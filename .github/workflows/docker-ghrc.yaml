@@ -1,0 +1,47 @@
+name: Build & Push to GHCR
+
+on:
+  push:
+    branches:
+      - dev
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-push-api:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker tags
+        id: docker_tags
+        run: |
+          # Get build number
+          BUILD_NUM=${{ github.run_number }}
+
+          # Default values - for dev branch
+          API_TAGS="ghcr.io/${{ github.repository_owner }}/trac-portal-api:dev-build.${BUILD_NUM} ghcr.io/${{ github.repository_owner }}/trac-portal-api:dev"
+
+          # If this is a tag push (for master)
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            API_TAGS="ghcr.io/${{ github.repository_owner }}/trac-portal-api:${VERSION} ghcr.io/${{ github.repository_owner }}/trac-portal-api:latest"
+          fi
+
+          echo "api_tags=${API_TAGS}" >> $GITHUB_OUTPUT
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build API Image
+        run: |
+          docker build --no-cache -t temp-api-image .
+
+      - name: Tag and Push API Image
+        run: |
+          for TAG in ${{ steps.docker_tags.outputs.api_tags }}; do
+            docker tag temp-api-image $TAG
+            docker push $TAG
+          done
