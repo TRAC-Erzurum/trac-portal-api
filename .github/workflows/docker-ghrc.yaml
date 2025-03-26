@@ -21,19 +21,23 @@ jobs:
           # Get build number
           BUILD_NUM=${{ github.run_number }}
 
+          # Adjust names
+          ORG_NAME=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          REPO_NAME=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
+
           # Default values - for dev branch
-          API_TAGS="ghcr.io/${{ github.repository_owner }}/trac-portal-api:dev-build.${BUILD_NUM} ghcr.io/${{ github.repository_owner }}/trac-portal-api:dev"
+          API_TAGS="ghcr.io/${ORG_NAME}/${REPO_NAME}:dev-build.${BUILD_NUM} ghcr.io/${ORG_NAME}/${REPO_NAME}:dev"
 
           # If this is a tag push (for master)
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
-            API_TAGS="ghcr.io/${{ github.repository_owner }}/trac-portal-api:${VERSION} ghcr.io/${{ github.repository_owner }}/trac-portal-api:latest"
+            API_TAGS="ghcr.io/${ORG_NAME}/${REPO_NAME}:${VERSION} ghcr.io/${ORG_NAME}/${REPO_NAME}:latest"
           fi
 
           echo "api_tags=${API_TAGS}" >> $GITHUB_OUTPUT
 
       - name: Login to GHCR
-        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
       - name: Build API Image
         run: |
