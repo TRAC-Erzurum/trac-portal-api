@@ -1,0 +1,218 @@
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotAcceptableException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, DeepPartial, ILike } from 'typeorm';
+import { User } from '../entities/user.entity';
+import { Role } from '../../auth/enums/role.enum';
+import { Operator } from '../../operator/entities/operator.entity';
+import { OperatorService } from '../../operator/services/operator.service';
+import { UpdateUserDto } from '../dto/update-user.dto';
+import * as crypto from 'crypto';
+import { SetPasswordDto } from '../dto/set-password.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
+
+@Injectable()
+export class UserService {
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    private readonly operatorService: OperatorService,
+  ) {}
+
+  async findByEmail(email: string): Promise<User> {
+    return this.userRepository.findOne({
+      where: { email },
+      relations: { operator: true },
+    });
+  }
+
+  async create(user: DeepPartial<User>): Promise<User> {
+    user.role = Role.GUEST;
+
+    if (user.provider === 'local') {
+      user.password = crypto
+        .createHash('sha256')
+        .update(`${user.password}${user.salt}`)
+        .digest('hex');
+    }
+
+    await this.userRepository.save(user);
+
+    return this.findByEmail(user.email);
+  }
+
+  async findAll(): Promise<User[]> {
+    return this.userRepository.find();
+  }
+
+  async updateUserRole(userId: string, role: Role): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.role = role;
+    return this.userRepository.save(user);
+  }
+
+  async findOne(id: string): Promise<User> {
+    return this.userRepository.findOneOrFail({
+      where: { id },
+      relations: { operator: true },
+    });
+  }
+
+  async exists(id: string): Promise<boolean> {
+    return this.userRepository.exists({ where: { id } });
+  }
+
+  async createOperator(
+    userId: string,
+    operatorData: DeepPartial<Operator>,
+  ): Promise<User> {
+    const user = await this.findOne(userId);
+
+    if (user.operator) {
+      throw new NotAcceptableException('User already has an operator');
+    }
+
+    const operator = await this.operatorService.create(operatorData);
+
+    user.operator = operator;
+    await this.userRepository.save(user);
+
+    return user;
+  }
+
+  async getOperatorOfUser(userId: string): Promise<Operator> {
+    const user = await this.findOne(userId);
+
+    if (!user.operator) {
+      throw new NotFoundException('User does not have an operator');
+    }
+
+    return user.operator;
+  }
+
+  async updateOperator(
+    userId: string,
+    operatorData: DeepPartial<Operator>,
+  ): Promise<User> {
+    const user = await this.findOne(userId);
+
+    if (!user.operator) {
+      throw new NotFoundException('User does not have an operator');
+    }
+
+    const updatedOperator = await this.operatorService.update(
+      user.operator.id,
+      operatorData,
+    );
+
+    user.operator = updatedOperator;
+    await this.userRepository.save(user);
+
+    return user;
+  }
+
+  async updateUser(userId: string, dto: UpdateUserDto): Promise<User> {
+    const fieldsToUpdate: Partial<User> = {};
+
+    if (dto.picture) {
+      fieldsToUpdate.picture = dto.picture;
+    }
+
+    if (dto.fullName) {
+      fieldsToUpdate.fullName = dto.fullName;
+    }
+
+    await this.userRepository.update(userId, fieldsToUpdate);
+
+    return this.findOne(userId);
+  }
+
+  async validate(identifier: string, password: string): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: [
+        { email: ILike(identifier) },
+        { operator: { callSign: ILike(identifier) } },
+      ],
+    });
+
+    if (!user) {
+      Logger.error(`User not found for identifier: ${identifier}`);
+      throw new UnauthorizedException('error.invalidCredentials');
+    }
+
+    if (!user.password) {
+      Logger.error(`User ${identifier} has no password`);
+      throw new UnauthorizedException('error.invalidCredentials');
+    }
+
+    const hashedPassword = crypto
+      .createHash('sha256')
+      .update(`${password}${user.salt}`)
+      .digest('hex');
+
+    if (hashedPassword !== user.password) {
+      Logger.error(`Invalid password for identifier: ${identifier}`);
+      throw new UnauthorizedException('error.invalidCredentials');
+    }
+
+    return user;
+  }
+
+  async setPassword(userId: string, dto: SetPasswordDto): Promise<void> {
+    const user = await this.findOne(userId);
+
+    if (user.password) {
+      throw new BadRequestException('error.userAlreadyHasPassword');
+    }
+
+    const salt = crypto.randomBytes(16).toString('hex');
+
+    const password = crypto
+      .createHash('sha256')
+      .update(`${dto.newPassword}${salt}`)
+      .digest('hex');
+
+    await this.userRepository.update(
+      { id: user.id },
+      { salt: salt, password: password },
+    );
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.findOne(userId);
+
+    const hashedCurrentPassword = crypto
+      .createHash('sha256')
+      .update(`${dto.currentPassword}${user.salt}`)
+      .digest('hex');
+
+    if (hashedCurrentPassword !== user.password) {
+      throw new BadRequestException('error.invalidCredentials');
+    }
+
+    const hashedPassword = crypto
+      .createHash('sha256')
+      .update(`${dto.newPassword}${user.salt}`)
+      .digest('hex');
+
+    await this.userRepository.update(
+      { id: user.id },
+      { password: hashedPassword },
+    );
+  }
+
+  async isAdmin(userId: string): Promise<boolean> {
+    const user = await this.findOne(userId);
+    return user.role === Role.ADMIN;
+  }
+}
