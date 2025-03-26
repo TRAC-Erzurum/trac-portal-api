@@ -37,7 +37,7 @@ jobs:
           echo "api_tags=${API_TAGS}" >> $GITHUB_OUTPUT
 
       - name: Login to GHCR
-        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${ORG_NAME} --password-stdin
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
       - name: Build API Image
         run: |
