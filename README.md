@@ -1,3 +1,5 @@
+[![Build & Push to GHCR](https://github.com/TRAC-Erzurum/trac-portal-api/actions/workflows/docker-ghrc.yaml/badge.svg)](https://github.com/TRAC-Erzurum/trac-portal-api/actions/workflows/docker-ghrc.yaml)
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
