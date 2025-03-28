@@ -1,4 +1,96 @@
-[![Build & Push to GHCR](https://github.com/TRAC-Erzurum/trac-portal-api/actions/workflows/docker-ghrc.yaml/badge.svg)](https://github.com/TRAC-Erzurum/trac-portal-api/actions/workflows/docker-ghrc.yaml)
+[![API Build](https://github.com/TRAC-Erzurum/trac-portal-api/actions/workflows/docker-ghrc.yaml/badge.svg)](https://github.com/TRAC-Erzurum/trac-portal-api/actions/workflows/docker-ghrc.yaml)
+---
+
+### Geliştirme Ortamının Hazırlanması
+
+1. Projeyi forklayın
+2. Yeni bir feature branch oluşturun (`git checkout -b feature/amazing-feature`)
+3. Gerekli bağımlılıkları yükleyin:
+   ```bash
+   # Backend için
+   cd backend && yarn install
+   
+   # Frontend için
+   cd frontend && yarn install
+   ```
+4. Geliştirme ortamını Docker ile başlatın:
+   ```bash
+   docker-compose up --build -d
+   ```
+
+### Branch Politikası
+
+- `master` ve `dev` branchleri korumalı branchlerdir
+- Tüm geliştirmeler `dev` branchinden türetilen feature branchlerinde yapılmalıdır
+- Pull requestler `dev` branchine açılmalıdır
+
+### Pull Request Kuralları
+
+1. **Branch İsimlendirmesi**
+   - Feature için: `feature/özellik-adı`
+   - Bug fix için: `fix/hata-açıklaması`
+   - Hotfix için: `hotfix/acil-düzeltme`
+
+2. **Commit Mesajları**
+   - İngilizce yazılmalıdır
+   - Açıklayıcı ve kısa olmalıdır
+   - Örnek format: `feat: add new attendee list`
+
+3. **PR İçeriği**
+   - Her PR tek bir amaca hizmet etmelidir
+   - PR açıklaması şablona uygun doldurulmalıdır
+   - Yapılan değişikliklerin test edildiğinden emin olunmalıdır
+   - Conflict olmamalıdır
+
+4. **Code Review**
+   - PR'ın merge edilebilmesi için en az bir onay gereklidir
+   - Review yorumları yapıcı ve açıklayıcı olmalıdır
+   - Tüm CI/CD kontrolleri başarılı olmalıdır
+
+5. **Dokümantasyon**
+   - Yeni özellikler için dokümantasyon güncellenmelidir
+
+
+
+
+
+## CI/CD
+
+### GitHub Actions ve Container Registry
+
+Proje, `GitHub Actions` ile, belirli ön koşullar sağlandığında build edilir ve `GitHub Container Registry`ye (ghcr.io) yüklenir. İki farklı build alınmaktadır:
+
+- Development (dev) modu: `dev` branche yapılan her pushta tetiklenir. `dev-build.{{build_id}}` etiketi ile versiyonlanır. Ayrıca son güncel dev buildi `dev` etiketine sahiptir.
+- Release modu: Yeni bir tag oluşturulduğunda tetiklenerek tag adı ile versiyonlanır. Ayrıca son güncel release buildi `latest` etiketine sahiptir.
+
+### Production Ortamına Kurulum
+
+1. Sunucunuzda Docker ve Docker Compose'un kurulu olduğundan emin olun
+2. Production ortamı için gerekli environment değişkenlerini ayarlayın
+3. Container'ları çekin ve başlatın:
+
+```bash
+# Production ortamı için docker-compose dosyasını kullanarak
+docker-compose -f docker-compose.prod.yml pull
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### Environment Değişkenleri
+
+Production ortamı için gerekli environment değişkenleri:
+
+```env
+# Backend
+DATABASE_URL=postgresql://user:password@db:5432/dbname
+JWT_SECRET=your-secret-key
+API_PORT=3000
+
+# Frontend
+API_BASE_URL=https://api.example.com
+```
+
+
+
 
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
