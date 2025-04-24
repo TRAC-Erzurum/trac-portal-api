@@ -107,7 +107,7 @@ export class DashboardService {
   }
 
   async getRecentSessions() {
-    const query = this.sessionRepository
+    const activeSessions = await this.sessionRepository
       .createQueryBuilder('session')
       .leftJoinAndSelect('session.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
@@ -117,10 +117,51 @@ export class DashboardService {
         'attendee',
       )
       .where('session.startedAt IS NOT NULL')
+      .andWhere('session.endedAt IS NULL')
       .orderBy('session.startedAt', 'DESC')
-      .limit(5);
+      .limit(5)
+      .getMany();
 
-    return query.getMany();
+    if (activeSessions.length >= 5) {
+      return activeSessions;
+    }
+
+    const upcomingSessions = await this.sessionRepository
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.operator', 'operator')
+      .leftJoinAndSelect('operator.user', 'user')
+      .loadRelationCountAndMap(
+        'session.attendeeCount',
+        'session.attendees',
+        'attendee',
+      )
+      .where('session.startedAt IS NULL')
+      .orderBy('session.createdAt', 'DESC')
+      .limit(5 - activeSessions.length)
+      .getMany();
+
+    const combinedSessions = [...activeSessions, ...upcomingSessions];
+
+    if (combinedSessions.length >= 5) {
+      return combinedSessions.slice(0, 5);
+    }
+
+    const completedSessions = await this.sessionRepository
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.operator', 'operator')
+      .leftJoinAndSelect('operator.user', 'user')
+      .loadRelationCountAndMap(
+        'session.attendeeCount',
+        'session.attendees',
+        'attendee',
+      )
+      .where('session.startedAt IS NOT NULL')
+      .andWhere('session.endedAt IS NOT NULL')
+      .orderBy('session.startedAt', 'DESC')
+      .limit(5 - combinedSessions.length)
+      .getMany();
+
+    return [...combinedSessions, ...completedSessions].slice(0, 5);
   }
 
   async getTopStats(): Promise<TopStat[]> {
