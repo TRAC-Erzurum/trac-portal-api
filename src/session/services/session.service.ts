@@ -9,6 +9,7 @@ import { Session } from '../entities/session.entity';
 import { Repository } from 'typeorm';
 import { CreateSessionDto } from '../dto/create-session.dto';
 import { OperatorService } from '../../operator/services/operator.service';
+import { UpdateSessionDto } from '../dto/update-session.dto';
 
 @Injectable()
 export class SessionService {
@@ -43,6 +44,35 @@ export class SessionService {
       console.error('Session save error:', error);
       throw new InternalServerErrorException('error.internal');
     }
+  }
+
+  async update(id: string, updateSessionDto: UpdateSessionDto) {
+    const operator = await this.operatorService.findOne(
+      updateSessionDto.operatorId,
+    );
+
+    if (!operator) {
+      throw new NotFoundException('Operator not found');
+    }
+
+    await this.sessionRepository.update(
+      { id: id },
+      {
+        name: updateSessionDto.name,
+        frequency: updateSessionDto.frequency,
+        mode: updateSessionDto.mode,
+        type: updateSessionDto.type,
+        operator: operator,
+        startedAt: updateSessionDto.startedAt,
+        endedAt: updateSessionDto.endedAt,
+      },
+    );
+
+    return this.findOne(id);
+  }
+
+  async delete(id: string) {
+    await this.sessionRepository.delete(id);
   }
 
   async startSession(id: string) {
