@@ -70,8 +70,13 @@ export class AttendeeService {
       if (callSignParts.length === 1) {
         callSign = callSignParts[0];
       } else if (callSignParts.length === 2) {
-        callSign = callSignParts[0];
-        prefix = callSignParts[1];
+        if (callSignParts[1]?.length === 1) {
+          callSign = callSignParts[0];
+          suffix = callSignParts[1];
+        } else {
+          prefix = callSignParts[0];
+          callSign = callSignParts[1];
+        }
       } else if (callSignParts.length === 3) {
         callSign = callSignParts[0];
         prefix = callSignParts[1];
