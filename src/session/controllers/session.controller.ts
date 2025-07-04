@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Put,
+  Req,
 } from '@nestjs/common';
 import { SessionService } from '../services/session.service';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -14,6 +15,7 @@ import { Role } from '../../auth/enums/role.enum';
 import { ManageSession } from '../decorators/manage-session.decorator';
 import { CreateSessionDto } from '../dto/create-session.dto';
 import { UpdateSessionDto } from '../dto/update-session.dto';
+import { RequestWithUser } from '../../shared/types/request.types';
 
 @Controller('session')
 export class SessionController {
@@ -21,8 +23,11 @@ export class SessionController {
 
   @Post()
   @Roles(Role.ADMIN)
-  create(@Body() createSessionDto: CreateSessionDto) {
-    return this.sessionService.create(createSessionDto);
+  create(
+    @Body() createSessionDto: CreateSessionDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.sessionService.create(createSessionDto, req.user.email);
   }
 
   @Put(':id')
@@ -30,8 +35,9 @@ export class SessionController {
   updateSession(
     @Param('id') id: string,
     @Body() updateSessionDto: UpdateSessionDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.sessionService.update(id, updateSessionDto);
+    return this.sessionService.update(id, updateSessionDto, req.user.email);
   }
 
   @Delete(':id')
@@ -53,22 +59,22 @@ export class SessionController {
   @Patch(':id/start')
   @Roles(Role.VOLUNTEER)
   @ManageSession()
-  async startSession(@Param('id') id: string) {
-    return this.sessionService.startSession(id);
+  async startSession(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.sessionService.startSession(id, req.user.email);
   }
 
   @Patch(':id/end')
   @Roles(Role.VOLUNTEER)
   @ManageSession()
-  async endSession(@Param('id') id: string) {
-    return this.sessionService.endSession(id);
+  async endSession(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.sessionService.endSession(id, req.user.email);
   }
 
   @Patch(':id/restart')
   @Roles(Role.ADMIN)
   @ManageSession()
-  restartSession(@Param('id') id: string) {
-    return this.sessionService.restartSession(id);
+  restartSession(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.sessionService.restartSession(id, req.user.email);
   }
 
   @Patch(':id/operator')
@@ -77,7 +83,8 @@ export class SessionController {
   changeOperator(
     @Param('id') id: string,
     @Body('operatorId') operatorId: string,
+    @Req() req: RequestWithUser,
   ) {
-    return this.sessionService.changeOperator(id, operatorId);
+    return this.sessionService.changeOperator(id, operatorId, req.user.email);
   }
 }

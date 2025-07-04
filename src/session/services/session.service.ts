@@ -19,7 +19,7 @@ export class SessionService {
     private readonly operatorService: OperatorService,
   ) {}
 
-  async create(createSessionDto: CreateSessionDto) {
+  async create(createSessionDto: CreateSessionDto, createdBy: string) {
     const operator = await this.operatorService.findOne(
       createSessionDto.operatorId,
     );
@@ -34,6 +34,8 @@ export class SessionService {
     session.mode = createSessionDto.mode;
     session.type = createSessionDto.type;
     session.operator = operator;
+    session.createdBy = createdBy;
+    session.updatedBy = [];
 
     try {
       return await this.sessionRepository.save(session);
@@ -46,7 +48,11 @@ export class SessionService {
     }
   }
 
-  async update(id: string, updateSessionDto: UpdateSessionDto) {
+  async update(
+    id: string,
+    updateSessionDto: UpdateSessionDto,
+    updatedBy: string,
+  ) {
     const operator = await this.operatorService.findOne(
       updateSessionDto.operatorId,
     );
@@ -55,36 +61,34 @@ export class SessionService {
       throw new NotFoundException('Operator not found');
     }
 
-    await this.sessionRepository.update(
-      { id: id },
-      {
-        name: updateSessionDto.name,
-        frequency: updateSessionDto.frequency,
-        mode: updateSessionDto.mode,
-        type: updateSessionDto.type,
-        operator: operator,
-        startedAt: updateSessionDto.startedAt,
-        endedAt: updateSessionDto.endedAt,
-      },
-    );
+    const session = await this.findOne(id);
+    session.name = updateSessionDto.name;
+    session.frequency = updateSessionDto.frequency;
+    session.mode = updateSessionDto.mode;
+    session.type = updateSessionDto.type;
+    session.operator = operator;
+    session.startedAt = updateSessionDto.startedAt;
+    session.endedAt = updateSessionDto.endedAt;
+    session.updatedBy = [...(session.updatedBy || []), updatedBy];
 
-    return this.findOne(id);
+    return this.sessionRepository.save(session);
   }
 
   async delete(id: string) {
     await this.sessionRepository.delete(id);
   }
 
-  async startSession(id: string) {
+  async startSession(id: string, updatedBy: string) {
     const session = await this.findOne(id);
-
     session.startedAt = new Date();
+    session.updatedBy = [...(session.updatedBy || []), updatedBy];
     return this.sessionRepository.save(session);
   }
 
-  async endSession(id: string) {
+  async endSession(id: string, updatedBy: string) {
     const session = await this.findOne(id);
     session.endedAt = new Date();
+    session.updatedBy = [...(session.updatedBy || []), updatedBy];
     return this.sessionRepository.save(session);
   }
 
@@ -130,15 +134,17 @@ export class SessionService {
     }));
   }
 
-  async restartSession(id: string) {
+  async restartSession(id: string, updatedBy: string) {
     const session = await this.findOne(id);
     session.endedAt = null;
+    session.updatedBy = [...(session.updatedBy || []), updatedBy];
     return this.sessionRepository.save(session);
   }
 
-  async changeOperator(id: string, operatorId: string) {
+  async changeOperator(id: string, operatorId: string, updatedBy: string) {
     const session = await this.findOne(id);
     session.operator = await this.operatorService.findOne(operatorId);
+    session.updatedBy = [...(session.updatedBy || []), updatedBy];
     return this.sessionRepository.save(session);
   }
 }

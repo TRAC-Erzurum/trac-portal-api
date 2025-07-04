@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { HttpExceptionFilter } from './shared/filters/http-exception.filter';
+import { ValidationPipe } from '@nestjs/common';
 
 function checkEnvVars() {
   const requiredVars = [
@@ -69,6 +70,13 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('api');
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transformOptions: { enableImplicitConversion: true },
+      transform: true,
+    }),
+  );
 
   app.useGlobalFilters(new HttpExceptionFilter());
 

@@ -1,22 +1,11 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  OneToOne,
-  JoinColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-  OneToMany,
-} from 'typeorm';
+import { Entity, Column, OneToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { Session } from '../../session/entities/session.entity';
 import { Attendee } from '../../session/entities/attendee.entity';
+import { BaseEntity } from 'src/shared/entities/base.entity';
 
 @Entity('operators')
-export class Operator {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Operator extends BaseEntity {
   @Column({ nullable: false, unique: true })
   callSign: string;
 
@@ -40,12 +29,6 @@ export class Operator {
 
   @Column({ nullable: true })
   fullName: string;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 
   @OneToOne(() => User, { eager: true })
   @JoinColumn()
