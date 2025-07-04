@@ -17,6 +17,9 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
+# Install PostgreSQL client for backups
+RUN apk add --no-cache postgresql-client
+
 RUN yarn global add pm2
 
 COPY --from=builder /app/package*.json ./
