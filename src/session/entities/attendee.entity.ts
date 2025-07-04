@@ -1,19 +1,10 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-} from 'typeorm';
+import { Entity, Column, ManyToOne } from 'typeorm';
 import { Session } from './session.entity';
 import { Operator } from '../../operator/entities/operator.entity';
+import { BaseEntity } from '../../shared/entities/base.entity';
 
 @Entity('attendees')
-export class Attendee {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Attendee extends BaseEntity {
   @Column({ nullable: false })
   callSign: string;
 
@@ -34,12 +25,6 @@ export class Attendee {
 
   @Column({ nullable: true })
   signalStrength: number;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 
   @ManyToOne(() => Session, (session) => session.attendees)
   session: Session;

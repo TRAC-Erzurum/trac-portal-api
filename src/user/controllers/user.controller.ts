@@ -8,6 +8,7 @@ import {
   UploadedFile,
   UseInterceptors,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { UserService } from '../services/user.service';
 import { CurrentUser } from '../decorators/current-user.decorator';
@@ -25,6 +26,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { unlink } from 'fs/promises';
 import { Express } from 'express';
+import { RequestWithUser } from '../../shared/types/request.types';
 
 @Controller('user')
 @Roles(Role.GUEST)
@@ -42,16 +44,22 @@ export class UserController {
   async createOperator(
     @CurrentUser() user: ICurrentUser,
     @Body() createOperatorDto: CreateOperatorDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.userService.createOperator(user.id, createOperatorDto);
+    return this.userService.createOperator(
+      user.id,
+      createOperatorDto,
+      req.user.email,
+    );
   }
 
   @Patch('operator')
   async updateOperator(
     @CurrentUser() user: ICurrentUser,
     @Body() dto: UpdateOperatorDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.userService.updateOperator(user.id, dto);
+    return this.userService.updateOperator(user.id, dto, req.user.email);
   }
 
   @Get('operator')
@@ -63,24 +71,27 @@ export class UserController {
   async updateUser(
     @CurrentUser() user: ICurrentUser,
     @Body() dto: UpdateUserDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.userService.updateUser(user.id, dto);
+    return this.userService.updateUser(user.id, dto, req.user.email);
   }
 
   @Post('change-password')
   async changePassword(
     @CurrentUser() user: ICurrentUser,
     @Body() dto: ChangePasswordDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.userService.changePassword(user.id, dto);
+    return this.userService.changePassword(user.id, dto, req.user.email);
   }
 
   @Post('set-password')
   async setPassword(
     @CurrentUser() user: ICurrentUser,
     @Body() dto: SetPasswordDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.userService.setPassword(user.id, dto);
+    return this.userService.setPassword(user.id, dto, req.user.email);
   }
 
   @Get(':id')
@@ -130,6 +141,7 @@ export class UserController {
   async uploadProfilePicture(
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: ICurrentUser,
+    @Req() req: RequestWithUser,
   ) {
     if (!file) {
       console.log('No file received');
@@ -143,9 +155,11 @@ export class UserController {
         throw new BadRequestException('Invalid file type');
       }
 
-      await this.userService.updateUser(user.id, {
-        picture: `/uploads/${file.filename}`,
-      });
+      await this.userService.updateUser(
+        user.id,
+        { picture: `/uploads/${file.filename}` },
+        req.user.email,
+      );
 
       console.log('File successfully processed, returning URL');
       return { url: `/uploads/${file.filename}` };
@@ -160,8 +174,12 @@ export class UserController {
 
   @Patch(':id/role')
   @Roles(Role.ADMIN)
-  async updateUserRole(@Param('id') id: string, @Body('role') role: Role) {
-    return this.userService.updateUserRole(id, role);
+  async updateUserRole(
+    @Param('id') id: string,
+    @Body('role') role: Role,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.userService.updateUserRole(id, role, req.user.email);
   }
 
   @Get(':id/operator')
@@ -175,7 +193,8 @@ export class UserController {
   async updateOperatorByUserId(
     @Param('id') id: string,
     @Body() dto: UpdateOperatorDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.userService.updateOperator(id, dto);
+    return this.userService.updateOperator(id, dto, req.user.email);
   }
 }
