@@ -13,5 +13,5 @@ export class PaginationDto {
   @IsNumber()
   @Min(1)
   @IsOptional()
-  pageSize?: number = 10;
+  pageSize?: number = 50;
 }
