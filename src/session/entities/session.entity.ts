@@ -1,22 +1,12 @@
 import { Operator } from '../../operator/entities/operator.entity';
 import { Mode } from '../../shared/enums/mode.enum';
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  ManyToOne,
-  OneToMany,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, Entity, ManyToOne, OneToMany } from 'typeorm';
 import { Attendee } from './attendee.entity';
 import { SessionType } from '../../shared/enums/session-type.enum';
+import { BaseEntity } from '../../shared/entities/base.entity';
 
 @Entity('sessions')
-export class Session {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Session extends BaseEntity {
   @Column({ unique: true, nullable: false })
   name: string;
 
@@ -42,10 +32,4 @@ export class Session {
 
   @OneToMany(() => Attendee, (attendee) => attendee.session)
   attendees: Attendee[];
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }

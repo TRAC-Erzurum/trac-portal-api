@@ -32,8 +32,10 @@ export class UserService {
     });
   }
 
-  async create(user: DeepPartial<User>): Promise<User> {
+  async create(user: DeepPartial<User>, createdBy: string): Promise<User> {
     user.role = Role.GUEST;
+    user.createdBy = createdBy;
+    user.updatedBy = [];
 
     if (user.provider === 'local') {
       user.password = crypto
@@ -51,13 +53,18 @@ export class UserService {
     return this.userRepository.find();
   }
 
-  async updateUserRole(userId: string, role: Role): Promise<User> {
+  async updateUserRole(
+    userId: string,
+    role: Role,
+    updatedBy: string,
+  ): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
     user.role = role;
+    user.updatedBy = [...(user.updatedBy || []), updatedBy];
     return this.userRepository.save(user);
   }
 
@@ -75,6 +82,7 @@ export class UserService {
   async createOperator(
     userId: string,
     operatorData: DeepPartial<Operator>,
+    createdBy: string,
   ): Promise<User> {
     const user = await this.findOne(userId);
 
@@ -82,9 +90,10 @@ export class UserService {
       throw new NotAcceptableException('User already has an operator');
     }
 
-    const operator = await this.operatorService.create(operatorData);
+    const operator = await this.operatorService.create(operatorData, createdBy);
 
     user.operator = operator;
+    user.updatedBy = [...(user.updatedBy || []), createdBy];
     await this.userRepository.save(user);
 
     return user;
@@ -103,6 +112,7 @@ export class UserService {
   async updateOperator(
     userId: string,
     operatorData: DeepPartial<Operator>,
+    updatedBy: string,
   ): Promise<User> {
     const user = await this.findOne(userId);
 
@@ -113,15 +123,22 @@ export class UserService {
     const updatedOperator = await this.operatorService.update(
       user.operator.id,
       operatorData,
+      updatedBy,
     );
 
     user.operator = updatedOperator;
+    user.updatedBy = [...(user.updatedBy || []), updatedBy];
     await this.userRepository.save(user);
 
     return user;
   }
 
-  async updateUser(userId: string, dto: UpdateUserDto): Promise<User> {
+  async updateUser(
+    userId: string,
+    dto: UpdateUserDto,
+    updatedBy: string,
+  ): Promise<User> {
+    const user = await this.findOne(userId);
     const fieldsToUpdate: Partial<User> = {};
 
     if (dto.picture) {
@@ -132,7 +149,9 @@ export class UserService {
       fieldsToUpdate.fullName = dto.fullName;
     }
 
-    await this.userRepository.update(userId, fieldsToUpdate);
+    user.updatedBy = [...(user.updatedBy || []), updatedBy];
+    Object.assign(user, fieldsToUpdate);
+    await this.userRepository.save(user);
 
     return this.findOne(userId);
   }
@@ -168,7 +187,11 @@ export class UserService {
     return user;
   }
 
-  async setPassword(userId: string, dto: SetPasswordDto): Promise<void> {
+  async setPassword(
+    userId: string,
+    dto: SetPasswordDto,
+    updatedBy: string,
+  ): Promise<void> {
     const user = await this.findOne(userId);
 
     if (user.password) {
@@ -182,13 +205,17 @@ export class UserService {
       .update(`${dto.newPassword}${salt}`)
       .digest('hex');
 
-    await this.userRepository.update(
-      { id: user.id },
-      { salt: salt, password: password },
-    );
+    user.salt = salt;
+    user.password = password;
+    user.updatedBy = [...(user.updatedBy || []), updatedBy];
+    await this.userRepository.save(user);
   }
 
-  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+    updatedBy: string,
+  ): Promise<void> {
     const user = await this.findOne(userId);
 
     const hashedCurrentPassword = crypto
@@ -200,15 +227,17 @@ export class UserService {
       throw new BadRequestException('error.invalidCredentials');
     }
 
-    const hashedPassword = crypto
+    const salt = crypto.randomBytes(16).toString('hex');
+
+    const password = crypto
       .createHash('sha256')
-      .update(`${dto.newPassword}${user.salt}`)
+      .update(`${dto.newPassword}${salt}`)
       .digest('hex');
 
-    await this.userRepository.update(
-      { id: user.id },
-      { password: hashedPassword },
-    );
+    user.salt = salt;
+    user.password = password;
+    user.updatedBy = [...(user.updatedBy || []), updatedBy];
+    await this.userRepository.save(user);
   }
 
   async isAdmin(userId: string): Promise<boolean> {

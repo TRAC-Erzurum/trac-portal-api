@@ -12,6 +12,7 @@ import { SessionService } from './session.service';
 import { OperatorService } from '../../operator/services/operator.service';
 import { Operator } from '../../operator/entities/operator.entity';
 import { PaginationDto } from '../../shared/dto/pagination.dto';
+
 @Injectable()
 export class AttendeeService {
   constructor(
@@ -21,7 +22,11 @@ export class AttendeeService {
     private operatorService: OperatorService,
   ) {}
 
-  async addAttendeeToSession(sessionId: string, dto: AttendeeDto) {
+  async addAttendeeToSession(
+    sessionId: string,
+    dto: AttendeeDto,
+    createdBy: string,
+  ) {
     const session = await this.sessionService.findOne(sessionId);
 
     const exists = await this.attendeeRepository.findOne({
@@ -32,7 +37,7 @@ export class AttendeeService {
       throw new ConflictException('Attendee already exists');
     }
 
-    const operator = await this.getOrCreateOperator(dto);
+    const operator = await this.getOrCreateOperator(dto, createdBy);
 
     const attendee = new Attendee();
     attendee.callSign = dto.callSign;
@@ -43,12 +48,14 @@ export class AttendeeService {
     attendee.readability = dto.readability;
     attendee.signalStrength = dto.signalStrength;
     attendee.operator = operator;
-
     attendee.session = session;
+    attendee.createdBy = createdBy;
+    attendee.updatedBy = [];
+
     return this.attendeeRepository.save(attendee);
   }
 
-  private async getOrCreateOperator(dto: AttendeeDto) {
+  private async getOrCreateOperator(dto: AttendeeDto, createdBy: string) {
     let operator: Operator;
     if (!dto.operatorId) {
       let callSign: string;
@@ -63,8 +70,13 @@ export class AttendeeService {
       if (callSignParts.length === 1) {
         callSign = callSignParts[0];
       } else if (callSignParts.length === 2) {
-        callSign = callSignParts[0];
-        prefix = callSignParts[1];
+        if (callSignParts[1]?.length === 1) {
+          callSign = callSignParts[0];
+          suffix = callSignParts[1];
+        } else {
+          prefix = callSignParts[0];
+          callSign = callSignParts[1];
+        }
       } else if (callSignParts.length === 3) {
         callSign = callSignParts[0];
         prefix = callSignParts[1];
@@ -85,15 +97,18 @@ export class AttendeeService {
         district = dto.district;
       }
 
-      operator = await this.operatorService.create({
-        callSign,
-        prefix,
-        suffix,
-        fullName: dto.name,
-        country,
-        city,
-        district,
-      });
+      operator = await this.operatorService.create(
+        {
+          callSign,
+          prefix,
+          suffix,
+          fullName: dto.name,
+          country,
+          city,
+          district,
+        },
+        createdBy,
+      );
     } else {
       operator = await this.operatorService.findOne(dto.operatorId);
     }
@@ -113,6 +128,7 @@ export class AttendeeService {
     sessionId: string,
     attendeeId: string,
     dto: AttendeeDto,
+    updatedBy: string,
   ) {
     const attendee = await this.attendeeRepository.findOne({
       where: { id: attendeeId },
@@ -135,6 +151,7 @@ export class AttendeeService {
     attendee.district = hasQth ? dto.district : attendee.district;
     attendee.readability = dto.readability ?? attendee.readability;
     attendee.signalStrength = dto.signalStrength ?? attendee.signalStrength;
+    attendee.updatedBy = [...(attendee.updatedBy || []), updatedBy];
 
     return this.attendeeRepository.save(attendee);
   }

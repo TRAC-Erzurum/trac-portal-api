@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, ILike, IsNull, Not, Repository } from 'typeorm';
 import { Operator } from '../entities/operator.entity';
 import { chunk, startCase } from 'lodash';
+import { OperatorQueryDto } from '../dto/operator-query.dto';
 
 @Injectable()
 export class OperatorService {
@@ -16,13 +17,34 @@ export class OperatorService {
     private readonly operatorRepository: Repository<Operator>,
   ) {}
 
-  async findAll(): Promise<Operator[]> {
-    return this.operatorRepository
+  async find(
+    query: OperatorQueryDto,
+  ): Promise<{ data: Operator[]; total: number }> {
+    const queryBuilder = this.operatorRepository
       .createQueryBuilder('operator')
       .leftJoinAndSelect('operator.user', 'user')
-      .orderBy('CASE WHEN user.id IS NULL THEN 1 ELSE 0 END', 'ASC')
-      .addOrderBy('operator.callSign', 'ASC')
-      .getMany();
+      .orderBy('operator.callSign', query.sort)
+      .addOrderBy('user.id', 'ASC', 'NULLS FIRST');
+
+    if (query.search) {
+      const searchTerm = `%${query.search.toLowerCase()}%`;
+      queryBuilder.where(
+        '(LOWER(operator.callSign) LIKE :search OR ' +
+          'LOWER(operator.fullName) LIKE :search OR ' +
+          'LOWER(operator.country) LIKE :search OR ' +
+          'LOWER(operator.city) LIKE :search OR ' +
+          'LOWER(operator.district) LIKE :search OR ' +
+          'LOWER(user.fullName) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
+    const [data, total] = await queryBuilder
+      .skip((query.pageNumber - 1) * query.pageSize)
+      .take(query.pageSize)
+      .getManyAndCount();
+
+    return { data, total };
   }
 
   async findAllWithUser(): Promise<Operator[]> {
@@ -43,14 +65,21 @@ export class OperatorService {
     return operator;
   }
 
-  async create(operatorData: DeepPartial<Operator>): Promise<Operator> {
+  async create(
+    operatorData: DeepPartial<Operator>,
+    createdBy: string,
+  ): Promise<Operator> {
     const existingOperator = await this.operatorRepository.findOne({
       where: { callSign: operatorData.callSign },
       relations: { user: true },
     });
 
     if (!existingOperator) {
-      const operator = this.operatorRepository.create(operatorData);
+      const operator = this.operatorRepository.create({
+        ...operatorData,
+        createdBy,
+        updatedBy: [],
+      });
       return this.operatorRepository.save(operator);
     }
 
@@ -60,23 +89,34 @@ export class OperatorService {
       );
     }
 
-    Object.assign(existingOperator, operatorData);
+    Object.assign(existingOperator, {
+      ...operatorData,
+      createdBy,
+      updatedBy: [],
+    });
     return this.operatorRepository.save(existingOperator);
   }
 
   async update(
     id: string,
     operatorData: DeepPartial<Operator>,
+    updatedBy: string,
   ): Promise<Operator> {
     const operator = await this.operatorRepository.findOne({ where: { id } });
     if (!operator) {
       throw new NotFoundException(`Operator with ID ${id} not found`);
     }
-    Object.assign(operator, operatorData);
+    Object.assign(operator, {
+      ...operatorData,
+      updatedBy: [...(operator.updatedBy || []), updatedBy],
+    });
     return this.operatorRepository.save(operator);
   }
 
-  async import(records: Record<string, string>[]): Promise<void> {
+  async import(
+    records: Record<string, string>[],
+    createdBy: string,
+  ): Promise<void> {
     const operators = records
       .filter((record) => record.callSign)
       .map((record) => {
@@ -89,6 +129,8 @@ export class OperatorService {
         operator.district = startCase(record.district);
         operator.gridSquare = record.gridSquare;
         operator.fullName = startCase(record.fullName);
+        operator.createdBy = createdBy;
+        operator.updatedBy = [];
         return operator;
       });
 

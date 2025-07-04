@@ -9,6 +9,7 @@ import {
   Query,
   UploadedFile,
   UseInterceptors,
+  Req,
 } from '@nestjs/common';
 import { Operator } from '../entities/operator.entity';
 import { Role } from '../../auth/enums/role.enum';
@@ -17,6 +18,9 @@ import { OperatorService } from '../services/operator.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OperatorDto } from '../dto/operator.dto';
 import { CsvParserService } from '../services/csv-parser.service';
+import { OperatorQueryDto } from '../dto/operator-query.dto';
+import { RequestWithUser } from '../../shared/types/request.types';
+import { Express } from 'express';
 
 @Controller('operator')
 export class OperatorController {
@@ -27,8 +31,8 @@ export class OperatorController {
 
   @Get()
   @Roles(Role.VOLUNTEER)
-  getOperators(): Promise<Operator[]> {
-    return this.operatorService.findAll();
+  getOperators(@Query() query: OperatorQueryDto) {
+    return this.operatorService.find(query);
   }
 
   @Get('user')
@@ -55,13 +59,14 @@ export class OperatorController {
   async importOperators(
     @UploadedFile() file: Express.Multer.File,
     @Body('mapping') mapping: string,
+    @Req() req: RequestWithUser,
   ): Promise<void> {
     const columnMapping = JSON.parse(mapping);
     const operators = await this.csvParserService.parse(
       file.buffer,
       columnMapping,
     );
-    await this.operatorService.import(operators);
+    await this.operatorService.import(operators, req.user.email);
   }
 
   @Delete(':id')
@@ -75,7 +80,8 @@ export class OperatorController {
   async updateOperator(
     @Param('id') id: string,
     @Body() dto: OperatorDto,
+    @Req() req: RequestWithUser,
   ): Promise<void> {
-    await this.operatorService.update(id, dto);
+    await this.operatorService.update(id, dto, req.user.email);
   }
 }

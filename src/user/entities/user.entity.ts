@@ -1,19 +1,10 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-  OneToOne,
-} from 'typeorm';
+import { Entity, Column, OneToOne } from 'typeorm';
 import { Role } from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
+import { BaseEntity } from '../../shared/entities/base.entity';
 
 @Entity('users')
-export class User {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class User extends BaseEntity {
   @Column()
   email: string;
 
@@ -34,12 +25,6 @@ export class User {
 
   @Column({ nullable: true, type: 'varchar' })
   salt: string | null;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 
   @Column({ type: 'enum', enum: Role, default: Role.GUEST })
   role: Role;

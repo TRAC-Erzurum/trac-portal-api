@@ -7,6 +7,7 @@ import {
   Patch,
   Delete,
   Query,
+  Req,
 } from '@nestjs/common';
 import { AttendeeService } from '../services/attendee.service';
 import { AttendeeDto } from '../dto/attendee.dto';
@@ -16,6 +17,7 @@ import { UseGuards } from '@nestjs/common';
 import { ManageSessionGuard } from '../guards/manage-session.guard';
 import { ManageSession } from '../decorators/manage-session.decorator';
 import { PaginationDto } from '../../shared/dto/pagination.dto';
+import { RequestWithUser } from '../../shared/types/request.types';
 
 @Controller('session/:sessionId/attendee')
 @Roles(Role.VOLUNTEER)
@@ -36,8 +38,13 @@ export class AttendeeController {
   async addAttendeeToSession(
     @Param('sessionId') sessionId: string,
     @Body() dto: AttendeeDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.attendeeService.addAttendeeToSession(sessionId, dto);
+    return this.attendeeService.addAttendeeToSession(
+      sessionId,
+      dto,
+      req.user.email,
+    );
   }
 
   @Delete(':attendeeId')
@@ -55,7 +62,13 @@ export class AttendeeController {
     @Param('sessionId') sessionId: string,
     @Param('attendeeId') attendeeId: string,
     @Body() dto: AttendeeDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.attendeeService.updateAttendee(sessionId, attendeeId, dto);
+    return this.attendeeService.updateAttendee(
+      sessionId,
+      attendeeId,
+      dto,
+      req.user.email,
+    );
   }
 }

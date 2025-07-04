@@ -32,15 +32,18 @@ export class AuthService {
       };
     }
 
-    const createdUser = await this.userService.create({
+    const createdUser = await this.userService.create(
+      {
+        email,
+        fullName: [profile.name.givenName, profile.name.familyName]
+          .filter(Boolean)
+          .join(' '),
+        picture: profile.photos[0]?.value || null,
+        providerId: profile.id,
+        provider: 'google',
+      },
       email,
-      fullName: [profile.name.givenName, profile.name.familyName]
-        .filter(Boolean)
-        .join(' '),
-      picture: profile.photos[0]?.value || null,
-      providerId: profile.id,
-      provider: 'google',
-    });
+    );
 
     return {
       id: createdUser.id,
@@ -87,21 +90,27 @@ export class AuthService {
       throw new ConflictException('Kullanıcı zaten mevcut');
     }
 
-    const operator = await this.operatorService.create({
-      callSign: dto.callSign,
-      city: dto.city,
-      country: dto.country,
-      district: dto.district,
-      fullName: dto.fullName,
-    });
+    const operator = await this.operatorService.create(
+      {
+        callSign: dto.callSign,
+        city: dto.city,
+        country: dto.country,
+        district: dto.district,
+        fullName: dto.fullName,
+      },
+      dto.email,
+    );
 
-    await this.userService.create({
-      email: dto.email,
-      password: dto.password,
-      salt: crypto.randomBytes(16).toString('hex'),
-      fullName: dto.fullName,
-      provider: 'local',
-      operator: operator,
-    });
+    await this.userService.create(
+      {
+        email: dto.email,
+        password: dto.password,
+        salt: crypto.randomBytes(16).toString('hex'),
+        fullName: dto.fullName,
+        provider: 'local',
+        operator: operator,
+      },
+      dto.email,
+    );
   }
 }
