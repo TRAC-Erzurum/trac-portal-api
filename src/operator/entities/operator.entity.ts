@@ -2,7 +2,7 @@ import { Entity, Column, OneToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { Session } from '../../session/entities/session.entity';
 import { Attendee } from '../../session/entities/attendee.entity';
-import { BaseEntity } from 'src/shared/entities/base.entity';
+import { BaseEntity } from '../../shared/entities/base.entity';
 
 @Entity('operators')
 export class Operator extends BaseEntity {

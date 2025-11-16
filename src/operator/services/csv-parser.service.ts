@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { parse } from 'csv-parse';
 
 @Injectable()
@@ -19,13 +19,26 @@ export class CsvParserService {
           const mappedData: Record<string, string> = {};
           Object.entries(mapping).forEach(([field, csvColumn]) => {
             if (csvColumn) {
-              mappedData[field] = data[csvColumn];
+              const normalizedCsvColumn = csvColumn.trim();
+              const dataKeys = Object.keys(data);
+              const matchingKey = dataKeys.find(
+                (key) => key.trim().toLowerCase() === normalizedCsvColumn.toLowerCase()
+              );
+
+              if (matchingKey) {
+                mappedData[field] = data[matchingKey];
+              } else {
+                mappedData[field] = data[normalizedCsvColumn] || data[csvColumn] || '';
+              }
             }
           });
           results.push(mappedData);
         })
         .on('end', () => resolve(results))
-        .on('error', (error) => reject(error));
+        .on('error', (error) => {
+          Logger.error('Error parsing CSV', error);
+          reject(error);
+        });
     });
   }
 }
