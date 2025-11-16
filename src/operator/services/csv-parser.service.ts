@@ -3,8 +3,6 @@ import { parse } from 'csv-parse';
 
 @Injectable()
 export class CsvParserService {
-  constructor(private readonly logger: Logger) {}
-
   async parse(
     buffer: Buffer,
     mapping: Record<string, string>,
@@ -26,7 +24,7 @@ export class CsvParserService {
               const matchingKey = dataKeys.find(
                 (key) => key.trim().toLowerCase() === normalizedCsvColumn.toLowerCase()
               );
-              
+
               if (matchingKey) {
                 mappedData[field] = data[matchingKey];
               } else {
@@ -38,7 +36,7 @@ export class CsvParserService {
         })
         .on('end', () => resolve(results))
         .on('error', (error) => {
-          this.logger.error('Error parsing CSV', error);
+          Logger.error('Error parsing CSV', error);
           reject(error);
         });
     });
