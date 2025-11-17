@@ -8,7 +8,7 @@ import { Attendee } from '../entities/attendee.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AttendeeDto } from '../dto/attendee.dto';
-import { SessionService } from './session.service';
+import { NetService } from './net.service';
 import { OperatorService } from '../../operator/services/operator.service';
 import { Operator } from '../../operator/entities/operator.entity';
 import { PaginationDto } from '../../shared/dto/pagination.dto';
@@ -18,19 +18,19 @@ export class AttendeeService {
   constructor(
     @InjectRepository(Attendee)
     private attendeeRepository: Repository<Attendee>,
-    private sessionService: SessionService,
+    private netService: NetService,
     private operatorService: OperatorService,
   ) {}
 
-  async addAttendeeToSession(
-    sessionId: string,
+  async addAttendeeToNet(
+      netId: string,
     dto: AttendeeDto,
     createdBy: string,
   ) {
-    const session = await this.sessionService.findOne(sessionId);
+    const net = await this.netService.findOne(netId);
 
     const exists = await this.attendeeRepository.findOne({
-      where: { callSign: dto.callSign, session: { id: sessionId } },
+      where: { callSign: dto.callSign, net: { id: netId } },
     });
 
     if (exists) {
@@ -48,7 +48,7 @@ export class AttendeeService {
     attendee.readability = dto.readability;
     attendee.signalStrength = dto.signalStrength;
     attendee.operator = operator;
-    attendee.session = session;
+    attendee.net = net;
     attendee.createdBy = createdBy;
     attendee.updatedBy = [];
 
@@ -116,31 +116,31 @@ export class AttendeeService {
     return operator;
   }
 
-  async getAttendees(sessionId: string, pagination: PaginationDto) {
+  async getAttendees(netId: string, pagination: PaginationDto) {
     return this.attendeeRepository.find({
-      where: { session: { id: sessionId } },
-      relations: { operator: true, session: true },
+      where: { net: { id: netId } },
+      relations: { operator: true, net: true },
       order: { createdAt: pagination.sort },
     });
   }
 
   async updateAttendee(
-    sessionId: string,
+    netId: string,
     attendeeId: string,
     dto: AttendeeDto,
     updatedBy: string,
   ) {
     const attendee = await this.attendeeRepository.findOne({
       where: { id: attendeeId },
-      relations: { session: true },
+      relations: { net: true },
     });
 
     if (!attendee) {
       throw new NotFoundException('Attendee not found');
     }
 
-    if (attendee.session.id !== sessionId) {
-      throw new NotFoundException('Attendee not found in this session');
+    if (attendee.net.id !== netId) {
+      throw new NotFoundException('Attendee not found in this net');
     }
 
     const hasQth = dto.country || dto.city || dto.district;
@@ -156,18 +156,18 @@ export class AttendeeService {
     return this.attendeeRepository.save(attendee);
   }
 
-  async deleteAttendee(sessionId: string, attendeeId: string) {
+  async deleteAttendee(netId: string, attendeeId: string) {
     const attendee = await this.attendeeRepository.findOne({
       where: { id: attendeeId },
-      relations: { session: true },
+      relations: { net: true },
     });
 
     if (!attendee) {
       throw new NotFoundException('Attendee not found');
     }
 
-    if (attendee.session.id !== sessionId) {
-      throw new NotFoundException('Attendee not found in this session');
+    if (attendee.net.id !== netId) {
+      throw new NotFoundException('Attendee not found in this net');
     }
 
     return this.attendeeRepository.delete(attendeeId);

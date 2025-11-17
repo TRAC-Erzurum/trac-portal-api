@@ -1,15 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Session } from '../../session/entities/session.entity';
-import { Attendee } from '../../session/entities/attendee.entity';
+import { Net } from '../../net/entities/net.entity';
+import { Attendee } from '../../net/entities/attendee.entity';
 import { Not, IsNull } from 'typeorm';
 import { startCase } from 'lodash';
 
 interface TopStat {
   title: string;
   icon: string;
-  type: 'operator' | 'session';
+  type: 'operator' | 'net';
   data: Array<
     | {
         userId: string;
@@ -17,8 +17,8 @@ interface TopStat {
         value: string;
       }
     | {
-        sessionId: string;
-        sessionName: string;
+        netId: string;
+        netName: string;
         operatorCallSign: string;
         value: string;
       }
@@ -28,27 +28,27 @@ interface TopStat {
 @Injectable()
 export class DashboardService {
   constructor(
-    @InjectRepository(Session)
-    private readonly sessionRepository: Repository<Session>,
+    @InjectRepository(Net)
+    private readonly netRepository: Repository<Net>,
     @InjectRepository(Attendee)
     private readonly attendeeRepository: Repository<Attendee>,
   ) {}
 
   async getPersonalStats(userId: string) {
-    const attendedSessions = await this.attendeeRepository.count({
+    const attendedNets = await this.attendeeRepository.count({
       where: { operator: { user: { id: userId } } },
     });
 
-    const managedSessions = await this.sessionRepository.count({
+    const managedNets = await this.netRepository.count({
       where: { operator: { user: { id: userId } } },
     });
 
-    const lastAttendedSession = await this.attendeeRepository.findOne({
+    const lastAttendedNet = await this.attendeeRepository.findOne({
       where: { operator: { user: { id: userId } } },
       order: { createdAt: 'DESC' },
-      relations: { session: true },
+      relations: { net: true },
       select: {
-        session: {
+        net: {
           id: true,
           name: true,
           startedAt: true,
@@ -56,7 +56,7 @@ export class DashboardService {
       },
     });
 
-    const lastManagedSession = await this.sessionRepository.findOne({
+    const lastManagedNet = await this.netRepository.findOne({
       where: { operator: { user: { id: userId } } },
       order: { startedAt: 'DESC' },
       select: {
@@ -69,7 +69,7 @@ export class DashboardService {
     const attendances = await this.attendeeRepository.find({
       where: { operator: { user: { id: userId } } },
       order: { createdAt: 'ASC' },
-      relations: { session: true },
+      relations: { net: true },
     });
 
     const signalReadability = await this.attendeeRepository
@@ -84,20 +84,20 @@ export class DashboardService {
       .getRawOne();
 
     return {
-      attendedSessions,
-      managedSessions,
-      lastAttendedSession: lastAttendedSession?.session
+      attendedNets,
+      managedNets,
+      lastAttendedNet: lastAttendedNet?.net
         ? {
-            id: lastAttendedSession.session.id,
-            name: lastAttendedSession.session.name,
-            date: lastAttendedSession.session.startedAt,
+            id: lastAttendedNet.net.id,
+            name: lastAttendedNet.net.name,
+            date: lastAttendedNet.net.startedAt,
           }
         : null,
-      lastManagedSession: lastManagedSession
+      lastManagedNet: lastManagedNet
         ? {
-            id: lastManagedSession.id,
-            name: lastManagedSession.name,
-            date: lastManagedSession.startedAt,
+            id: lastManagedNet.id,
+            name: lastManagedNet.name,
+            date: lastManagedNet.startedAt,
           }
         : null,
       consecutiveRecord: this.calculateConsecutiveRecord(attendances),
@@ -106,78 +106,78 @@ export class DashboardService {
     };
   }
 
-  async getRecentSessions() {
-    const activeSessions = await this.sessionRepository
-      .createQueryBuilder('session')
-      .leftJoinAndSelect('session.operator', 'operator')
+  async getRecentNets() {
+    const activeNets = await this.netRepository
+      .createQueryBuilder('net')
+      .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
       .loadRelationCountAndMap(
-        'session.attendeeCount',
-        'session.attendees',
+        'net.attendeeCount',
+        'net.attendees',
         'attendee',
       )
-      .where('session.startedAt IS NOT NULL')
-      .andWhere('session.endedAt IS NULL')
-      .orderBy('session.startedAt', 'DESC')
+      .where('net.startedAt IS NOT NULL')
+      .andWhere('net.endedAt IS NULL')
+      .orderBy('net.startedAt', 'DESC')
       .limit(5)
       .getMany();
 
-    if (activeSessions.length >= 5) {
-      return activeSessions;
+    if (activeNets.length >= 5) {
+      return activeNets;
     }
 
-    const upcomingSessions = await this.sessionRepository
-      .createQueryBuilder('session')
-      .leftJoinAndSelect('session.operator', 'operator')
+    const upcomingNets = await this.netRepository
+      .createQueryBuilder('net')
+      .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
       .loadRelationCountAndMap(
-        'session.attendeeCount',
-        'session.attendees',
+        'net.attendeeCount',
+        'net.attendees',
         'attendee',
       )
-      .where('session.startedAt IS NULL')
-      .orderBy('session.createdAt', 'DESC')
-      .limit(5 - activeSessions.length)
+      .where('net.startedAt IS NULL')
+      .orderBy('net.createdAt', 'DESC')
+      .limit(5 - activeNets.length)
       .getMany();
 
-    const combinedSessions = [...activeSessions, ...upcomingSessions];
+    const combinedNets = [...activeNets, ...upcomingNets];
 
-    if (combinedSessions.length >= 5) {
-      return combinedSessions.slice(0, 5);
+    if (combinedNets.length >= 5) {
+      return combinedNets.slice(0, 5);
     }
 
-    const completedSessions = await this.sessionRepository
-      .createQueryBuilder('session')
-      .leftJoinAndSelect('session.operator', 'operator')
+    const completedNets = await this.netRepository
+      .createQueryBuilder('net')
+      .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
       .loadRelationCountAndMap(
-        'session.attendeeCount',
-        'session.attendees',
+        'net.attendeeCount',
+          'net.attendees',
         'attendee',
       )
-      .where('session.startedAt IS NOT NULL')
-      .andWhere('session.endedAt IS NOT NULL')
-      .orderBy('session.startedAt', 'DESC')
-      .limit(5 - combinedSessions.length)
+      .where('net.startedAt IS NOT NULL')
+      .andWhere('net.endedAt IS NOT NULL')
+      .orderBy('net.startedAt', 'DESC')
+      .limit(5 - combinedNets.length)
       .getMany();
 
-    return [...combinedSessions, ...completedSessions].slice(0, 5);
+    return [...combinedNets, ...completedNets].slice(0, 5);
   }
 
   async getTopStats(): Promise<TopStat[]> {
-    const topOperatorsBySession = await this.sessionRepository
-      .createQueryBuilder('session')
-      .leftJoin('session.operator', 'operator')
+    const topOperatorsByNet = await this.netRepository
+      .createQueryBuilder('net')
+      .leftJoin('net.operator', 'operator')
       .leftJoin('operator.user', 'user')
       .select([
         'operator.id as operator_id',
         'operator.callSign as operator_callsign',
         'user.id as user_id',
-        'COUNT(session.id) as value',
+        'COUNT(net.id) as value',
       ])
       .where('operator.id IS NOT NULL')
       .groupBy('operator.id, operator.callSign, user.id')
-      .having('COUNT(session.id) > 0')
+      .having('COUNT(net.id) > 0')
       .orderBy('value', 'DESC')
       .limit(5)
       .getRawMany();
@@ -243,16 +243,16 @@ export class DashboardService {
       .createQueryBuilder('attendee')
       .leftJoin('attendee.operator', 'operator')
       .leftJoin('operator.user', 'user')
-      .leftJoin('attendee.session', 'session')
+      .leftJoin('attendee.net', 'net')
       .select([
         'operator.id as operator_id',
         'operator.callSign as operator_callsign',
         'user.id as user_id',
-        'session.startedAt as session_date',
+        'net.startedAt as net_date',
       ])
       .where('operator.id IS NOT NULL')
       .orderBy('operator.id', 'ASC')
-      .addOrderBy('session.startedAt', 'ASC')
+      .addOrderBy('net.startedAt', 'ASC')
       .getRawMany();
 
     const operatorStreaks = new Map();
@@ -273,8 +273,8 @@ export class DashboardService {
         currentStreak = 1;
         maxStreak = 1;
       } else if (index > 0) {
-        const prevDate = new Date(operatorAttendances[index - 1].session_date);
-        const currDate = new Date(attendance.session_date);
+        const prevDate = new Date(operatorAttendances[index - 1].net_date);
+        const currDate = new Date(attendance.net_date);
         const daysDiff =
           (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
 
@@ -306,18 +306,18 @@ export class DashboardService {
         value: `${op.streak} çevrim`,
       }));
 
-    const topSessionsByParticipants = await this.sessionRepository
-      .createQueryBuilder('session')
-      .leftJoin('session.operator', 'operator')
-      .leftJoin('session.attendees', 'attendee')
+    const topNetsByParticipants = await this.netRepository
+      .createQueryBuilder('net')
+      .leftJoin('net.operator', 'operator')
+      .leftJoin('net.attendees', 'attendee')
       .select([
-        'session.id as session_id',
-        'session.name as session_name',
+        'net.id as net_id',
+        'net.name as net_name',
         'operator.callSign as operator_callsign',
         'COUNT(DISTINCT attendee.id) as value',
       ])
-      .groupBy('session.id')
-      .addGroupBy('session.name')
+      .groupBy('net.id')
+      .addGroupBy('net.name')
       .addGroupBy('operator.callSign')
       .orderBy('value', 'DESC')
       .limit(5)
@@ -339,32 +339,32 @@ export class DashboardService {
 
     return [
       {
-        title: 'pages.dashboard.topSessionsByParticipants',
+        title: 'pages.dashboard.topNetsByParticipants',
         icon: 'mdi-account-multiple',
-        type: 'session',
-        data: topSessionsByParticipants.map((session) => ({
-          sessionId: session.session_id,
-          sessionName: session.session_name,
-          operatorCallSign: session.operator_callsign,
-          value: `${session.value} katılımcı`,
+        type: 'net',
+        data: topNetsByParticipants.map((net) => ({
+          netId: net.net_id,
+          netName: net.net_name,
+          operatorCallSign: net.operator_callsign,
+          value: `${net.value} katılımcı`,
         })),
       },
       {
         title: 'pages.dashboard.topActiveCities',
         icon: 'mdi-city',
-        type: 'session',
+        type: 'net',
         data: topActiveCities.map((city) => ({
-          sessionId: null,
-          sessionName: startCase(city.city),
+          netId: null,
+          netName: startCase(city.city),
           operatorCallSign: null,
           value: `${city.value} katılım`,
         })),
       },
       {
-        title: 'pages.dashboard.topOperatorsBySession',
+        title: 'pages.dashboard.topOperatorsByNet',
         icon: 'mdi-account-star',
         type: 'operator',
-        data: topOperatorsBySession.map((op) => ({
+        data: topOperatorsByNet.map((op) => ({
           userId: op.user_id,
           callSign: op.operator_callsign,
           value: `${op.value} çevrim`,
@@ -416,8 +416,8 @@ export class DashboardService {
     let currentStreak = 1;
 
     for (let i = 1; i < attendances.length; i++) {
-      const prevDate = new Date(attendances[i - 1].session.startedAt);
-      const currDate = new Date(attendances[i].session.startedAt);
+      const prevDate = new Date(attendances[i - 1].net.startedAt);
+      const currDate = new Date(attendances[i].net.startedAt);
 
       const daysDiff =
         (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
@@ -433,10 +433,10 @@ export class DashboardService {
     return maxStreak;
   }
 
-  async getSessionStats() {
-    const [totalSessions, totalAttendees, averageAttendees] = await Promise.all(
+  async getNetStats() {
+    const [totalNets, totalAttendees, averageAttendees] = await Promise.all(
       [
-        this.sessionRepository.count({
+        this.netRepository.count({
           where: {
             startedAt: Not(IsNull()),
           },
@@ -444,34 +444,34 @@ export class DashboardService {
 
         this.attendeeRepository
           .createQueryBuilder('attendee')
-          .innerJoin('attendee.session', 'session')
-          .where('session.startedAt IS NOT NULL')
+          .innerJoin('attendee.net', 'net')
+          .where('net.startedAt IS NOT NULL')
           .getCount(),
 
-        this.sessionRepository
-          .createQueryBuilder('session')
+        this.netRepository
+            .createQueryBuilder('net')
           .select('ROUND(AVG(attendee_count)::numeric, 1)', 'average')
           .from((subQuery) => {
             return subQuery
               .select([
-                'session.id',
+                'net.id',
                 'COUNT(DISTINCT attendee.id) as attendee_count',
               ])
-              .from('sessions', 'session')
+              .from('nets', 'net')
               .leftJoin(
                 'attendees',
                 'attendee',
-                'attendee.sessionId = session.id',
+                'attendee.netId = net.id',
               )
-              .where('session.startedAt IS NOT NULL')
-              .groupBy('session.id');
-          }, 'session_stats')
+              .where('net.startedAt IS NOT NULL')
+              .groupBy('net.id');
+          }, 'net_stats')
           .getRawOne(),
       ],
     );
 
     return {
-      totalSessions,
+      totalNets,
       totalAttendees,
       averageAttendees: averageAttendees?.average || 0,
     };

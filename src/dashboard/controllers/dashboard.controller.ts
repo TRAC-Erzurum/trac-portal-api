@@ -12,9 +12,9 @@ export class DashboardController {
     return this.dashboardService.getPersonalStats(user.id);
   }
 
-  @Get('recent-sessions')
-  getRecentSessions() {
-    return this.dashboardService.getRecentSessions();
+  @Get('recent-nets')
+  getRecentNets() {
+    return this.dashboardService.getRecentNets();
   }
 
   @Get('top-stats')
@@ -22,8 +22,8 @@ export class DashboardController {
     return this.dashboardService.getTopStats();
   }
 
-  @Get('session-stats')
-  getSessionStats() {
-    return this.dashboardService.getSessionStats();
+  @Get('net-stats')
+  getNetStats() {
+    return this.dashboardService.getNetStats();
   }
 }

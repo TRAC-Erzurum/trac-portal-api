@@ -1,9 +1,9 @@
 import { Mode } from '../../shared/enums/mode.enum';
-import { SessionType } from '../../shared/enums/session-type.enum';
-export class CreateSessionDto {
+import { NetType } from '../../shared/enums/net-type.enum';
+export class CreateNetDto {
   name: string;
   frequency: string;
   mode: Mode;
   operatorId: string;
-  type: SessionType;
+  type: NetType;
 }

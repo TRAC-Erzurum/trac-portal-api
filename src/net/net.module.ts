@@ -4,13 +4,13 @@ import { OperatorModule } from '../operator/operator.module';
 import { controllers } from './controllers';
 import { services } from './services';
 import { entities } from './entities';
-import { ManageSessionGuard } from './guards/manage-session.guard';
-import { UserModule } from 'src/user/user.module';
+import { ManageNetGuard } from './guards/manage-net.guard';
+import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [TypeOrmModule.forFeature(entities), OperatorModule, UserModule],
   controllers: controllers,
-  providers: [...services, ManageSessionGuard],
+  providers: [...services, ManageNetGuard],
   exports: [...services],
 })
-export class SessionModule {}
+export class NetModule {}

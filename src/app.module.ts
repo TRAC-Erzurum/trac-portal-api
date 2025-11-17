@@ -8,7 +8,7 @@ import { UserModule } from './user/user.module';
 import databaseConfig from './shared/config/database.config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { RolesGuard } from './auth/guards/roles.guard';
-import { SessionModule } from './session/session.module';
+import { NetModule } from './net/net.module';
 import { OperatorModule } from './operator/operator.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AppController } from './app.controller';
@@ -34,7 +34,7 @@ import { QthModule } from './qth/qth.module';
     }),
     AuthModule,
     UserModule,
-    SessionModule,
+    NetModule,
     OperatorModule,
     DashboardModule,
     QthModule,

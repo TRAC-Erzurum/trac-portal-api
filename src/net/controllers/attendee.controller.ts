@@ -14,58 +14,58 @@ import { AttendeeDto } from '../dto/attendee.dto';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
 import { UseGuards } from '@nestjs/common';
-import { ManageSessionGuard } from '../guards/manage-session.guard';
-import { ManageSession } from '../decorators/manage-session.decorator';
+import { ManageNetGuard } from '../guards/manage-net.guard';
+import { ManageNet } from '../decorators/manage-net.decorator';
 import { PaginationDto } from '../../shared/dto/pagination.dto';
 import { RequestWithUser } from '../../shared/types/request.types';
 
-@Controller('session/:sessionId/attendee')
+@Controller('net/:netId/attendee')
 @Roles(Role.VOLUNTEER)
-@UseGuards(ManageSessionGuard)
+@UseGuards(ManageNetGuard)
 export class AttendeeController {
   constructor(private readonly attendeeService: AttendeeService) {}
 
   @Get()
   getAttendees(
-    @Param('sessionId') sessionId: string,
+    @Param('netId') netId: string,
     @Query() pagination: PaginationDto,
   ) {
-    return this.attendeeService.getAttendees(sessionId, pagination);
+    return this.attendeeService.getAttendees(netId, pagination);
   }
 
   @Post()
-  @ManageSession()
-  async addAttendeeToSession(
-    @Param('sessionId') sessionId: string,
+  @ManageNet()
+  async addAttendeeToNet(
+    @Param('netId') netId: string,
     @Body() dto: AttendeeDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.attendeeService.addAttendeeToSession(
-      sessionId,
+    return this.attendeeService.addAttendeeToNet(
+      netId,
       dto,
       req.user.email,
     );
   }
 
   @Delete(':attendeeId')
-  @ManageSession()
+  @ManageNet()
   async deleteAttendee(
-    @Param('sessionId') sessionId: string,
+    @Param('netId') netId: string,
     @Param('attendeeId') attendeeId: string,
   ) {
-    return this.attendeeService.deleteAttendee(sessionId, attendeeId);
+    return this.attendeeService.deleteAttendee(netId, attendeeId);
   }
 
   @Patch(':attendeeId')
-  @ManageSession()
+  @ManageNet()
   async updateAttendee(
-    @Param('sessionId') sessionId: string,
+    @Param('netId') netId: string,
     @Param('attendeeId') attendeeId: string,
     @Body() dto: AttendeeDto,
     @Req() req: RequestWithUser,
   ) {
     return this.attendeeService.updateAttendee(
-      sessionId,
+      netId,
       attendeeId,
       dto,
       req.user.email,
