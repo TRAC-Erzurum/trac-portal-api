@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotAcceptableException,
@@ -33,7 +34,14 @@ export class UserService {
   }
 
   async create(user: DeepPartial<User>, createdBy: string): Promise<User> {
-    user.role = Role.GUEST;
+    const userCount = await this.userRepository.count();
+    
+    if (userCount === 0) {
+      user.role = Role.SUPER_ADMIN;
+    } else {
+      user.role = Role.GUEST;
+    }
+    
     user.createdBy = createdBy;
     user.updatedBy = [];
 
@@ -58,6 +66,10 @@ export class UserService {
     role: Role,
     updatedBy: string,
   ): Promise<User> {
+    if (role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Super admin role cannot be assigned');
+    }
+
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -242,6 +254,6 @@ export class UserService {
 
   async isAdmin(userId: string): Promise<boolean> {
     const user = await this.findOne(userId);
-    return user.role === Role.ADMIN;
+    return user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN;
   }
 }

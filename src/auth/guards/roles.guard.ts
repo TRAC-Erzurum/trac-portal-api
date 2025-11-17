@@ -40,6 +40,7 @@ export class RolesGuard implements CanActivate {
     }
 
     const roleHierarchy = {
+      [Role.SUPER_ADMIN]: [Role.SUPER_ADMIN, Role.ADMIN, Role.MEMBER, Role.VOLUNTEER, Role.GUEST],
       [Role.ADMIN]: [Role.ADMIN, Role.MEMBER, Role.VOLUNTEER, Role.GUEST],
       [Role.MEMBER]: [Role.MEMBER, Role.VOLUNTEER, Role.GUEST],
       [Role.VOLUNTEER]: [Role.VOLUNTEER, Role.GUEST],
