@@ -1,0 +1,90 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Req,
+} from '@nestjs/common';
+import { NetService } from '../services/net.service';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { Role } from '../../auth/enums/role.enum';
+import { ManageNet } from '../decorators/manage-net.decorator';
+import { CreateNetDto } from '../dto/create-net.dto';
+import { UpdateNetDto } from '../dto/update-net.dto';
+import { RequestWithUser } from '../../shared/types/request.types';
+
+@Controller('net')
+export class NetController {
+  constructor(private readonly netService: NetService) {}
+
+  @Post()
+  @Roles(Role.ADMIN)
+  create(
+    @Body() createNetDto: CreateNetDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.netService.create(createNetDto, req.user.email);
+  }
+
+  @Put(':id')
+  @Roles(Role.ADMIN)
+  updateNet(
+    @Param('id') id: string,
+    @Body() updateNetDto: UpdateNetDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.netService.update(id, updateNetDto, req.user.email);
+  }
+
+  @Delete(':id')
+  @Roles(Role.ADMIN)
+  deleteNet(@Param('id') id: string) {
+    return this.netService.delete(id);
+  }
+
+  @Get()
+  findAll() {
+    return this.netService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.netService.findOne(id);
+  }
+
+  @Patch(':id/start')
+  @Roles(Role.VOLUNTEER)
+  @ManageNet()
+  async startNet(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.netService.startNet(id, req.user.email);
+  }
+
+  @Patch(':id/end')
+  @Roles(Role.VOLUNTEER)
+  @ManageNet()
+  async endNet(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.netService.endNet(id, req.user.email);
+  }
+
+  @Patch(':id/restart')
+  @Roles(Role.ADMIN)
+  @ManageNet()
+  restartNet(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.netService.restartNet(id, req.user.email);
+  }
+
+  @Patch(':id/operator')
+  @Roles(Role.ADMIN)
+  @ManageNet()
+  changeOperator(
+    @Param('id') id: string,
+    @Body('operatorId') operatorId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.netService.changeOperator(id, operatorId, req.user.email);
+  }
+}

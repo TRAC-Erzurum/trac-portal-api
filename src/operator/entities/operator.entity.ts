@@ -1,7 +1,7 @@
 import { Entity, Column, OneToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
-import { Session } from '../../session/entities/session.entity';
-import { Attendee } from '../../session/entities/attendee.entity';
+import { Net } from '../../net/entities/net.entity';
+import { Attendee } from '../../net/entities/attendee.entity';
 import { BaseEntity } from '../../shared/entities/base.entity';
 
 @Entity('operators')
@@ -34,8 +34,8 @@ export class Operator extends BaseEntity {
   @JoinColumn()
   user: User;
 
-  @OneToMany(() => Session, (session) => session.operator)
-  sessions: Session[];
+  @OneToMany(() => Net, (net) => net.operator)
+  nets: Net[];
 
   @OneToMany(() => Attendee, (attendee) => attendee.operator)
   attendees: Attendee[];

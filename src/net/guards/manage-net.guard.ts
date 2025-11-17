@@ -6,22 +6,22 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { SessionService } from '../services/session.service';
-import { MANAGE_SESSION_KEY } from '../decorators/manage-session.decorator';
+import { MANAGE_NET_KEY } from '../decorators/manage-net.decorator';
 import { ICurrentUser } from '../../user/types/user.types';
-import { UserService } from 'src/user/services/user.service';
+import { UserService } from '../../user/services/user.service';
+import { NetService } from '../services/net.service';
 
 @Injectable()
-export class ManageSessionGuard implements CanActivate {
+export class ManageNetGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
-    private sessionService: SessionService,
+    private netService: NetService,
     private userService: UserService,
-  ) {}
+  ) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const paramName = this.reflector.get<string>(
-      MANAGE_SESSION_KEY,
+      MANAGE_NET_KEY,
       context.getHandler(),
     );
 
@@ -30,16 +30,16 @@ export class ManageSessionGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const sessionId: string = request.params[paramName];
+    const netId: string = request.params[paramName];
     const user: ICurrentUser = request.user;
 
-    if (!sessionId || !user) {
+    if (!netId || !user) {
       throw new ForbiddenException('Yetkilendirme başarısız');
     }
 
-    const session = await this.sessionService.findOne(sessionId);
+    const net = await this.netService.findOne(netId);
 
-    if (!session) {
+    if (!net) {
       throw new NotFoundException('Çevrim bulunamadı');
     }
 
@@ -47,7 +47,7 @@ export class ManageSessionGuard implements CanActivate {
       return true;
     }
 
-    if (session.operator.user.id !== user.id) {
+    if (net.operator.user.id !== user.id) {
       throw new ForbiddenException('Bu işlemi yapmaya yetkiniz yok');
     }
 

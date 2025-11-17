@@ -1,5 +1,5 @@
 import { Entity, Column, ManyToOne } from 'typeorm';
-import { Session } from './session.entity';
+import { Net } from './net.entity';
 import { Operator } from '../../operator/entities/operator.entity';
 import { BaseEntity } from '../../shared/entities/base.entity';
 
@@ -26,8 +26,8 @@ export class Attendee extends BaseEntity {
   @Column({ nullable: true })
   signalStrength: number;
 
-  @ManyToOne(() => Session, (session) => session.attendees)
-  session: Session;
+    @ManyToOne(() => Net, (net) => net.attendees)
+  net: Net;
 
   @ManyToOne(() => Operator, (operator) => operator.attendees)
   operator: Operator;

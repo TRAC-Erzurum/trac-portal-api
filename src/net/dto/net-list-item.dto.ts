@@ -1,4 +1,4 @@
-export class SessionListItemDto {
+export class NetListItemDto {
   id: string;
   name: string;
   startedAt: Date;

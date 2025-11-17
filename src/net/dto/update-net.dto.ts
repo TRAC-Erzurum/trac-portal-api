@@ -2,9 +2,9 @@ import { IsDate, IsEnum, IsOptional } from 'class-validator';
 import { IsNotEmpty } from 'class-validator';
 import { IsString } from 'class-validator';
 import { Mode } from 'src/shared/enums/mode.enum';
-import { SessionType } from 'src/shared/enums/session-type.enum';
+import { NetType } from 'src/shared/enums/net-type.enum';
 
-export class UpdateSessionDto {
+export class UpdateNetDto {
   @IsString()
   @IsNotEmpty()
   name: string;
@@ -22,8 +22,8 @@ export class UpdateSessionDto {
   operatorId: string;
 
   @IsNotEmpty()
-  @IsEnum(SessionType)
-  type: SessionType;
+  @IsEnum(NetType)
+  type: NetType;
 
   @IsDate()
   @IsOptional()

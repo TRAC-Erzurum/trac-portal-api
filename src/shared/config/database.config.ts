@@ -13,7 +13,7 @@ export default registerAs(
     ssl: process.env.DB_SSL === 'true',
     migrations: ['dist/migrations/*{.ts,.js}'],
     entities: ['dist/**/*.entity{.ts,.js}'],
-    synchronize: process.env.NODE_ENV === 'development',
+    synchronize: false,
     logging: false,
   }),
 );
