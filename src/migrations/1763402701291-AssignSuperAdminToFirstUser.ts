@@ -4,21 +4,18 @@ export class AssignSuperAdminToFirstUser1763402701291 implements MigrationInterf
   name = 'AssignSuperAdminToFirstUser1763402701291';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const superAdminCount = await queryRunner.query(
-      `SELECT COUNT(*)::int as count FROM "users" WHERE "role" = 'super_admin'`,
+    const firstUser = await queryRunner.query(
+      `SELECT "id" FROM "users" ORDER BY "createdAt" ASC LIMIT 1`,
     );
 
-    if (parseInt(superAdminCount[0]?.count || '0', 10) === 0) {
-      const firstUser = await queryRunner.query(
-        `SELECT "id" FROM "users" ORDER BY "createdAt" ASC LIMIT 1`,
+    if (firstUser?.length > 0) {
+      const userId = firstUser[0].id;
+      await queryRunner.query(
+        `DO $migration$
+        BEGIN
+          EXECUTE format('UPDATE "users" SET "role" = CAST(%L AS %I) WHERE "id" = %L', 'super_admin', 'users_role_enum', '${userId}');
+        END $migration$;`,
       );
-
-      if (firstUser?.length > 0) {
-        await queryRunner.query(
-          `UPDATE "users" SET "role" = 'super_admin' WHERE "id" = $1`,
-          [firstUser[0].id],
-        );
-      }
     }
   }
 
