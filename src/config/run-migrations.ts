@@ -7,7 +7,9 @@ async function runMigrations() {
 
     if (pendingMigrations) {
       console.log('Running pending migrations...');
-      await dataSource.runMigrations();
+      await dataSource.runMigrations({
+        transaction: 'each',
+      });
       console.log('Migrations completed successfully');
     } else {
       console.log('No pending migrations');
