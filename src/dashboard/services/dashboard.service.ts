@@ -66,11 +66,15 @@ export class DashboardService {
       },
     });
 
-    const attendances = await this.attendeeRepository.find({
-      where: { operator: { user: { id: userId } } },
-      order: { createdAt: 'ASC' },
-      relations: { net: true },
-    });
+    const attendances = await this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .leftJoinAndSelect('attendee.net', 'net')
+      .leftJoin('attendee.operator', 'operator')
+      .leftJoin('operator.user', 'user')
+      .where('user.id = :userId', { userId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .orderBy('net.endedAt', 'ASC')
+      .getMany();
 
     const signalReadability = await this.attendeeRepository
       .createQueryBuilder('attendee')
@@ -119,10 +123,10 @@ export class DashboardService {
       .where('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NULL')
       .orderBy('net.startedAt', 'DESC')
-      .limit(5)
+      .limit(6)
       .getMany();
 
-    if (activeNets.length >= 5) {
+    if (activeNets.length >= 6) {
       return activeNets;
     }
 
@@ -137,13 +141,13 @@ export class DashboardService {
       )
       .where('net.startedAt IS NULL')
       .orderBy('net.createdAt', 'DESC')
-      .limit(5 - activeNets.length)
+      .limit(6 - activeNets.length)
       .getMany();
 
     const combinedNets = [...activeNets, ...upcomingNets];
 
-    if (combinedNets.length >= 5) {
-      return combinedNets.slice(0, 5);
+    if (combinedNets.length >= 6) {
+      return combinedNets.slice(0, 6);
     }
 
     const completedNets = await this.netRepository
@@ -158,10 +162,10 @@ export class DashboardService {
       .where('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NOT NULL')
       .orderBy('net.startedAt', 'DESC')
-      .limit(5 - combinedNets.length)
+      .limit(6 - combinedNets.length)
       .getMany();
 
-    return [...combinedNets, ...completedNets].slice(0, 5);
+    return [...combinedNets, ...completedNets].slice(0, 6);
   }
 
   async getTopStats(): Promise<TopStat[]> {
@@ -176,6 +180,7 @@ export class DashboardService {
         'COUNT(net.id) as value',
       ])
       .where('operator.id IS NOT NULL')
+      .andWhere('net.endedAt IS NOT NULL')
       .groupBy('operator.id, operator.callSign, user.id')
       .having('COUNT(net.id) > 0')
       .orderBy('value', 'DESC')
@@ -216,6 +221,7 @@ export class DashboardService {
       .addGroupBy('user.id')
       .orderBy('value', 'DESC')
       .addOrderBy('count', 'DESC')
+      .addOrderBy('operator.callSign', 'ASC')
       .limit(5)
       .getRawMany();
 
@@ -236,6 +242,7 @@ export class DashboardService {
       .addGroupBy('user.id')
       .orderBy('value', 'DESC')
       .addOrderBy('count', 'DESC')
+      .addOrderBy('operator.callSign', 'ASC')
       .limit(5)
       .getRawMany();
 
@@ -248,11 +255,12 @@ export class DashboardService {
         'operator.id as operator_id',
         'operator.callSign as operator_callsign',
         'user.id as user_id',
-        'net.startedAt as net_date',
+        'net.endedAt as net_date',
       ])
       .where('operator.id IS NOT NULL')
+      .andWhere('net.endedAt IS NOT NULL')
       .orderBy('operator.id', 'ASC')
-      .addOrderBy('net.startedAt', 'ASC')
+      .addOrderBy('net.endedAt', 'ASC')
       .getRawMany();
 
     const operatorStreaks = new Map();
@@ -325,14 +333,11 @@ export class DashboardService {
 
     const topActiveCities = await this.attendeeRepository
       .createQueryBuilder('attendee')
-      .select([
-        'LOWER(attendee.city) as city_lower',
-        'MAX(attendee.city) as city',
-        'COUNT(attendee.id) as value',
-      ])
+      .select('TRIM(attendee.city)', 'city')
+      .addSelect('COUNT(attendee.id)', 'value')
       .where('attendee.city IS NOT NULL')
-      .andWhere("attendee.city != ''")
-      .groupBy('LOWER(attendee.city)')
+      .andWhere("TRIM(attendee.city) != ''")
+      .groupBy('TRIM(attendee.city)')
       .orderBy('value', 'DESC')
       .limit(5)
       .getRawMany();
@@ -410,14 +415,24 @@ export class DashboardService {
   }
 
   private calculateConsecutiveRecord(attendances: Attendee[]): number {
-    if (!attendances.length) return 0;
+    const filteredAttendances = attendances.filter(
+      (attendance) => attendance.net?.endedAt != null
+    );
+
+    if (!filteredAttendances.length) return 0;
+
+    const sortedAttendances = [...filteredAttendances].sort((a, b) => {
+      const dateA = a.net.endedAt ? new Date(a.net.endedAt).getTime() : 0;
+      const dateB = b.net.endedAt ? new Date(b.net.endedAt).getTime() : 0;
+      return dateA - dateB;
+    });
 
     let maxStreak = 1;
     let currentStreak = 1;
 
-    for (let i = 1; i < attendances.length; i++) {
-      const prevDate = new Date(attendances[i - 1].net.startedAt);
-      const currDate = new Date(attendances[i].net.startedAt);
+    for (let i = 1; i < sortedAttendances.length; i++) {
+      const prevDate = new Date(sortedAttendances[i - 1].net.endedAt);
+      const currDate = new Date(sortedAttendances[i].net.endedAt);
 
       const daysDiff =
         (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
