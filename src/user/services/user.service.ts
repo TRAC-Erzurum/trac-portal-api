@@ -17,6 +17,7 @@ import { UpdateUserDto } from '../dto/update-user.dto';
 import * as crypto from 'crypto';
 import { SetPasswordDto } from '../dto/set-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
+import { AuthUser } from '../../auth/types/auth.types';
 
 @Injectable()
 export class UserService {
@@ -250,6 +251,41 @@ export class UserService {
     user.password = password;
     user.updatedBy = [...(user.updatedBy || []), updatedBy];
     await this.userRepository.save(user);
+  }
+
+  async adminResetPassword(
+    targetUserId: string,
+    newPassword: string,
+    adminUser: AuthUser,
+  ): Promise<void> {
+    const targetUser = await this.findOne(targetUserId);
+
+    const roleHierarchy = {
+      [Role.SUPER_ADMIN]: 5,
+      [Role.ADMIN]: 4,
+      [Role.MEMBER]: 3,
+      [Role.VOLUNTEER]: 2,
+      [Role.GUEST]: 1,
+    };
+
+    if (adminUser.role !== Role.SUPER_ADMIN) {
+      if (roleHierarchy[targetUser.role] >= roleHierarchy[adminUser.role]) {
+        throw new ForbiddenException('error.cannotResetHigherRolePassword');
+      }
+    }
+
+    const salt = crypto.randomBytes(16).toString('hex');
+
+    const hashedPassword = crypto
+      .createHash('sha256')
+      .update(`${newPassword}${salt}`)
+      .digest('hex');
+
+    targetUser.salt = salt;
+    targetUser.password = hashedPassword;
+    targetUser.updatedBy = [...(targetUser.updatedBy || []), adminUser.email];
+
+    await this.userRepository.save(targetUser);
   }
 
   async isAdmin(userId: string): Promise<boolean> {

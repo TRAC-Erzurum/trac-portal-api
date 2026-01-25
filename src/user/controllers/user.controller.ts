@@ -21,6 +21,7 @@ import { UpdateOperatorDto } from '../dto/update-operator.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { SetPasswordDto } from '../dto/set-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
+import { AdminResetPasswordDto } from '../dto/admin-reset-password.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -180,6 +181,16 @@ export class UserController {
     @Req() req: RequestWithUser,
   ) {
     return this.userService.updateUserRole(id, role, req.user.email);
+  }
+
+  @Post(':id/reset-password')
+  @Roles(Role.ADMIN)
+  async adminResetPassword(
+    @Param('id') id: string,
+    @Body() dto: AdminResetPasswordDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.userService.adminResetPassword(id, dto.newPassword, req.user);
   }
 
   @Get(':id/operator')
