@@ -15,6 +15,7 @@ import { Role } from '../../auth/enums/role.enum';
 import { ManageNet } from '../decorators/manage-net.decorator';
 import { CreateNetDto } from '../dto/create-net.dto';
 import { UpdateNetDto } from '../dto/update-net.dto';
+import { StartNetDto } from '../dto/start-net.dto';
 import { RequestWithUser } from '../../shared/types/request.types';
 
 @Controller('net')
@@ -22,7 +23,7 @@ export class NetController {
   constructor(private readonly netService: NetService) {}
 
   @Post()
-  @Roles(Role.ADMIN)
+  @Roles(Role.MEMBER)
   create(
     @Body() createNetDto: CreateNetDto,
     @Req() req: RequestWithUser,
@@ -59,8 +60,12 @@ export class NetController {
   @Patch(':id/start')
   @Roles(Role.VOLUNTEER)
   @ManageNet()
-  async startNet(@Param('id') id: string, @Req() req: RequestWithUser) {
-    return this.netService.startNet(id, req.user.email);
+  async startNet(
+    @Param('id') id: string,
+    @Body() startNetDto: StartNetDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.netService.startNet(id, req.user.email, startNetDto.addOperatorAsAttendee);
   }
 
   @Patch(':id/end')
@@ -85,6 +90,7 @@ export class NetController {
     @Body('operatorId') operatorId: string,
     @Req() req: RequestWithUser,
   ) {
-    return this.netService.changeOperator(id, operatorId, req.user.email);
+    const isSuperAdmin = req.user.role === Role.SUPER_ADMIN;
+    return this.netService.changeOperator(id, operatorId, req.user.email, isSuperAdmin);
   }
 }

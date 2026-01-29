@@ -20,15 +20,13 @@ export class OperatorService {
   async find(
     query: OperatorQueryDto,
   ): Promise<{ data: Operator[]; total: number }> {
-    const queryBuilder = this.operatorRepository
+    const baseQueryBuilder = this.operatorRepository
       .createQueryBuilder('operator')
-      .leftJoinAndSelect('operator.user', 'user')
-      .orderBy('operator.callSign', query.sort)
-      .addOrderBy('user.id', 'ASC', 'NULLS FIRST');
+      .leftJoinAndSelect('operator.user', 'user');
 
     if (query.search) {
       const searchTerm = `%${query.search.toLowerCase()}%`;
-      queryBuilder.where(
+      baseQueryBuilder.where(
         '(LOWER(operator.callSign) LIKE :search OR ' +
           'LOWER(operator.fullName) LIKE :search OR ' +
           'LOWER(operator.country) LIKE :search OR ' +
@@ -39,10 +37,19 @@ export class OperatorService {
       );
     }
 
-    const [data, total] = await queryBuilder
+    const total = await baseQueryBuilder.getCount();
+
+    const data = await baseQueryBuilder
+      .addSelect(
+        'CASE WHEN "user"."id" IS NULL THEN 1 ELSE 0 END',
+        'user_sort_priority',
+      )
+      .orderBy('user_sort_priority', 'ASC')
+      .addOrderBy('operator.createdAt', 'ASC')
+      .addOrderBy('operator.callSign', 'ASC')
       .skip((query.pageNumber - 1) * query.pageSize)
       .take(query.pageSize)
-      .getManyAndCount();
+      .getMany();
 
     return { data, total };
   }

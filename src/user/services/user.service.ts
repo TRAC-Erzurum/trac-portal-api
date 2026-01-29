@@ -76,6 +76,10 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
+    if (user.role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Super admin role cannot be changed');
+    }
+
     user.role = role;
     user.updatedBy = [...(user.updatedBy || []), updatedBy];
     return this.userRepository.save(user);
@@ -291,5 +295,10 @@ export class UserService {
   async isAdmin(userId: string): Promise<boolean> {
     const user = await this.findOne(userId);
     return user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN;
+  }
+
+  async isSuperAdmin(userId: string): Promise<boolean> {
+    const user = await this.findOne(userId);
+    return user.role === Role.SUPER_ADMIN;
   }
 }
