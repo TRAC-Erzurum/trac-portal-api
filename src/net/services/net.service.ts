@@ -1,11 +1,13 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Net } from '../entities/net.entity';
+import { Attendee } from '../entities/attendee.entity';
 import { Repository } from 'typeorm';
 import { CreateNetDto } from '../dto/create-net.dto';
 import { OperatorService } from '../../operator/services/operator.service';
@@ -16,6 +18,8 @@ export class NetService {
   constructor(
     @InjectRepository(Net)
     private readonly netRepository: Repository<Net>,
+    @InjectRepository(Attendee)
+    private readonly attendeeRepository: Repository<Attendee>,
     private readonly operatorService: OperatorService,
   ) {}
 
@@ -78,11 +82,33 @@ export class NetService {
     await this.netRepository.delete(id);
   }
 
-  async startNet(id: string, updatedBy: string) {
+  async startNet(id: string, updatedBy: string, addOperatorAsAttendee: boolean = false) {
     const net = await this.findOne(id);
     net.startedAt = new Date();
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
-    return this.netRepository.save(net);
+    const savedNet = await this.netRepository.save(net);
+
+    if (addOperatorAsAttendee && net.operator) {
+      const existingAttendee = await this.attendeeRepository.findOne({
+        where: { callSign: net.operator.callSign, net: { id } },
+      });
+
+      if (!existingAttendee) {
+        const attendee = new Attendee();
+        attendee.callSign = net.operator.callSign;
+        attendee.name = net.operator.fullName;
+        attendee.country = net.operator.country;
+        attendee.city = net.operator.city;
+        attendee.district = net.operator.district;
+        attendee.operator = net.operator;
+        attendee.net = savedNet;
+        attendee.createdBy = updatedBy;
+        attendee.updatedBy = [];
+        await this.attendeeRepository.save(attendee);
+      }
+    }
+
+    return this.findOne(id);
   }
 
   async endNet(id: string, updatedBy: string) {
@@ -139,8 +165,13 @@ export class NetService {
     return this.netRepository.save(net);
   }
 
-  async changeOperator(id: string, operatorId: string, updatedBy: string) {
+  async changeOperator(id: string, operatorId: string, updatedBy: string, isSuperAdmin: boolean = false) {
     const net = await this.findOne(id);
+
+    if (net.startedAt && !isSuperAdmin) {
+      throw new ForbiddenException('error.operatorChangeNotAllowed');
+    }
+
     net.operator = await this.operatorService.findOne(operatorId);
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
     return this.netRepository.save(net);
