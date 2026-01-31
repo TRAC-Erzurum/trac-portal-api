@@ -1,18 +1,28 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { AuthUser, JwtPayload } from '../types/auth.types';
 import { UserService } from 'src/user/services/user.service';
 import { GoogleProfile } from '../types/auth.types';
 import { RegisterDto } from '../dto/register.dto';
 import { OperatorService } from '../../operator/services/operator.service';
+import {
+  PasswordResetRequest,
+  PasswordResetStatus,
+} from '../entities/password-reset-request.entity';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly operatorService: OperatorService,
+    @InjectRepository(PasswordResetRequest)
+    private readonly passwordResetRequestRepository: Repository<PasswordResetRequest>,
   ) {}
 
   async validateOAuthUser(profile: GoogleProfile): Promise<AuthUser> {
@@ -87,7 +97,7 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const existingUser = await this.userService.findByEmail(dto.email);
     if (existingUser) {
-      throw new ConflictException('Kullanıcı zaten mevcut');
+      throw new ConflictException('error.userAlreadyExists');
     }
 
     const operator = await this.operatorService.create(
@@ -112,5 +122,36 @@ export class AuthService {
       },
       dto.email,
     );
+  }
+
+  async createPasswordResetRequest(callSign: string): Promise<void> {
+    const normalizedCallSign = callSign.toUpperCase();
+
+    const existingPending = await this.passwordResetRequestRepository.findOne({
+      where: {
+        callSign: normalizedCallSign,
+        status: PasswordResetStatus.PENDING,
+      },
+    });
+
+    if (existingPending) {
+      this.logger.log(`Password reset request already pending for ${normalizedCallSign}`);
+      return;
+    }
+
+    const operator = await this.operatorService.findByCallSign(normalizedCallSign);
+
+    if (!operator) {
+      this.logger.warn(`Password reset requested for unknown call sign: ${normalizedCallSign}`);
+    }
+
+    const request = this.passwordResetRequestRepository.create({
+      callSign: normalizedCallSign,
+      operator: operator || null,
+      operatorId: operator?.id || null,
+      status: PasswordResetStatus.PENDING,
+    });
+
+    await this.passwordResetRequestRepository.save(request);
   }
 }

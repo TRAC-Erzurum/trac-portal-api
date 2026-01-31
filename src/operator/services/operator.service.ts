@@ -72,6 +72,13 @@ export class OperatorService {
     return operator;
   }
 
+  async findByCallSign(callSign: string): Promise<Operator | null> {
+    return this.operatorRepository.findOne({
+      where: { callSign: callSign.toUpperCase() },
+      relations: { user: true },
+    });
+  }
+
   async create(
     operatorData: DeepPartial<Operator>,
     createdBy: string,

@@ -41,17 +41,20 @@ async function bootstrap() {
   const domain = configService.get<string>('DOMAIN');
   const isProduction = configService.get<string>('NODE_ENV') === 'production';
 
-  const corsOrigin = isProduction
-    ? `https://${domain}`
-    : [`http://${domain}`, 'http://localhost:3000'];
-
-  app.enableCors({
-    origin: corsOrigin,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    credentials: true,
-    exposedHeaders: ['Set-Cookie'],
-  });
+  app.enableCors(
+    isProduction
+      ? {
+          origin: `https://${domain}`,
+          methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+          allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+          credentials: true,
+          exposedHeaders: ['Set-Cookie'],
+        }
+      : {
+          origin: true,
+          credentials: true,
+        },
+  );
 
   app.use(cookieParser(configService.get<string>('COOKIE_SECRET')));
 

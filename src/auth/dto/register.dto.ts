@@ -6,4 +6,5 @@ export class RegisterDto {
   district?: string;
   city?: string;
   country?: string;
+  captchaToken?: string;
 }

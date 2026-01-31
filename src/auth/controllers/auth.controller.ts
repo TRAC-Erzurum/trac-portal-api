@@ -6,9 +6,12 @@ import {
   Res,
   Post,
   Body,
+  Ip,
+  Inject,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from '../services/auth.service';
+import { CaptchaService, CAPTCHA_SERVICE } from '../services/captcha.interface';
 import { Public } from '../decorators/public.decorator';
 import { AuthUser } from '../types/auth.types';
 import { Request, Response } from 'express';
@@ -16,6 +19,7 @@ import { ConfigService } from '@nestjs/config';
 import { AllowWithoutCallsign } from '../decorators/allow-without-callsign.decorator';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
+import { PasswordResetRequestDto } from '../dto/password-reset-request.dto';
 
 interface RequestWithUser extends Request {
   user: AuthUser;
@@ -25,6 +29,7 @@ interface RequestWithUser extends Request {
 export class AuthController {
   constructor(
     private authService: AuthService,
+    @Inject(CAPTCHA_SERVICE) private captchaService: CaptchaService,
     private configService: ConfigService,
   ) {}
 
@@ -72,7 +77,9 @@ export class AuthController {
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
+    @Ip() ip: string,
   ) {
+    await this.captchaService.verify(dto.captchaToken, ip);
     await this.authService.register(dto);
 
     const authUser = await this.authService.validateLocalUser(
@@ -96,7 +103,10 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
+    @Ip() ip: string,
   ) {
+    await this.captchaService.verify(dto.captchaToken, ip);
+
     const authUser = await this.authService.validateLocalUser(
       dto.identifier,
       dto.password,
@@ -111,5 +121,16 @@ export class AuthController {
       domain: this.configService.get<string>('DOMAIN'),
       maxAge: 24 * 60 * 60 * 1000,
     });
+  }
+
+  @Public()
+  @Post('password-reset-request')
+  async passwordResetRequest(
+    @Body() dto: PasswordResetRequestDto,
+    @Ip() ip: string,
+  ) {
+    await this.captchaService.verify(dto.captchaToken, ip);
+    await this.authService.createPasswordResetRequest(dto.callSign);
+    return { message: 'Talebiniz alındı' };
   }
 }
