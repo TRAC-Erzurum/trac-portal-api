@@ -22,6 +22,14 @@ export interface ActiveNet {
   durationMinutes: number;
 }
 
+export interface PendingNet {
+  id: string;
+  name: string;
+  frequency: string;
+  mode: string;
+  operatorCallSign: string;
+}
+
 export interface PersonalNetStats {
   attendedNets: number;
   managedNets: number;
@@ -108,6 +116,24 @@ export class DashboardV2Service {
       durationMinutes: net.startedAt
         ? Math.floor((now.getTime() - new Date(net.startedAt).getTime()) / 60000)
         : 0,
+    }));
+  }
+
+  async getPendingNets(limit: number = 5): Promise<PendingNet[]> {
+    const nets = await this.netRepository
+      .createQueryBuilder('net')
+      .leftJoinAndSelect('net.operator', 'operator')
+      .where('net.startedAt IS NULL')
+      .orderBy('net.createdAt', 'DESC')
+      .limit(limit)
+      .getMany();
+
+    return nets.map((net) => ({
+      id: net.id,
+      name: net.name,
+      frequency: net.frequency,
+      mode: net.mode,
+      operatorCallSign: net.operator?.callSign || 'Unknown',
     }));
   }
 

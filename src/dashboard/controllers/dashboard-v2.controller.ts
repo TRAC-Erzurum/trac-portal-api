@@ -6,6 +6,7 @@ import {
   DashboardV2Service,
   StatusResponse,
   ActiveNet,
+  PendingNet,
   PersonalNetStats,
   CommunityStats,
 } from '../services/dashboard-v2.service';
@@ -24,6 +25,13 @@ export class DashboardV2Controller {
     @Query('limit', new DefaultValuePipe(5), ParseIntPipe) limit: number,
   ): Promise<ActiveNet[]> {
     return this.dashboardService.getActiveNets(Math.min(limit, 10));
+  }
+
+  @Get('nets/pending')
+  async getPendingNets(
+    @Query('limit', new DefaultValuePipe(5), ParseIntPipe) limit: number,
+  ): Promise<PendingNet[]> {
+    return this.dashboardService.getPendingNets(Math.min(limit, 10));
   }
 
   @Get('nets/recent')
