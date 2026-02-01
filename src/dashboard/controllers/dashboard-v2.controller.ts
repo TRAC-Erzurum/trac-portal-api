@@ -56,15 +56,17 @@ export class DashboardV2Controller {
   async getActivity(
     @CurrentUser() user: User,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
   ) {
-    return this.dashboardService.getActivity(user?.id, Math.min(limit, 50));
+    return this.dashboardService.getActivity(user?.id, Math.min(limit, 50), offset);
   }
 
   @Get('activity/global')
   @Public()
   async getGlobalActivity(
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
   ) {
-    return this.dashboardService.getActivity(undefined, Math.min(limit, 50));
+    return this.dashboardService.getActivity(undefined, Math.min(limit, 50), offset);
   }
 }

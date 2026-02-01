@@ -25,20 +25,31 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const message = exception.message || null;
     const errorResponse = exception.getResponse() || null;
 
-    this.logger.error(
-      `HTTP Exception: ${status} - ${request.method} ${request.url}`,
-      {
-        statusCode: status,
-        path: request.url,
-        method: request.method,
-        timestamp: new Date().toISOString(),
-        message,
-        errorResponse,
-        headers: request.headers,
-        query: request.query,
-        body: request.body,
-      },
-    );
+    const logData = {
+      statusCode: status,
+      path: request.url,
+      method: request.method,
+      timestamp: new Date().toISOString(),
+      message,
+      errorResponse,
+    };
+
+    if (status >= 500) {
+      this.logger.error(
+        `HTTP Exception: ${status} - ${request.method} ${request.url}`,
+        {
+          ...logData,
+          headers: request.headers,
+          query: request.query,
+          body: request.body,
+        },
+      );
+    } else {
+      this.logger.debug(
+        `HTTP ${status} - ${request.method} ${request.url}`,
+        logData,
+      );
+    }
 
     response.status(status).json({
       statusCode: status,

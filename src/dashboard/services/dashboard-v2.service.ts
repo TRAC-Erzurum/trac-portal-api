@@ -374,11 +374,12 @@ export class DashboardV2Service {
     return stats;
   }
 
-  async getActivity(userId?: string, limit: number = 10) {
+  async getActivity(userId?: string, limit: number = 10, offset: number = 0) {
     const query = this.activityRepository
       .createQueryBuilder('activity')
       .orderBy('activity.createdAt', 'DESC')
-      .limit(limit);
+      .limit(limit)
+      .offset(offset);
 
     if (userId) {
       query.where('activity.userId = :userId OR activity.targetCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId)', { userId });
