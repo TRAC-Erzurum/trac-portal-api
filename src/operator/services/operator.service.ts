@@ -7,14 +7,36 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, ILike, IsNull, Not, Repository } from 'typeorm';
 import { Operator } from '../entities/operator.entity';
+import { Attendee } from '../../net/entities/attendee.entity';
+import { Net } from '../../net/entities/net.entity';
 import { chunk, startCase } from 'lodash';
 import { OperatorQueryDto } from '../dto/operator-query.dto';
+
+export interface OperatorStats {
+  attendedNets: number;
+  managedNets: number;
+  streak: number;
+  averageReadability: number;
+  averageSignal: number;
+}
+
+export interface OperatorNetItem {
+  id: string;
+  name: string;
+  date: Date;
+  role: 'attended' | 'managed';
+  attendeeCount?: number;
+}
 
 @Injectable()
 export class OperatorService {
   constructor(
     @InjectRepository(Operator)
     private readonly operatorRepository: Repository<Operator>,
+    @InjectRepository(Attendee)
+    private readonly attendeeRepository: Repository<Attendee>,
+    @InjectRepository(Net)
+    private readonly netRepository: Repository<Net>,
   ) {}
 
   async find(
@@ -50,6 +72,67 @@ export class OperatorService {
       .skip((query.pageNumber - 1) * query.pageSize)
       .take(query.pageSize)
       .getMany();
+
+    return { data, total };
+  }
+
+  async findWithStats(
+    query: OperatorQueryDto,
+  ): Promise<{ data: (Operator & { attendedCount: number; managedCount: number })[]; total: number }> {
+    const baseQueryBuilder = this.operatorRepository
+      .createQueryBuilder('operator')
+      .leftJoinAndSelect('operator.user', 'user')
+      .leftJoin('operator.attendees', 'attendee')
+      .leftJoin('operator.nets', 'net', 'net.endedAt IS NOT NULL')
+      .addSelect('COUNT(DISTINCT attendee.id)', 'attendedCount')
+      .addSelect('COUNT(DISTINCT net.id)', 'managedCount')
+      .groupBy('operator.id')
+      .addGroupBy('user.id');
+
+    if (query.search) {
+      const searchTerm = `%${query.search.toLowerCase()}%`;
+      baseQueryBuilder.where(
+        '(LOWER(operator.callSign) LIKE :search OR ' +
+          'LOWER(operator.fullName) LIKE :search OR ' +
+          'LOWER(operator.country) LIKE :search OR ' +
+          'LOWER(operator.city) LIKE :search OR ' +
+          'LOWER(operator.district) LIKE :search OR ' +
+          'LOWER(user.fullName) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
+    const countQuery = this.operatorRepository
+      .createQueryBuilder('operator')
+      .leftJoin('operator.user', 'user');
+
+    if (query.search) {
+      const searchTerm = `%${query.search.toLowerCase()}%`;
+      countQuery.where(
+        '(LOWER(operator.callSign) LIKE :search OR ' +
+          'LOWER(operator.fullName) LIKE :search OR ' +
+          'LOWER(operator.country) LIKE :search OR ' +
+          'LOWER(operator.city) LIKE :search OR ' +
+          'LOWER(operator.district) LIKE :search OR ' +
+          'LOWER(user.fullName) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
+    const total = await countQuery.getCount();
+
+    const rawAndEntities = await baseQueryBuilder
+      .orderBy('COUNT(DISTINCT attendee.id)', 'DESC')
+      .addOrderBy('operator.callSign', 'ASC')
+      .offset((query.pageNumber - 1) * query.pageSize)
+      .limit(query.pageSize)
+      .getRawAndEntities();
+
+    const data = rawAndEntities.entities.map((entity, idx) => ({
+      ...entity,
+      attendedCount: parseInt(rawAndEntities.raw[idx]?.attendedCount || '0', 10),
+      managedCount: parseInt(rawAndEntities.raw[idx]?.managedCount || '0', 10),
+    }));
 
     return { data, total };
   }
@@ -197,5 +280,133 @@ export class OperatorService {
     }
 
     await this.operatorRepository.delete(id);
+  }
+
+  async getStats(id: string): Promise<OperatorStats> {
+    const operator = await this.findOne(id);
+
+    const [attendedNets, managedNets, signalReadability, streak] =
+      await Promise.all([
+        this.attendeeRepository.count({
+          where: { operator: { id } },
+        }),
+
+        this.netRepository.count({
+          where: {
+            operator: { id },
+            startedAt: Not(IsNull()),
+            endedAt: Not(IsNull()),
+          },
+        }),
+
+        this.attendeeRepository
+          .createQueryBuilder('attendee')
+          .select([
+            'ROUND(AVG(attendee.signalStrength)::numeric, 1) as "avgSignal"',
+            'ROUND(AVG(attendee.readability)::numeric, 1) as "avgReadability"',
+          ])
+          .where('attendee.operatorId = :id', { id })
+          .andWhere('attendee.signalStrength IS NOT NULL')
+          .getRawOne(),
+
+        this.calculateStreak(id),
+      ]);
+
+    return {
+      attendedNets,
+      managedNets,
+      streak,
+      averageReadability: parseFloat(signalReadability?.avgReadability) || 0,
+      averageSignal: parseFloat(signalReadability?.avgSignal) || 0,
+    };
+  }
+
+  async getRecentNets(id: string, limit: number = 10, offset: number = 0): Promise<OperatorNetItem[]> {
+    const fetchLimit = limit + offset + 50;
+    
+    const [attendedNets, managedNets] = await Promise.all([
+      this.attendeeRepository
+        .createQueryBuilder('attendee')
+        .leftJoinAndSelect('attendee.net', 'net')
+        .where('attendee.operatorId = :id', { id })
+        .andWhere('net.endedAt IS NOT NULL')
+        .orderBy('net.endedAt', 'DESC')
+        .limit(fetchLimit)
+        .getMany(),
+
+      this.netRepository
+        .createQueryBuilder('net')
+        .leftJoin('net.attendees', 'attendee')
+        .addSelect('COUNT(attendee.id)', 'attendeeCount')
+        .where('net.operatorId = :id', { id })
+        .andWhere('net.endedAt IS NOT NULL')
+        .groupBy('net.id')
+        .orderBy('net.endedAt', 'DESC')
+        .limit(fetchLimit)
+        .getRawAndEntities(),
+    ]);
+
+    const attended: OperatorNetItem[] = attendedNets.map((a) => ({
+      id: a.net.id,
+      name: a.net.name,
+      date: a.net.endedAt,
+      role: 'attended' as const,
+    }));
+
+    const managed: OperatorNetItem[] = managedNets.entities.map((net, idx) => ({
+      id: net.id,
+      name: net.name,
+      date: net.endedAt,
+      role: 'managed' as const,
+      attendeeCount: parseInt(managedNets.raw[idx]?.attendeeCount || '0', 10),
+    }));
+
+    const all = [...attended, ...managed]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const uniqueNets = new Map<string, OperatorNetItem>();
+    for (const net of all) {
+      if (!uniqueNets.has(net.id)) {
+        uniqueNets.set(net.id, net);
+      } else {
+        const existing = uniqueNets.get(net.id)!;
+        if (net.role === 'managed') {
+          uniqueNets.set(net.id, { ...net, role: 'managed' });
+        }
+      }
+    }
+
+    return Array.from(uniqueNets.values()).slice(offset, offset + limit);
+  }
+
+  private async calculateStreak(operatorId: string): Promise<number> {
+    const attendances = await this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .leftJoinAndSelect('attendee.net', 'net')
+      .where('attendee.operatorId = :operatorId', { operatorId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .orderBy('net.endedAt', 'ASC')
+      .getMany();
+
+    if (!attendances.length) return 0;
+
+    let maxStreak = 1;
+    let currentStreak = 1;
+
+    for (let i = 1; i < attendances.length; i++) {
+      const prevDate = new Date(attendances[i - 1].net.endedAt);
+      const currDate = new Date(attendances[i].net.endedAt);
+      const daysDiff =
+        (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (daysDiff <= 7) {
+        currentStreak++;
+        maxStreak = Math.max(maxStreak, currentStreak);
+      } else {
+        currentStreak = 1;
+      }
+    }
+
+    return maxStreak;
   }
 }

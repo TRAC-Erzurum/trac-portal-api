@@ -6,12 +6,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Net } from '../entities/net.entity';
 import { Attendee } from '../entities/attendee.entity';
 import { Repository } from 'typeorm';
 import { CreateNetDto } from '../dto/create-net.dto';
 import { OperatorService } from '../../operator/services/operator.service';
 import { UpdateNetDto } from '../dto/update-net.dto';
+import { ActivityEvent, ACTIVITY_EVENT } from '../../activity/events/activity.events';
+import { ActivityType, EntityType } from '../../activity/enums/activity-type.enum';
 
 @Injectable()
 export class NetService {
@@ -21,6 +24,7 @@ export class NetService {
     @InjectRepository(Attendee)
     private readonly attendeeRepository: Repository<Attendee>,
     private readonly operatorService: OperatorService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(createNetDto: CreateNetDto, createdBy: string) {
@@ -42,7 +46,20 @@ export class NetService {
     net.updatedBy = [];
 
     try {
-      return await this.netRepository.save(net);
+      const saved = await this.netRepository.save(net);
+      this.eventEmitter.emit(
+        ACTIVITY_EVENT,
+        new ActivityEvent(
+          ActivityType.NET_CREATED,
+          EntityType.NET,
+          saved.id,
+          null,
+          operator.callSign,
+          null,
+          { netName: saved.name, frequency: saved.frequency, mode: saved.mode },
+        ),
+      );
+      return saved;
     } catch (error) {
       if (error.code === '23505') {
         throw new ConflictException('error.alreadyExists');
@@ -88,6 +105,19 @@ export class NetService {
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
     const savedNet = await this.netRepository.save(net);
 
+    this.eventEmitter.emit(
+      ACTIVITY_EVENT,
+      new ActivityEvent(
+        ActivityType.NET_STARTED,
+        EntityType.NET,
+        savedNet.id,
+        null,
+        net.operator?.callSign || null,
+        null,
+        { netName: net.name, frequency: net.frequency },
+      ),
+    );
+
     if (addOperatorAsAttendee && net.operator) {
       const existingAttendee = await this.attendeeRepository.findOne({
         where: { callSign: net.operator.callSign, net: { id } },
@@ -115,7 +145,22 @@ export class NetService {
     const net = await this.findOne(id);
     net.endedAt = new Date();
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
-    return this.netRepository.save(net);
+    const saved = await this.netRepository.save(net);
+
+    this.eventEmitter.emit(
+      ACTIVITY_EVENT,
+      new ActivityEvent(
+        ActivityType.NET_ENDED,
+        EntityType.NET,
+        saved.id,
+        null,
+        net.operator?.callSign || null,
+        null,
+        { netName: net.name, attendeeCount: net.attendeeCount },
+      ),
+    );
+
+    return saved;
   }
 
   async findOne(id: string) {

@@ -10,11 +10,13 @@ import {
   UploadedFile,
   UseInterceptors,
   Req,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { Operator } from '../entities/operator.entity';
 import { Role } from '../../auth/enums/role.enum';
 import { Roles } from '../../auth/decorators/roles.decorator';
-import { OperatorService } from '../services/operator.service';
+import { OperatorService, OperatorStats, OperatorNetItem } from '../services/operator.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OperatorDto } from '../dto/operator.dto';
 import { CsvParserService } from '../services/csv-parser.service';
@@ -32,7 +34,7 @@ export class OperatorController {
   @Get()
   @Roles(Role.VOLUNTEER)
   getOperators(@Query() query: OperatorQueryDto) {
-    return this.operatorService.find(query);
+    return this.operatorService.findWithStats(query);
   }
 
   @Get('user')
@@ -51,6 +53,22 @@ export class OperatorController {
   @Roles(Role.VOLUNTEER)
   getOperator(@Param('id') id: string): Promise<Operator> {
     return this.operatorService.findOne(id);
+  }
+
+  @Get(':id/stats')
+  @Roles(Role.VOLUNTEER)
+  getOperatorStats(@Param('id') id: string): Promise<OperatorStats> {
+    return this.operatorService.getStats(id);
+  }
+
+  @Get(':id/recent-nets')
+  @Roles(Role.VOLUNTEER)
+  getOperatorRecentNets(
+    @Param('id') id: string,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+  ): Promise<OperatorNetItem[]> {
+    return this.operatorService.getRecentNets(id, Math.min(limit, 50), offset);
   }
 
   @Post('import')
