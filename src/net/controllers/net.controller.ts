@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
 } from '@nestjs/common';
 import { NetService } from '../services/net.service';
@@ -16,6 +17,7 @@ import { ManageNet } from '../decorators/manage-net.decorator';
 import { CreateNetDto } from '../dto/create-net.dto';
 import { UpdateNetDto } from '../dto/update-net.dto';
 import { StartNetDto } from '../dto/start-net.dto';
+import { NetQueryDto } from '../dto/net-query.dto';
 import { RequestWithUser } from '../../shared/types/request.types';
 
 @Controller('net')
@@ -48,8 +50,8 @@ export class NetController {
   }
 
   @Get()
-  findAll() {
-    return this.netService.findAll();
+  findAll(@Query() query: NetQueryDto) {
+    return this.netService.findAll(query);
   }
 
   @Get(':id')

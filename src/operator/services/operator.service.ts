@@ -91,7 +91,7 @@ export class OperatorService {
 
     if (query.search) {
       const searchTerm = `%${query.search.toLowerCase()}%`;
-      baseQueryBuilder.where(
+      baseQueryBuilder.andWhere(
         '(LOWER(operator.callSign) LIKE :search OR ' +
           'LOWER(operator.fullName) LIKE :search OR ' +
           'LOWER(operator.country) LIKE :search OR ' +
@@ -100,6 +100,12 @@ export class OperatorService {
           'LOWER(user.fullName) LIKE :search)',
         { search: searchTerm },
       );
+    }
+
+    if (query.membership === 'registered') {
+      baseQueryBuilder.andWhere('user.id IS NOT NULL');
+    } else if (query.membership === 'unregistered') {
+      baseQueryBuilder.andWhere('user.id IS NULL');
     }
 
     const countQuery = this.operatorRepository
@@ -108,7 +114,7 @@ export class OperatorService {
 
     if (query.search) {
       const searchTerm = `%${query.search.toLowerCase()}%`;
-      countQuery.where(
+      countQuery.andWhere(
         '(LOWER(operator.callSign) LIKE :search OR ' +
           'LOWER(operator.fullName) LIKE :search OR ' +
           'LOWER(operator.country) LIKE :search OR ' +
@@ -119,10 +125,17 @@ export class OperatorService {
       );
     }
 
+    if (query.membership === 'registered') {
+      countQuery.andWhere('user.id IS NOT NULL');
+    } else if (query.membership === 'unregistered') {
+      countQuery.andWhere('user.id IS NULL');
+    }
+
     const total = await countQuery.getCount();
 
     const rawAndEntities = await baseQueryBuilder
-      .orderBy('COUNT(DISTINCT attendee.id)', 'DESC')
+      .addSelect('CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END', 'user_priority')
+      .orderBy('CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END', 'ASC')
       .addOrderBy('operator.callSign', 'ASC')
       .offset((query.pageNumber - 1) * query.pageSize)
       .limit(query.pageSize)
@@ -244,18 +257,51 @@ export class OperatorService {
     }
   }
 
-  async search(query: string): Promise<Operator[]> {
-    return this.operatorRepository.find({
-      where: [
-        { callSign: ILike(`%${query}%`) },
-        { fullName: ILike(`%${query}%`) },
-        { user: { fullName: ILike(`%${query}%`) } },
-        { country: ILike(`%${query}%`) },
-        { city: ILike(`%${query}%`) },
-        { district: ILike(`%${query}%`) },
-      ],
-      relations: { user: true },
-    });
+  async search(
+    query: string,
+    sortBy: 'managed' | 'attended' | 'default' = 'default',
+    limit: number = 10,
+  ): Promise<Operator[]> {
+    const searchTerm = `%${query.toLowerCase()}%`;
+
+    const qb = this.operatorRepository
+      .createQueryBuilder('operator')
+      .leftJoinAndSelect('operator.user', 'user')
+      .where(
+        '(LOWER(operator.callSign) LIKE :search OR ' +
+          'LOWER(operator.fullName) LIKE :search OR ' +
+          'LOWER(operator.city) LIKE :search OR ' +
+          'LOWER(operator.district) LIKE :search OR ' +
+          'LOWER(user.fullName) LIKE :search)',
+        { search: searchTerm },
+      );
+
+    if (sortBy === 'managed') {
+      qb.leftJoin('operator.nets', 'net')
+        .addSelect('COUNT(DISTINCT net.id)', 'managedCount')
+        .addSelect('MAX(net.endedAt)', 'lastNetDate')
+        .groupBy('operator.id')
+        .addGroupBy('user.id')
+        .orderBy('COUNT(DISTINCT net.id)', 'DESC')
+        .addOrderBy('MAX(net.endedAt)', 'DESC', 'NULLS LAST')
+        .addOrderBy('operator.callSign', 'ASC');
+
+      const result = await qb.limit(limit).getRawAndEntities();
+      return result.entities;
+    } else if (sortBy === 'attended') {
+      qb.leftJoin('operator.attendees', 'attendee')
+        .addSelect('COUNT(DISTINCT attendee.id)', 'attendedCount')
+        .groupBy('operator.id')
+        .addGroupBy('user.id')
+        .orderBy('COUNT(DISTINCT attendee.id)', 'DESC')
+        .addOrderBy('operator.callSign', 'ASC');
+
+      const result = await qb.limit(limit).getRawAndEntities();
+      return result.entities;
+    } else {
+      qb.orderBy('operator.callSign', 'ASC');
+      return qb.limit(limit).getMany();
+    }
   }
 
   async delete(id: string): Promise<void> {

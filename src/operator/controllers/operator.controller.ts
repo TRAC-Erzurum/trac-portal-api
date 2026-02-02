@@ -45,8 +45,12 @@ export class OperatorController {
 
   @Get('search')
   @Roles(Role.VOLUNTEER)
-  searchOperators(@Query('q') query: string): Promise<Operator[]> {
-    return this.operatorService.search(query);
+  searchOperators(
+    @Query('q') query: string,
+    @Query('sortBy') sortBy?: 'managed' | 'attended' | 'default',
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
+  ): Promise<Operator[]> {
+    return this.operatorService.search(query, sortBy || 'default', Math.min(limit, 50));
   }
 
   @Get(':id')

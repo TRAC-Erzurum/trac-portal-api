@@ -185,8 +185,16 @@ export class NetService {
     };
   }
 
-  async findAll() {
-    const nets = await this.netRepository
+  async findAll(query: {
+    search?: string;
+    status?: 'all' | 'active' | 'pending' | 'completed';
+    dateFilter?: 'all' | 'week' | 'month' | '3months';
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const { search, status = 'all', dateFilter = 'all', limit = 50, offset = 0 } = query;
+
+    const qb = this.netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
@@ -194,13 +202,66 @@ export class NetService {
       .addSelect('COUNT(DISTINCT attendee.id)', 'attendeeCount')
       .groupBy('net.id')
       .addGroupBy('operator.id')
-      .addGroupBy('user.id')
-      .orderBy('net.createdAt', 'DESC')
-      .getRawAndEntities();
-    return nets.entities.map((net, index) => ({
-      ...net,
-      attendeeCount: Number(nets.raw[index]?.attendeeCount || 0),
-    }));
+      .addGroupBy('user.id');
+
+    if (search) {
+      const searchTerm = `%${search.toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(net.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
+    if (status !== 'all') {
+      if (status === 'active') {
+        qb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NULL');
+      } else if (status === 'pending') {
+        qb.andWhere('net.startedAt IS NULL');
+      } else if (status === 'completed') {
+        qb.andWhere('net.endedAt IS NOT NULL');
+      }
+    }
+
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      let cutoff: Date;
+      if (dateFilter === 'week') {
+        cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else if (dateFilter === 'month') {
+        cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else {
+        cutoff = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      }
+      qb.andWhere('COALESCE(net.startedAt, net.createdAt) >= :cutoff', { cutoff });
+    }
+
+    qb.orderBy(
+      `CASE 
+        WHEN net.startedAt IS NOT NULL AND net.endedAt IS NULL THEN 0 
+        WHEN net.startedAt IS NULL THEN 1 
+        ELSE 2 
+      END`,
+      'ASC',
+    );
+    qb.addOrderBy('net.createdAt', 'DESC');
+
+    const countQb = qb.clone();
+    const total = await countQb.getCount();
+
+    qb.limit(Math.min(limit, 100));
+    qb.offset(offset);
+
+    const nets = await qb.getRawAndEntities();
+
+    return {
+      data: nets.entities.map((net, index) => ({
+        ...net,
+        attendeeCount: Number(nets.raw[index]?.attendeeCount || 0),
+      })),
+      total,
+      limit,
+      offset,
+    };
   }
 
   async restartNet(id: string, updatedBy: string) {
