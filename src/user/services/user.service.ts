@@ -68,7 +68,7 @@ export class UserService {
     updatedBy: string,
   ): Promise<User> {
     if (role === Role.SUPER_ADMIN) {
-      throw new ForbiddenException('Super admin role cannot be assigned');
+      throw new ForbiddenException('error.superAdminRoleCannotBeAssigned');
     }
 
     const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -77,7 +77,7 @@ export class UserService {
     }
 
     if (user.role === Role.SUPER_ADMIN) {
-      throw new ForbiddenException('Super admin role cannot be changed');
+      throw new ForbiddenException('error.superAdminRoleCannotBeChanged');
     }
 
     user.role = role;

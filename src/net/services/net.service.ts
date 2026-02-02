@@ -130,6 +130,8 @@ export class NetService {
         attendee.country = net.operator.country;
         attendee.city = net.operator.city;
         attendee.district = net.operator.district;
+        attendee.readability = 5;
+        attendee.signalStrength = 9;
         attendee.operator = net.operator;
         attendee.net = savedNet;
         attendee.createdBy = updatedBy;

@@ -2,12 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as session from 'express-session';
 import * as cookieParser from 'cookie-parser';
+import * as compression from 'compression';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { HttpExceptionFilter } from './shared/filters/http-exception.filter';
-import { ValidationPipe } from '@nestjs/common';
+import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 
 function checkEnvVars() {
   const requiredVars = [
@@ -58,6 +60,8 @@ async function bootstrap() {
 
   app.use(cookieParser(configService.get<string>('COOKIE_SECRET')));
 
+  app.use(compression());
+
   app.use(
     session({
       secret: configService.get<string>('SESSION_SECRET'),
@@ -82,6 +86,7 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   await app.listen(configService.get<number>('PORT') || 8000);
 }

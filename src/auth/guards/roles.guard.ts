@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Role } from '../enums/role.enum';
 import { ROLES_KEY } from '../decorators/roles.decorator';
@@ -27,7 +27,7 @@ export class RolesGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
 
     if (!user.callSign && !allowWithoutCallsign) {
-      return false;
+      throw new ForbiddenException('error.forbiddenDescription');
     }
 
     const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
@@ -47,8 +47,14 @@ export class RolesGuard implements CanActivate {
       [Role.GUEST]: [Role.GUEST],
     };
 
-    return requiredRoles.some((role) =>
+    const hasRole = requiredRoles.some((role) =>
       roleHierarchy[user.role]?.includes(role),
     );
+
+    if (!hasRole) {
+      throw new ForbiddenException('error.forbiddenDescription');
+    }
+
+    return true;
   }
 }

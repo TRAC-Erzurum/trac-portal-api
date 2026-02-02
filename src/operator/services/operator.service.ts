@@ -202,9 +202,7 @@ export class OperatorService {
     }
 
     if (existingOperator.user) {
-      throw new ForbiddenException(
-        `Operator with call sign ${operatorData.callSign} already exists`,
-      );
+      throw new ForbiddenException('error.operatorAlreadyExists');
     }
 
     Object.assign(existingOperator, {
