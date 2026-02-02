@@ -47,7 +47,7 @@ export class ManageNetGuard implements CanActivate {
       return true;
     }
 
-    if (net.operator.user.id !== user.id) {
+    if (!net.operator.user || net.operator.user.id !== user.id) {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 

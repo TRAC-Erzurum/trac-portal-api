@@ -34,22 +34,33 @@ export class AttendeeService {
   ) {
     const net = await this.netService.findOne(netId);
 
+    const callSign = (dto.callSign ?? '').trim();
     const exists = await this.attendeeRepository.findOne({
-      where: { callSign: dto.callSign, net: { id: netId } },
+      where: { callSign, net: { id: netId } },
     });
 
     if (exists) {
       throw new ConflictException('Attendee already exists');
     }
 
-    const operator = await this.getOrCreateOperator(dto, createdBy);
+    const operator = await this.getOrCreateOperator(
+      {
+        ...dto,
+        callSign,
+        name: (dto.name ?? '').trim() || undefined,
+        country: (dto.country ?? '').trim() || undefined,
+        city: (dto.city ?? '').trim() || undefined,
+        district: (dto.district ?? '').trim() || undefined,
+      },
+      createdBy,
+    );
 
     const attendee = new Attendee();
-    attendee.callSign = dto.callSign;
-    attendee.name = dto.name;
-    attendee.country = dto.country;
-    attendee.city = dto.city;
-    attendee.district = dto.district;
+    attendee.callSign = callSign;
+    attendee.name = (dto.name ?? '').trim() || null;
+    attendee.country = (dto.country ?? '').trim() || null;
+    attendee.city = (dto.city ?? '').trim() || null;
+    attendee.district = (dto.district ?? '').trim() || null;
     attendee.readability = dto.readability;
     attendee.signalStrength = dto.signalStrength;
     attendee.operator = operator;
@@ -85,7 +96,8 @@ export class AttendeeService {
       let city: string | undefined;
       let district: string | undefined;
 
-      const callSignParts = dto.callSign.split('/');
+      const rawParts = (dto.callSign ?? '').trim().split('/');
+      const callSignParts = rawParts.map((p) => (p ?? '').trim());
 
       if (callSignParts.length === 1) {
         callSign = callSignParts[0];
@@ -163,12 +175,16 @@ export class AttendeeService {
       throw new NotFoundException('Attendee not found in this net');
     }
 
-    const hasQth = dto.country || dto.city || dto.district;
-
-    attendee.name = dto.name ?? attendee.name;
-    attendee.country = hasQth ? dto.country : attendee.country;
-    attendee.city = hasQth ? dto.city : attendee.city;
-    attendee.district = hasQth ? dto.district : attendee.district;
+    attendee.name = dto.name != null ? (String(dto.name).trim() || null) : attendee.name;
+    if ('country' in dto) {
+      attendee.country = (String(dto.country ?? '').trim() || null);
+    }
+    if ('city' in dto) {
+      attendee.city = (String(dto.city ?? '').trim() || null);
+    }
+    if ('district' in dto) {
+      attendee.district = (String(dto.district ?? '').trim() || null);
+    }
     attendee.readability = dto.readability ?? attendee.readability;
     attendee.signalStrength = dto.signalStrength ?? attendee.signalStrength;
     attendee.updatedBy = [...(attendee.updatedBy || []), updatedBy];

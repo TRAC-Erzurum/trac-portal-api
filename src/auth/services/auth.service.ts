@@ -103,11 +103,11 @@ export class AuthService {
 
     const operator = await this.operatorService.create(
       {
-        callSign: dto.callSign,
-        city: dto.city,
-        country: dto.country,
-        district: dto.district,
-        fullName: dto.fullName,
+        callSign: (dto.callSign ?? '').trim(),
+        city: (dto.city ?? '').trim() || undefined,
+        country: (dto.country ?? '').trim() || undefined,
+        district: (dto.district ?? '').trim() || undefined,
+        fullName: (dto.fullName ?? '').trim() || undefined,
       },
       dto.email,
     );

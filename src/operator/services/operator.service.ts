@@ -47,7 +47,7 @@ export class OperatorService {
       .leftJoinAndSelect('operator.user', 'user');
 
     if (query.search) {
-      const searchTerm = `%${query.search.toLowerCase()}%`;
+      const searchTerm = `%${(query.search || '').trim().toLowerCase()}%`;
       baseQueryBuilder.where(
         '(LOWER(operator.callSign) LIKE :search OR ' +
           'LOWER(operator.fullName) LIKE :search OR ' +
@@ -90,7 +90,7 @@ export class OperatorService {
       .addGroupBy('user.id');
 
     if (query.search) {
-      const searchTerm = `%${query.search.toLowerCase()}%`;
+      const searchTerm = `%${(query.search || '').trim().toLowerCase()}%`;
       baseQueryBuilder.andWhere(
         '(LOWER(operator.callSign) LIKE :search OR ' +
           'LOWER(operator.fullName) LIKE :search OR ' +
@@ -117,7 +117,7 @@ export class OperatorService {
       .leftJoin('operator.user', 'user');
 
     if (query.search) {
-      const searchTerm = `%${query.search.toLowerCase()}%`;
+      const searchTerm = `%${(query.search || '').trim().toLowerCase()}%`;
       countQuery.andWhere(
         '(LOWER(operator.callSign) LIKE :search OR ' +
           'LOWER(operator.fullName) LIKE :search OR ' +
@@ -187,17 +187,27 @@ export class OperatorService {
     operatorData: DeepPartial<Operator>,
     createdBy: string,
   ): Promise<Operator> {
+    const callSign = (operatorData.callSign ?? '').trim();
     const existingOperator = await this.operatorRepository.findOne({
-      where: { callSign: operatorData.callSign },
+      where: { callSign },
       relations: { user: true },
     });
 
+    const trimOptional = (v: string | null | undefined) =>
+      (v ?? '').trim() || undefined;
+    const trimmed = {
+      ...operatorData,
+      callSign,
+      fullName: trimOptional(operatorData.fullName),
+      city: trimOptional(operatorData.city),
+      district: trimOptional(operatorData.district),
+      country: trimOptional(operatorData.country),
+      createdBy,
+      updatedBy: [],
+    };
+
     if (!existingOperator) {
-      const operator = this.operatorRepository.create({
-        ...operatorData,
-        createdBy,
-        updatedBy: [],
-      });
+      const operator = this.operatorRepository.create(trimmed);
       return this.operatorRepository.save(operator);
     }
 
@@ -205,11 +215,7 @@ export class OperatorService {
       throw new ForbiddenException('error.operatorAlreadyExists');
     }
 
-    Object.assign(existingOperator, {
-      ...operatorData,
-      createdBy,
-      updatedBy: [],
-    });
+    Object.assign(existingOperator, trimmed);
     return this.operatorRepository.save(existingOperator);
   }
 
@@ -222,10 +228,28 @@ export class OperatorService {
     if (!operator) {
       throw new NotFoundException(`Operator with ID ${id} not found`);
     }
-    Object.assign(operator, {
+    const trimOrNull = (v: string | null | undefined) =>
+      (v ?? '').trim() || null;
+    const updates: DeepPartial<Operator> = {
       ...operatorData,
       updatedBy: [...(operator.updatedBy || []), updatedBy],
-    });
+    };
+    if (operatorData.callSign !== undefined) {
+      updates.callSign = (operatorData.callSign ?? '').trim();
+    }
+    if (operatorData.fullName !== undefined) {
+      updates.fullName = trimOrNull(operatorData.fullName);
+    }
+    if (operatorData.city !== undefined) {
+      updates.city = trimOrNull(operatorData.city);
+    }
+    if (operatorData.district !== undefined) {
+      updates.district = trimOrNull(operatorData.district);
+    }
+    if (operatorData.country !== undefined) {
+      updates.country = trimOrNull(operatorData.country);
+    }
+    Object.assign(operator, updates);
     return this.operatorRepository.save(operator);
   }
 
@@ -234,17 +258,17 @@ export class OperatorService {
     createdBy: string,
   ): Promise<void> {
     const operators = records
-      .filter((record) => record.callSign)
+      .filter((record) => (record.callSign ?? '').trim())
       .map((record) => {
         const operator = new Operator();
-        operator.callSign = record.callSign.toUpperCase();
-        operator.prefix = record.prefix;
-        operator.suffix = record.suffix;
-        operator.country = startCase(record.country);
-        operator.city = startCase(record.city);
-        operator.district = startCase(record.district);
-        operator.gridSquare = record.gridSquare;
-        operator.fullName = startCase(record.fullName);
+        operator.callSign = (record.callSign ?? '').trim().toUpperCase();
+        operator.prefix = (record.prefix ?? '').trim() || undefined;
+        operator.suffix = (record.suffix ?? '').trim() || undefined;
+        operator.country = (record.country ?? '').trim() ? startCase((record.country ?? '').trim()) : undefined;
+        operator.city = (record.city ?? '').trim() ? startCase((record.city ?? '').trim()) : undefined;
+        operator.district = (record.district ?? '').trim() ? startCase((record.district ?? '').trim()) : undefined;
+        operator.gridSquare = (record.gridSquare ?? '').trim() || undefined;
+        operator.fullName = (record.fullName ?? '').trim() ? startCase((record.fullName ?? '').trim()) : undefined;
         operator.createdBy = createdBy;
         operator.updatedBy = [];
         return operator;
@@ -268,7 +292,7 @@ export class OperatorService {
     sortBy: 'managed' | 'attended' | 'default' = 'default',
     limit: number = 10,
   ): Promise<Operator[]> {
-    const searchTerm = `%${query.toLowerCase()}%`;
+    const searchTerm = `%${(query ?? '').trim().toLowerCase()}%`;
 
     const qb = this.operatorRepository
       .createQueryBuilder('operator')
