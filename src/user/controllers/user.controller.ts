@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -171,6 +172,27 @@ export class UserController {
       }
       throw new BadRequestException('Error processing file');
     }
+  }
+
+  @Delete('picture')
+  async deleteProfilePicture(
+    @CurrentUser() user: ICurrentUser,
+    @Req() req: RequestWithUser,
+  ) {
+    const currentUser = await this.userService.findOne(user.id);
+    
+    if (currentUser.picture && currentUser.picture.startsWith('/uploads/')) {
+      const filePath = `.${currentUser.picture}`;
+      await unlink(filePath).catch(() => {});
+    }
+
+    await this.userService.updateUser(
+      user.id,
+      { picture: null },
+      req.user.email,
+    );
+
+    return { message: 'Picture deleted' };
   }
 
   @Patch(':id/role')

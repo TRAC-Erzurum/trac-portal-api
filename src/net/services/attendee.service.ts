@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Attendee } from '../entities/attendee.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,8 @@ import { NetService } from './net.service';
 import { OperatorService } from '../../operator/services/operator.service';
 import { Operator } from '../../operator/entities/operator.entity';
 import { PaginationDto } from '../../shared/dto/pagination.dto';
+import { ActivityEvent, ACTIVITY_EVENT } from '../../activity/events/activity.events';
+import { ActivityType, EntityType } from '../../activity/enums/activity-type.enum';
 
 @Injectable()
 export class AttendeeService {
@@ -20,12 +23,14 @@ export class AttendeeService {
     private attendeeRepository: Repository<Attendee>,
     private netService: NetService,
     private operatorService: OperatorService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async addAttendeeToNet(
       netId: string,
     dto: AttendeeDto,
     createdBy: string,
+    actorCallSign: string,
   ) {
     const net = await this.netService.findOne(netId);
 
@@ -52,7 +57,22 @@ export class AttendeeService {
     attendee.createdBy = createdBy;
     attendee.updatedBy = [];
 
-    return this.attendeeRepository.save(attendee);
+    const saved = await this.attendeeRepository.save(attendee);
+
+    this.eventEmitter.emit(
+      ACTIVITY_EVENT,
+      new ActivityEvent(
+        ActivityType.ATTENDEE_ADDED,
+        EntityType.ATTENDEE,
+        saved.id,
+        null,
+        actorCallSign,
+        dto.callSign,
+        { netId: net.id, netName: net.name },
+      ),
+    );
+
+    return saved;
   }
 
   private async getOrCreateOperator(dto: AttendeeDto, createdBy: string) {
@@ -119,7 +139,7 @@ export class AttendeeService {
   async getAttendees(netId: string, pagination: PaginationDto) {
     return this.attendeeRepository.find({
       where: { net: { id: netId } },
-      relations: { operator: true, net: true },
+      relations: { operator: { user: true }, net: true },
       order: { createdAt: pagination.sort },
     });
   }

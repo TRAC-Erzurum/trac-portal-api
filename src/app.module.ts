@@ -1,6 +1,7 @@
 import { Module, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -11,6 +12,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { NetModule } from './net/net.module';
 import { OperatorModule } from './operator/operator.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { ActivityModule } from './activity/activity.module';
 import { AppController } from './app.controller';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -22,6 +24,7 @@ import { QthModule } from './qth/qth.module';
       load: [databaseConfig],
       isGlobal: true,
     }),
+    EventEmitterModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
@@ -37,6 +40,7 @@ import { QthModule } from './qth/qth.module';
     NetModule,
     OperatorModule,
     DashboardModule,
+    ActivityModule,
     QthModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),

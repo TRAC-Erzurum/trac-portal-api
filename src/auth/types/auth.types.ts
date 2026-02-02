@@ -19,6 +19,7 @@ export interface AuthUser {
   providerId?: string | null;
   fullName?: string | null;
   picture?: string | null;
+  isTemporaryPassword?: boolean;
 }
 
 export interface JwtPayload {

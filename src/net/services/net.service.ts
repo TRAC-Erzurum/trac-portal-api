@@ -6,12 +6,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Net } from '../entities/net.entity';
 import { Attendee } from '../entities/attendee.entity';
 import { Repository } from 'typeorm';
 import { CreateNetDto } from '../dto/create-net.dto';
 import { OperatorService } from '../../operator/services/operator.service';
 import { UpdateNetDto } from '../dto/update-net.dto';
+import { ActivityEvent, ACTIVITY_EVENT } from '../../activity/events/activity.events';
+import { ActivityType, EntityType } from '../../activity/enums/activity-type.enum';
 
 @Injectable()
 export class NetService {
@@ -21,9 +24,10 @@ export class NetService {
     @InjectRepository(Attendee)
     private readonly attendeeRepository: Repository<Attendee>,
     private readonly operatorService: OperatorService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async create(createNetDto: CreateNetDto, createdBy: string) {
+  async create(createNetDto: CreateNetDto, createdBy: string, actorCallSign: string) {
     const operator = await this.operatorService.findOne(
       createNetDto.operatorId,
     );
@@ -42,7 +46,20 @@ export class NetService {
     net.updatedBy = [];
 
     try {
-      return await this.netRepository.save(net);
+      const saved = await this.netRepository.save(net);
+      this.eventEmitter.emit(
+        ACTIVITY_EVENT,
+        new ActivityEvent(
+          ActivityType.NET_CREATED,
+          EntityType.NET,
+          saved.id,
+          null,
+          actorCallSign,
+          null,
+          { netName: saved.name, frequency: saved.frequency, mode: saved.mode },
+        ),
+      );
+      return saved;
     } catch (error) {
       if (error.code === '23505') {
         throw new ConflictException('error.alreadyExists');
@@ -82,11 +99,24 @@ export class NetService {
     await this.netRepository.delete(id);
   }
 
-  async startNet(id: string, updatedBy: string, addOperatorAsAttendee: boolean = false) {
+  async startNet(id: string, updatedBy: string, actorCallSign: string, addOperatorAsAttendee: boolean = false) {
     const net = await this.findOne(id);
     net.startedAt = new Date();
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
     const savedNet = await this.netRepository.save(net);
+
+    this.eventEmitter.emit(
+      ACTIVITY_EVENT,
+      new ActivityEvent(
+        ActivityType.NET_STARTED,
+        EntityType.NET,
+        savedNet.id,
+        null,
+        actorCallSign,
+        null,
+        { netName: net.name, frequency: net.frequency },
+      ),
+    );
 
     if (addOperatorAsAttendee && net.operator) {
       const existingAttendee = await this.attendeeRepository.findOne({
@@ -100,6 +130,8 @@ export class NetService {
         attendee.country = net.operator.country;
         attendee.city = net.operator.city;
         attendee.district = net.operator.district;
+        attendee.readability = 5;
+        attendee.signalStrength = 9;
         attendee.operator = net.operator;
         attendee.net = savedNet;
         attendee.createdBy = updatedBy;
@@ -111,11 +143,26 @@ export class NetService {
     return this.findOne(id);
   }
 
-  async endNet(id: string, updatedBy: string) {
+  async endNet(id: string, updatedBy: string, actorCallSign: string) {
     const net = await this.findOne(id);
     net.endedAt = new Date();
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
-    return this.netRepository.save(net);
+    const saved = await this.netRepository.save(net);
+
+    this.eventEmitter.emit(
+      ACTIVITY_EVENT,
+      new ActivityEvent(
+        ActivityType.NET_ENDED,
+        EntityType.NET,
+        saved.id,
+        null,
+        actorCallSign,
+        null,
+        { netName: net.name, attendeeCount: net.attendeeCount },
+      ),
+    );
+
+    return saved;
   }
 
   async findOne(id: string) {
@@ -140,8 +187,19 @@ export class NetService {
     };
   }
 
-  async findAll() {
-    const nets = await this.netRepository
+  async findAll(query: {
+    search?: string;
+    status?: 'all' | 'active' | 'pending' | 'completed';
+    dateFilter?: 'all' | 'week' | 'month' | '3months';
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const { search, status = 'all', dateFilter = 'all' } = query;
+    const usePagination = query.limit !== undefined || query.offset !== undefined;
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+
+    const qb = this.netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
@@ -149,13 +207,74 @@ export class NetService {
       .addSelect('COUNT(DISTINCT attendee.id)', 'attendeeCount')
       .groupBy('net.id')
       .addGroupBy('operator.id')
-      .addGroupBy('user.id')
-      .orderBy('net.createdAt', 'DESC')
-      .getRawAndEntities();
-    return nets.entities.map((net, index) => ({
+      .addGroupBy('user.id');
+
+    if (search) {
+      const searchTerm = `%${search.toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(net.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
+    if (status !== 'all') {
+      if (status === 'active') {
+        qb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NULL');
+      } else if (status === 'pending') {
+        qb.andWhere('net.startedAt IS NULL');
+      } else if (status === 'completed') {
+        qb.andWhere('net.endedAt IS NOT NULL');
+      }
+    }
+
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      let cutoff: Date;
+      if (dateFilter === 'week') {
+        cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else if (dateFilter === 'month') {
+        cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else {
+        cutoff = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      }
+      qb.andWhere('COALESCE(net.startedAt, net.createdAt) >= :cutoff', { cutoff });
+    }
+
+    qb.orderBy(
+      `CASE 
+        WHEN net.startedAt IS NOT NULL AND net.endedAt IS NULL THEN 0 
+        WHEN net.startedAt IS NULL THEN 1 
+        ELSE 2 
+      END`,
+      'ASC',
+    );
+    qb.addOrderBy('net.createdAt', 'DESC');
+
+    const countQb = qb.clone();
+    const total = await countQb.getCount();
+
+    if (usePagination) {
+      qb.limit(Math.min(limit, 100));
+      qb.offset(offset);
+    }
+
+    const nets = await qb.getRawAndEntities();
+
+    const netsData = nets.entities.map((net, index) => ({
       ...net,
       attendeeCount: Number(nets.raw[index]?.attendeeCount || 0),
     }));
+
+    if (usePagination) {
+      return {
+        data: netsData,
+        total,
+        limit,
+        offset,
+      };
+    }
+
+    return netsData;
   }
 
   async restartNet(id: string, updatedBy: string) {

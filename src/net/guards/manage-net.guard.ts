@@ -34,7 +34,7 @@ export class ManageNetGuard implements CanActivate {
     const user: ICurrentUser = request.user;
 
     if (!netId || !user) {
-      throw new ForbiddenException('Yetkilendirme başarısız');
+      throw new ForbiddenException('error.forbiddenDescription');
     }
 
     const net = await this.netService.findOne(netId);
@@ -48,7 +48,7 @@ export class ManageNetGuard implements CanActivate {
     }
 
     if (net.operator.user.id !== user.id) {
-      throw new ForbiddenException('Bu işlemi yapmaya yetkiniz yok');
+      throw new ForbiddenException('error.forbiddenDescription');
     }
 
     return true;

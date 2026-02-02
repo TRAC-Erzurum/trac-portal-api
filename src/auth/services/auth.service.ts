@@ -1,18 +1,28 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { AuthUser, JwtPayload } from '../types/auth.types';
 import { UserService } from 'src/user/services/user.service';
 import { GoogleProfile } from '../types/auth.types';
 import { RegisterDto } from '../dto/register.dto';
 import { OperatorService } from '../../operator/services/operator.service';
+import {
+  PasswordResetRequest,
+  PasswordResetStatus,
+} from '../entities/password-reset-request.entity';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly operatorService: OperatorService,
+    @InjectRepository(PasswordResetRequest)
+    private readonly passwordResetRequestRepository: Repository<PasswordResetRequest>,
   ) {}
 
   async validateOAuthUser(profile: GoogleProfile): Promise<AuthUser> {
@@ -69,6 +79,7 @@ export class AuthService {
       role: user.role,
       callSign: user.operator?.callSign,
       provider: user.provider,
+      isTemporaryPassword: user.isTemporaryPassword,
     };
   }
 
@@ -87,7 +98,7 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const existingUser = await this.userService.findByEmail(dto.email);
     if (existingUser) {
-      throw new ConflictException('Kullanıcı zaten mevcut');
+      throw new ConflictException('error.userAlreadyExists');
     }
 
     const operator = await this.operatorService.create(
@@ -112,5 +123,109 @@ export class AuthService {
       },
       dto.email,
     );
+  }
+
+  async createPasswordResetRequest(callSign: string): Promise<void> {
+    const normalizedCallSign = callSign.toUpperCase();
+
+    const existingPending = await this.passwordResetRequestRepository.findOne({
+      where: {
+        callSign: normalizedCallSign,
+        status: PasswordResetStatus.PENDING,
+      },
+    });
+
+    if (existingPending) {
+      this.logger.log(`Password reset request already pending for ${normalizedCallSign}`);
+      return;
+    }
+
+    const operator = await this.operatorService.findByCallSign(normalizedCallSign);
+
+    if (!operator) {
+      this.logger.warn(`Password reset requested for unknown call sign: ${normalizedCallSign}`);
+    }
+
+    const request = this.passwordResetRequestRepository.create({
+      callSign: normalizedCallSign,
+      operator: operator || null,
+      operatorId: operator?.id || null,
+      status: PasswordResetStatus.PENDING,
+    });
+
+    await this.passwordResetRequestRepository.save(request);
+  }
+
+  async getPendingPasswordResetRequests(): Promise<PasswordResetRequest[]> {
+    return this.passwordResetRequestRepository.find({
+      where: { status: PasswordResetStatus.PENDING },
+      relations: ['operator'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async getPendingPasswordResetRequestsCount(): Promise<number> {
+    return this.passwordResetRequestRepository.count({
+      where: { status: PasswordResetStatus.PENDING },
+    });
+  }
+
+  async approvePasswordResetRequest(
+    requestId: string,
+    adminId: string,
+  ): Promise<{ newPassword: string }> {
+    const request = await this.passwordResetRequestRepository.findOne({
+      where: { id: requestId, status: PasswordResetStatus.PENDING },
+      relations: ['operator', 'operator.user'],
+    });
+
+    if (!request) {
+      throw new ConflictException('error.requestNotFound');
+    }
+
+    if (!request.operator?.user) {
+      throw new ConflictException('error.userNotFound');
+    }
+
+    const newPassword = this.generateRandomPassword();
+    await this.userService.forceSetPassword(request.operator.user.id, newPassword);
+
+    request.status = PasswordResetStatus.COMPLETED;
+    request.processedBy = adminId;
+    request.processedAt = new Date();
+    await this.passwordResetRequestRepository.save(request);
+
+    this.logger.log(`Password reset approved for ${request.callSign} by admin ${adminId}`);
+
+    return { newPassword };
+  }
+
+  async rejectPasswordResetRequest(
+    requestId: string,
+    adminId: string,
+  ): Promise<void> {
+    const request = await this.passwordResetRequestRepository.findOne({
+      where: { id: requestId, status: PasswordResetStatus.PENDING },
+    });
+
+    if (!request) {
+      throw new ConflictException('error.requestNotFound');
+    }
+
+    request.status = PasswordResetStatus.REJECTED;
+    request.processedBy = adminId;
+    request.processedAt = new Date();
+    await this.passwordResetRequestRepository.save(request);
+
+    this.logger.log(`Password reset rejected for ${request.callSign} by admin ${adminId}`);
+  }
+
+  private generateRandomPassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let password = '';
+    for (let i = 0; i < 10; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
   }
 }
