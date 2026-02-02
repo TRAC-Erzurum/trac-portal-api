@@ -194,7 +194,10 @@ export class NetService {
     limit?: number;
     offset?: number;
   } = {}) {
-    const { search, status = 'all', dateFilter = 'all', limit = 50, offset = 0 } = query;
+    const { search, status = 'all', dateFilter = 'all' } = query;
+    const usePagination = query.limit !== undefined || query.offset !== undefined;
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
 
     const qb = this.netRepository
       .createQueryBuilder('net')
@@ -250,20 +253,28 @@ export class NetService {
     const countQb = qb.clone();
     const total = await countQb.getCount();
 
-    qb.limit(Math.min(limit, 100));
-    qb.offset(offset);
+    if (usePagination) {
+      qb.limit(Math.min(limit, 100));
+      qb.offset(offset);
+    }
 
     const nets = await qb.getRawAndEntities();
 
-    return {
-      data: nets.entities.map((net, index) => ({
-        ...net,
-        attendeeCount: Number(nets.raw[index]?.attendeeCount || 0),
-      })),
-      total,
-      limit,
-      offset,
-    };
+    const netsData = nets.entities.map((net, index) => ({
+      ...net,
+      attendeeCount: Number(nets.raw[index]?.attendeeCount || 0),
+    }));
+
+    if (usePagination) {
+      return {
+        data: netsData,
+        total,
+        limit,
+        offset,
+      };
+    }
+
+    return netsData;
   }
 
   async restartNet(id: string, updatedBy: string) {
