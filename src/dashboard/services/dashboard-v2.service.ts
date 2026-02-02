@@ -43,6 +43,7 @@ export interface LeaderboardEntry {
   callSign: string;
   operatorId?: string | null;
   netId?: string | null;
+  picture?: string | null;
   value: number;
   label: string;
 }
@@ -225,13 +226,16 @@ export class DashboardV2Service {
       this.attendeeRepository
         .createQueryBuilder('attendee')
         .leftJoin('attendee.operator', 'operator')
+        .leftJoin('operator.user', 'user')
         .select([
           'UPPER(TRIM(attendee.callSign)) as "callSign"',
           'operator.id as "operatorId"',
+          'user.picture as "picture"',
           'COUNT(attendee.id) as value',
         ])
         .groupBy('UPPER(TRIM(attendee.callSign))')
         .addGroupBy('operator.id')
+        .addGroupBy('user.picture')
         .orderBy('value', 'DESC')
         .limit(5)
         .getRawMany(),
@@ -239,15 +243,18 @@ export class DashboardV2Service {
       this.netRepository
         .createQueryBuilder('net')
         .leftJoin('net.operator', 'operator')
+        .leftJoin('operator.user', 'user')
         .select([
           'operator.id as "operatorId"',
           'operator.callSign as "callSign"',
+          'user.picture as "picture"',
           'COUNT(net.id) as value',
         ])
         .where('net.startedAt IS NOT NULL')
         .andWhere('net.endedAt IS NOT NULL')
         .groupBy('operator.id')
         .addGroupBy('operator.callSign')
+        .addGroupBy('user.picture')
         .orderBy('value', 'DESC')
         .limit(5)
         .getRawMany(),
@@ -274,6 +281,7 @@ export class DashboardV2Service {
         rank: index + 1,
         callSign: op.callSign,
         operatorId: op.operatorId || null,
+        picture: op.picture || null,
         value: parseInt(op.value, 10),
         label: 'attendance',
       }),
@@ -284,6 +292,7 @@ export class DashboardV2Service {
         rank: index + 1,
         callSign: op.callSign,
         operatorId: op.operatorId || null,
+        picture: op.picture || null,
         value: parseInt(op.value, 10),
         label: 'nets',
       }),
@@ -382,7 +391,12 @@ export class DashboardV2Service {
       .offset(offset);
 
     if (userId) {
-      query.where('activity.userId = :userId OR activity.targetCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId)', { userId });
+      query.where(
+        'activity.userId = :userId OR ' +
+        'activity.actorCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId) OR ' +
+        'activity.targetCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId)',
+        { userId }
+      );
     }
 
     return query.getMany();

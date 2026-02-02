@@ -9,4 +9,8 @@ export class OperatorQueryDto extends PaginationDto {
   @IsOptional()
   @IsIn(['all', 'registered', 'unregistered'])
   membership?: 'all' | 'registered' | 'unregistered' = 'all';
+
+  @IsOptional()
+  @IsIn(['all', 'super_admin', 'admin', 'member', 'volunteer', 'guest'])
+  role?: 'all' | 'super_admin' | 'admin' | 'member' | 'volunteer' | 'guest' = 'all';
 }

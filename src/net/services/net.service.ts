@@ -27,7 +27,7 @@ export class NetService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async create(createNetDto: CreateNetDto, createdBy: string) {
+  async create(createNetDto: CreateNetDto, createdBy: string, actorCallSign: string) {
     const operator = await this.operatorService.findOne(
       createNetDto.operatorId,
     );
@@ -54,7 +54,7 @@ export class NetService {
           EntityType.NET,
           saved.id,
           null,
-          operator.callSign,
+          actorCallSign,
           null,
           { netName: saved.name, frequency: saved.frequency, mode: saved.mode },
         ),
@@ -99,7 +99,7 @@ export class NetService {
     await this.netRepository.delete(id);
   }
 
-  async startNet(id: string, updatedBy: string, addOperatorAsAttendee: boolean = false) {
+  async startNet(id: string, updatedBy: string, actorCallSign: string, addOperatorAsAttendee: boolean = false) {
     const net = await this.findOne(id);
     net.startedAt = new Date();
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
@@ -112,7 +112,7 @@ export class NetService {
         EntityType.NET,
         savedNet.id,
         null,
-        net.operator?.callSign || null,
+        actorCallSign,
         null,
         { netName: net.name, frequency: net.frequency },
       ),
@@ -141,7 +141,7 @@ export class NetService {
     return this.findOne(id);
   }
 
-  async endNet(id: string, updatedBy: string) {
+  async endNet(id: string, updatedBy: string, actorCallSign: string) {
     const net = await this.findOne(id);
     net.endedAt = new Date();
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
@@ -154,7 +154,7 @@ export class NetService {
         EntityType.NET,
         saved.id,
         null,
-        net.operator?.callSign || null,
+        actorCallSign,
         null,
         { netName: net.name, attendeeCount: net.attendeeCount },
       ),

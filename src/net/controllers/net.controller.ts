@@ -30,7 +30,7 @@ export class NetController {
     @Body() createNetDto: CreateNetDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.netService.create(createNetDto, req.user.email);
+    return this.netService.create(createNetDto, req.user.email, req.user.callSign);
   }
 
   @Put(':id')
@@ -67,14 +67,14 @@ export class NetController {
     @Body() startNetDto: StartNetDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.netService.startNet(id, req.user.email, startNetDto.addOperatorAsAttendee);
+    return this.netService.startNet(id, req.user.email, req.user.callSign, startNetDto.addOperatorAsAttendee);
   }
 
   @Patch(':id/end')
   @Roles(Role.VOLUNTEER)
   @ManageNet()
   async endNet(@Param('id') id: string, @Req() req: RequestWithUser) {
-    return this.netService.endNet(id, req.user.email);
+    return this.netService.endNet(id, req.user.email, req.user.callSign);
   }
 
   @Patch(':id/restart')

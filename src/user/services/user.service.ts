@@ -158,7 +158,7 @@ export class UserService {
     const user = await this.findOne(userId);
     const fieldsToUpdate: Partial<User> = {};
 
-    if (dto.picture) {
+    if (dto.picture !== undefined) {
       fieldsToUpdate.picture = dto.picture;
     }
 
@@ -253,6 +253,7 @@ export class UserService {
 
     user.salt = salt;
     user.password = password;
+    user.isTemporaryPassword = false;
     user.updatedBy = [...(user.updatedBy || []), updatedBy];
     await this.userRepository.save(user);
   }
@@ -300,5 +301,27 @@ export class UserService {
   async isSuperAdmin(userId: string): Promise<boolean> {
     const user = await this.findOne(userId);
     return user.role === Role.SUPER_ADMIN;
+  }
+
+  async forceSetPassword(userId: string, newPassword: string): Promise<void> {
+    const user = await this.findOne(userId);
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hashedPassword = crypto
+      .createHash('sha256')
+      .update(`${newPassword}${salt}`)
+      .digest('hex');
+
+    user.salt = salt;
+    user.password = hashedPassword;
+    user.isTemporaryPassword = true;
+
+    await this.userRepository.save(user);
+  }
+
+  async clearTemporaryPassword(userId: string): Promise<void> {
+    const user = await this.findOne(userId);
+    user.isTemporaryPassword = false;
+    await this.userRepository.save(user);
   }
 }

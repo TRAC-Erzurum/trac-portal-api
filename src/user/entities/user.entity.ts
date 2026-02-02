@@ -29,6 +29,9 @@ export class User extends BaseEntity {
   @Column({ type: 'enum', enum: Role, default: Role.GUEST })
   role: Role;
 
+  @Column({ default: false })
+  isTemporaryPassword: boolean;
+
   @OneToOne(() => Operator, (operator) => operator.user)
   operator: Operator;
 }

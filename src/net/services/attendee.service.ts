@@ -30,6 +30,7 @@ export class AttendeeService {
       netId: string,
     dto: AttendeeDto,
     createdBy: string,
+    actorCallSign: string,
   ) {
     const net = await this.netService.findOne(netId);
 
@@ -65,7 +66,7 @@ export class AttendeeService {
         EntityType.ATTENDEE,
         saved.id,
         null,
-        null,
+        actorCallSign,
         dto.callSign,
         { netId: net.id, netName: net.name },
       ),
@@ -138,7 +139,7 @@ export class AttendeeService {
   async getAttendees(netId: string, pagination: PaginationDto) {
     return this.attendeeRepository.find({
       where: { net: { id: netId } },
-      relations: { operator: true, net: true },
+      relations: { operator: { user: true }, net: true },
       order: { createdAt: pagination.sort },
     });
   }

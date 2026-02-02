@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, ILike, IsNull, Not, Repository } from 'typeorm';
+import { DeepPartial, IsNull, Not, Repository } from 'typeorm';
 import { Operator } from '../entities/operator.entity';
 import { Attendee } from '../../net/entities/attendee.entity';
 import { Net } from '../../net/entities/net.entity';
@@ -108,6 +108,10 @@ export class OperatorService {
       baseQueryBuilder.andWhere('user.id IS NULL');
     }
 
+    if (query.role && query.role !== 'all') {
+      baseQueryBuilder.andWhere('user.role = :role', { role: query.role });
+    }
+
     const countQuery = this.operatorRepository
       .createQueryBuilder('operator')
       .leftJoin('operator.user', 'user');
@@ -129,6 +133,10 @@ export class OperatorService {
       countQuery.andWhere('user.id IS NOT NULL');
     } else if (query.membership === 'unregistered') {
       countQuery.andWhere('user.id IS NULL');
+    }
+
+    if (query.role && query.role !== 'all') {
+      countQuery.andWhere('user.role = :role', { role: query.role });
     }
 
     const total = await countQuery.getCount();

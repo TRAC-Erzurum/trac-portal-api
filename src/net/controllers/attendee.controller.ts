@@ -44,6 +44,7 @@ export class AttendeeController {
       netId,
       dto,
       req.user.email,
+      req.user.callSign,
     );
   }
 

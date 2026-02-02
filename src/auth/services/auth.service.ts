@@ -79,6 +79,7 @@ export class AuthService {
       role: user.role,
       callSign: user.operator?.callSign,
       provider: user.provider,
+      isTemporaryPassword: user.isTemporaryPassword,
     };
   }
 
@@ -153,5 +154,78 @@ export class AuthService {
     });
 
     await this.passwordResetRequestRepository.save(request);
+  }
+
+  async getPendingPasswordResetRequests(): Promise<PasswordResetRequest[]> {
+    return this.passwordResetRequestRepository.find({
+      where: { status: PasswordResetStatus.PENDING },
+      relations: ['operator'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async getPendingPasswordResetRequestsCount(): Promise<number> {
+    return this.passwordResetRequestRepository.count({
+      where: { status: PasswordResetStatus.PENDING },
+    });
+  }
+
+  async approvePasswordResetRequest(
+    requestId: string,
+    adminId: string,
+  ): Promise<{ newPassword: string }> {
+    const request = await this.passwordResetRequestRepository.findOne({
+      where: { id: requestId, status: PasswordResetStatus.PENDING },
+      relations: ['operator', 'operator.user'],
+    });
+
+    if (!request) {
+      throw new ConflictException('error.requestNotFound');
+    }
+
+    if (!request.operator?.user) {
+      throw new ConflictException('error.userNotFound');
+    }
+
+    const newPassword = this.generateRandomPassword();
+    await this.userService.forceSetPassword(request.operator.user.id, newPassword);
+
+    request.status = PasswordResetStatus.COMPLETED;
+    request.processedBy = adminId;
+    request.processedAt = new Date();
+    await this.passwordResetRequestRepository.save(request);
+
+    this.logger.log(`Password reset approved for ${request.callSign} by admin ${adminId}`);
+
+    return { newPassword };
+  }
+
+  async rejectPasswordResetRequest(
+    requestId: string,
+    adminId: string,
+  ): Promise<void> {
+    const request = await this.passwordResetRequestRepository.findOne({
+      where: { id: requestId, status: PasswordResetStatus.PENDING },
+    });
+
+    if (!request) {
+      throw new ConflictException('error.requestNotFound');
+    }
+
+    request.status = PasswordResetStatus.REJECTED;
+    request.processedBy = adminId;
+    request.processedAt = new Date();
+    await this.passwordResetRequestRepository.save(request);
+
+    this.logger.log(`Password reset rejected for ${request.callSign} by admin ${adminId}`);
+  }
+
+  private generateRandomPassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let password = '';
+    for (let i = 0; i < 10; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
   }
 }
