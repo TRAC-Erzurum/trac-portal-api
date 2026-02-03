@@ -10,8 +10,10 @@ ENV NODE_ENV=production
 RUN yarn build && \
     find dist -name "*.js.map" -type f -delete
 
-RUN yarn install --production --frozen-lockfile && \
-    yarn cache clean
+RUN yarn install --production --frozen-lockfile --ignore-scripts && \
+    yarn cache clean && \
+    find /app/node_modules -type f \( -name "*.md" -o -name "*.markdown" -o -name "CHANGELOG*" -o -name "LICENSE*" -o -name "*.map" -o -name "*.tsbuildinfo" -o -name "*.d.ts" \) -delete && \
+    find /app/node_modules -depth -type d \( -name "test" -o -name "tests" -o -name "__tests__" -o -name "doc" -o -name "docs" -o -name "example" -o -name "examples" \) -exec rm -rf {} + 2>/dev/null || true
 
 FROM node:20-alpine AS production
 
@@ -20,7 +22,7 @@ WORKDIR /app
 # Install PostgreSQL client for backups
 RUN apk add --no-cache postgresql-client
 
-RUN yarn global add pm2
+RUN npm install -g pm2
 
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
