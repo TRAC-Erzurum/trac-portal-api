@@ -84,12 +84,17 @@ export class AuthService {
   }
 
   login(user: AuthUser): { access_token: string } {
+    return this.generateToken(user);
+  }
+
+  generateToken(user: AuthUser, currentBranchId?: string): { access_token: string } {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       provider: user.provider,
       role: user.role,
       callSign: user.callSign,
+      currentBranchId,
     };
 
     return { access_token: this.jwtService.sign(payload) };

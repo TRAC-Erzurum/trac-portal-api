@@ -18,13 +18,19 @@ import * as crypto from 'crypto';
 import { SetPasswordDto } from '../dto/set-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { AuthUser } from '../../auth/types/auth.types';
+import { BranchService } from '../../branch/services/branch.service';
+import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
+import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(UserBranchMembership)
+    private readonly membershipRepository: Repository<UserBranchMembership>,
     private readonly operatorService: OperatorService,
+    private readonly branchService: BranchService,
   ) {}
 
   async findByEmail(email: string): Promise<User> {
@@ -323,5 +329,26 @@ export class UserService {
     const user = await this.findOne(userId);
     user.isTemporaryPassword = false;
     await this.userRepository.save(user);
+  }
+
+  async validateBranchMembership(userId: string, branchId: string): Promise<void> {
+    await this.branchService.findOne(branchId);
+
+    const user = await this.findOne(userId);
+    if (user.role === Role.SUPER_ADMIN) {
+      return;
+    }
+
+    const membership = await this.membershipRepository.findOne({
+      where: {
+        userId,
+        branchId,
+        status: MembershipStatus.APPROVED,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('error.notBranchMember');
+    }
   }
 }

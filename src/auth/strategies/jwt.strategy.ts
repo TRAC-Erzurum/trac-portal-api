@@ -35,6 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role,
       callSign: user.operator?.callSign,
       picture: user.picture,
+      currentBranchId: payload.currentBranchId,
     };
   }
 }

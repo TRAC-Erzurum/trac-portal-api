@@ -1,0 +1,100 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import { BranchService } from '../services/branch.service';
+import { CreateBranchDto } from '../dto/create-branch.dto';
+import { UpdateBranchDto } from '../dto/update-branch.dto';
+import { UpdateStatusDto } from '../dto/update-status.dto';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { Role } from '../../auth/enums/role.enum';
+import { RequestWithUser } from '../../shared/types/request.types';
+
+@Controller('branches')
+export class BranchController {
+  constructor(private readonly branchService: BranchService) {}
+
+  @Post()
+  @Roles(Role.SUPER_ADMIN)
+  async create(
+    @Body() createBranchDto: CreateBranchDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.branchService.create(
+      createBranchDto,
+      req.user.id,
+      req.user.callSign || '',
+    );
+  }
+
+  @Get('admin/inactive-branches')
+  @Roles(Role.SUPER_ADMIN)
+  async findInactive() {
+    return this.branchService.findInactive();
+  }
+
+  @Get()
+  async findAll(
+    @Req() req: RequestWithUser,
+    @Query('includeInactive') includeInactive?: string,
+    @Query('search') search?: string,
+  ) {
+    const options: { includeInactive?: boolean; search?: string } = {};
+
+    // Only SUPER_ADMIN can use includeInactive
+    if (includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN) {
+      options.includeInactive = true;
+    }
+
+    if (search) {
+      options.search = search;
+    }
+
+    return this.branchService.findAll(options);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.branchService.findOne(id);
+  }
+
+  @Patch(':id')
+  @Roles(Role.SUPER_ADMIN)
+  async update(
+    @Param('id') id: string,
+    @Body() updateBranchDto: UpdateBranchDto,
+    @Req() req: RequestWithUser,
+  ) {
+    // For now, only SUPER_ADMIN can edit branches
+    // TODO: Add check for branch ADMIN when membership exists
+    return this.branchService.update(id, updateBranchDto, req.user.id);
+  }
+
+  @Patch(':id/status')
+  @Roles(Role.SUPER_ADMIN)
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() updateStatusDto: UpdateStatusDto,
+    @Req() req: RequestWithUser,
+  ) {
+    if (updateStatusDto.isActive) {
+      return this.branchService.activate(
+        id,
+        req.user.id,
+        req.user.callSign || '',
+      );
+    } else {
+      return this.branchService.deactivate(
+        id,
+        req.user.id,
+        req.user.callSign || '',
+      );
+    }
+  }
+}
