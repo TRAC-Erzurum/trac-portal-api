@@ -10,6 +10,10 @@ import { MANAGE_NET_KEY } from '../decorators/manage-net.decorator';
 import { ICurrentUser } from '../../user/types/user.types';
 import { UserService } from '../../user/services/user.service';
 import { NetService } from '../services/net.service';
+import { Role } from '../../auth/enums/role.enum';
+import { MembershipService } from '../../branch/services/membership.service';
+import { MembershipStatus } from '../../branch/enums/membership-status.enum';
+import { BranchRole } from '../../branch/enums/branch-role.enum';
 
 @Injectable()
 export class ManageNetGuard implements CanActivate {
@@ -17,6 +21,7 @@ export class ManageNetGuard implements CanActivate {
     private reflector: Reflector,
     private netService: NetService,
     private userService: UserService,
+    private membershipService: MembershipService,
   ) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -43,14 +48,33 @@ export class ManageNetGuard implements CanActivate {
       throw new NotFoundException('Çevrim bulunamadı');
     }
 
-    if (await this.userService.isAdmin(user.id)) {
+    // SUPER_ADMIN can manage all nets
+    const effectiveRole = await this.userService.getEffectiveRole(user.id);
+    if (effectiveRole === Role.SUPER_ADMIN) {
       return true;
     }
 
-    if (!net.operator.user || net.operator.user.id !== user.id) {
+    // Check if user is the net operator
+    if (net.operator.user && net.operator.user.id === user.id) {
+      return true;
+    }
+
+    // Check branch membership - user must be MEMBER+ in the net's branch
+    const membership = await this.membershipService.findMembership(
+      user.id,
+      net.branchId,
+    );
+
+    if (!membership || membership.status !== MembershipStatus.APPROVED) {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 
-    return true;
+    // Branch ADMIN can manage all nets in their branch
+    if (membership.role === BranchRole.ADMIN) {
+      return true;
+    }
+
+    // For other operations, only the operator can manage (already checked above)
+    throw new ForbiddenException('error.forbiddenDescription');
   }
 }

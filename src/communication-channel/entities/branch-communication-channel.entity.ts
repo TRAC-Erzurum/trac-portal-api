@@ -1,10 +1,10 @@
 import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { Branch } from '../../branch/entities/branch.entity';
-import { InfrastructureType } from '../enums/infrastructure-type.enum';
+import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
 
-@Entity('branch_infrastructure')
-export class BranchInfrastructure extends BaseEntity {
+@Entity('branch_communication_channels')
+export class BranchCommunicationChannel extends BaseEntity {
   @Column({ nullable: false })
   branchId: string;
 
@@ -12,8 +12,8 @@ export class BranchInfrastructure extends BaseEntity {
   @JoinColumn({ name: 'branchId' })
   branch: Branch;
 
-  @Column({ nullable: false, type: 'enum', enum: InfrastructureType })
-  type: InfrastructureType;
+  @Column({ nullable: false, type: 'enum', enum: CommunicationChannelType })
+  type: CommunicationChannelType;
 
   @Column({ nullable: true })
   repeaterMode: string;

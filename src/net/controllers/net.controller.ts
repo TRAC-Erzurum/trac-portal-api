@@ -30,17 +30,17 @@ export class NetController {
     @Body() createNetDto: CreateNetDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.netService.create(createNetDto, req.user.email, req.user.callSign);
+    return this.netService.create(createNetDto, req.user.email, req.user.callSign, req.user.id);
   }
 
   @Put(':id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.MEMBER)
   updateNet(
     @Param('id') id: string,
     @Body() updateNetDto: UpdateNetDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.netService.update(id, updateNetDto, req.user.email);
+    return this.netService.update(id, updateNetDto, req.user.email, req.user.id);
   }
 
   @Delete(':id')
@@ -50,8 +50,8 @@ export class NetController {
   }
 
   @Get()
-  findAll(@Query() query: NetQueryDto) {
-    return this.netService.findAll(query);
+  findAll(@Query() query: NetQueryDto, @Req() req: RequestWithUser) {
+    return this.netService.findAll(query, req.user.id);
   }
 
   @Get(':id')

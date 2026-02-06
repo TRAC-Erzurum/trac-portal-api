@@ -318,6 +318,7 @@ export class UserService {
 
     targetUser.salt = salt;
     targetUser.password = hashedPassword;
+    targetUser.isTemporaryPassword = true;
     targetUser.updatedBy = [...(targetUser.updatedBy || []), adminUser.email];
 
     await this.userRepository.save(targetUser);

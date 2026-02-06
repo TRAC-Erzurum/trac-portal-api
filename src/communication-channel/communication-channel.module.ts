@@ -10,4 +10,4 @@ import { controllers } from './controllers';
   providers: [...services],
   exports: [...services],
 })
-export class InfrastructureModule {}
+export class CommunicationChannelModule {}

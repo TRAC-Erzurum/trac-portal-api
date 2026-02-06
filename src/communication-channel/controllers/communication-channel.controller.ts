@@ -9,32 +9,32 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { InfrastructureService } from '../services/infrastructure.service';
-import { CreateInfrastructureDto } from '../dto/create-infrastructure.dto';
-import { UpdateInfrastructureDto } from '../dto/update-infrastructure.dto';
+import { CommunicationChannelService } from '../services/communication-channel.service';
+import { CreateCommunicationChannelDto } from '../dto/create-communication-channel.dto';
+import { UpdateCommunicationChannelDto } from '../dto/update-communication-channel.dto';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
 import { RequestWithUser } from '../../shared/types/request.types';
-import { InfrastructureType } from '../enums/infrastructure-type.enum';
+import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
 
-@Controller('infrastructure')
-export class InfrastructureController {
-  constructor(private readonly infrastructureService: InfrastructureService) {}
+@Controller('communication-channel')
+export class CommunicationChannelController {
+  constructor(private readonly communicationChannelService: CommunicationChannelService) {}
 
   @Post()
   @Roles(Role.SUPER_ADMIN)
   async create(
-    @Body() createInfrastructureDto: CreateInfrastructureDto,
+    @Body() createCommunicationChannelDto: CreateCommunicationChannelDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.infrastructureService.create(createInfrastructureDto, req.user.id);
+    return this.communicationChannelService.create(createCommunicationChannelDto, req.user.id);
   }
 
   @Get()
   async findAll(
     @Req() req: RequestWithUser,
     @Query('branchId') branchId?: string,
-    @Query('type') type?: InfrastructureType,
+    @Query('type') type?: CommunicationChannelType,
     @Query('search') search?: string,
     @Query('includeInactive') includeInactive?: string,
     @Query('pageNumber') pageNumber?: string,
@@ -42,7 +42,7 @@ export class InfrastructureController {
   ) {
     const options: {
       branchId?: string;
-      type?: InfrastructureType;
+      type?: CommunicationChannelType;
       search?: string;
       includeInactive?: boolean;
       pageNumber?: number;
@@ -73,60 +73,60 @@ export class InfrastructureController {
       options.pageSize = parseInt(pageSize, 10);
     }
 
-    return this.infrastructureService.findAll(options);
+    return this.communicationChannelService.findAll(options);
   }
 
   @Get('tutorials')
   async getAllTutorials(@Query('locale') locale?: string) {
-    return this.infrastructureService.getAllTutorials(locale || 'tr');
+    return this.communicationChannelService.getAllTutorials(locale || 'tr');
   }
 
   @Get('tutorials/:type')
   async getTutorial(
-    @Param('type') type: InfrastructureType,
+    @Param('type') type: CommunicationChannelType,
     @Query('locale') locale?: string,
   ) {
-    return this.infrastructureService.getTutorial(type, locale || 'tr');
+    return this.communicationChannelService.getTutorial(type, locale || 'tr');
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.infrastructureService.findOne(id);
+    return this.communicationChannelService.findOne(id);
   }
 
   @Patch(':id')
   @Roles(Role.SUPER_ADMIN)
   async update(
     @Param('id') id: string,
-    @Body() updateInfrastructureDto: UpdateInfrastructureDto,
+    @Body() updateCommunicationChannelDto: UpdateCommunicationChannelDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.infrastructureService.update(id, updateInfrastructureDto, req.user.id);
+    return this.communicationChannelService.update(id, updateCommunicationChannelDto, req.user.id);
   }
 
   @Patch(':id/activate')
   @Roles(Role.SUPER_ADMIN)
   async activate(@Param('id') id: string, @Req() req: RequestWithUser) {
-    return this.infrastructureService.activate(id, req.user.id);
+    return this.communicationChannelService.activate(id, req.user.id);
   }
 
   @Patch(':id/deactivate')
   @Roles(Role.SUPER_ADMIN)
   async deactivate(@Param('id') id: string, @Req() req: RequestWithUser) {
-    return this.infrastructureService.deactivate(id, req.user.id);
+    return this.communicationChannelService.deactivate(id, req.user.id);
   }
 
   @Delete(':id')
   @Roles(Role.SUPER_ADMIN)
   async delete(@Param('id') id: string) {
-    await this.infrastructureService.delete(id);
+    await this.communicationChannelService.delete(id);
     return { success: true };
   }
 }
 
-@Controller('branches/:branchId/infrastructure')
-export class BranchInfrastructureController {
-  constructor(private readonly infrastructureService: InfrastructureService) {}
+@Controller('branches/:branchId/communication-channel')
+export class BranchCommunicationChannelController {
+  constructor(private readonly communicationChannelService: CommunicationChannelService) {}
 
   @Get()
   async findByBranch(
@@ -142,17 +142,17 @@ export class BranchInfrastructureController {
       includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN;
     const page = pageNumber ? parseInt(pageNumber, 10) : undefined;
     const size = pageSize ? parseInt(pageSize, 10) : undefined;
-    return this.infrastructureService.findByBranch(branchId, includeInactiveFlag, page, size, search, type);
+    return this.communicationChannelService.findByBranch(branchId, includeInactiveFlag, page, size, search, type);
   }
 
   @Post()
   @Roles(Role.SUPER_ADMIN)
   async create(
     @Param('branchId') branchId: string,
-    @Body() dto: CreateInfrastructureDto,
+    @Body() dto: CreateCommunicationChannelDto,
     @Req() req: RequestWithUser,
   ) {
     dto.branchId = branchId;
-    return this.infrastructureService.create(dto, req.user.id);
+    return this.communicationChannelService.create(dto, req.user.id);
   }
 }

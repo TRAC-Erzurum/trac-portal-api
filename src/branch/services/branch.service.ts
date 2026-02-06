@@ -228,6 +228,9 @@ export class BranchService {
     if (dto.email !== undefined) {
       branch.email = dto.email;
     }
+    if (dto.city !== undefined) {
+      branch.city = dto.city;
+    }
 
     // Handle callSign updates if provided
     if (dto.callSigns !== undefined) {
@@ -332,5 +335,36 @@ export class BranchService {
       .where('branch.isActive = :isActive', { isActive: false })
       .orderBy('branch.name', 'ASC')
       .getMany();
+  }
+
+  async getBranchNets(branchId: string): Promise<any[]> {
+    // Import Net repository dynamically to avoid circular dependency
+    const { Net } = await import('../../net/entities/net.entity');
+    const netRepository = this.branchRepository.manager.getRepository(Net);
+
+    return netRepository
+      .createQueryBuilder('net')
+      .leftJoinAndSelect('net.operator', 'operator')
+      .leftJoinAndSelect('operator.user', 'user')
+      .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
+      .leftJoinAndSelect('net.communicationChannels', 'communicationChannels')
+      .leftJoinAndSelect('communicationChannels.communicationChannel', 'channelDetails')
+      .leftJoin('net.attendees', 'attendee')
+      .addSelect('COUNT(DISTINCT attendee.id)', 'attendeeCount')
+      .where('net.branchId = :branchId', { branchId })
+      .groupBy('net.id')
+      .addGroupBy('operator.id')
+      .addGroupBy('user.id')
+      .addGroupBy('branchCallSign.id')
+      .addGroupBy('communicationChannels.id')
+      .addGroupBy('channelDetails.id')
+      .orderBy('net.createdAt', 'DESC')
+      .getRawAndEntities()
+      .then((result) => {
+        return result.entities.map((net, index) => ({
+          ...net,
+          attendeeCount: Number(result.raw[index]?.attendeeCount || 0),
+        }));
+      });
   }
 }

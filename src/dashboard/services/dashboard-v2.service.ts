@@ -14,20 +14,34 @@ export interface StatusResponse {
 export interface ActiveNet {
   id: string;
   name: string;
-  frequency: string;
-  mode: string;
   operatorCallSign: string;
   attendeeCount: number;
   startedAt: Date;
   durationMinutes: number;
+  branch?: {
+    id: string;
+    name: string;
+    isHeadquarters?: boolean;
+  };
+  branchCallSign?: {
+    id: string;
+    callSign: string;
+  };
 }
 
 export interface PendingNet {
   id: string;
   name: string;
-  frequency: string;
-  mode: string;
   operatorCallSign: string;
+  branch?: {
+    id: string;
+    name: string;
+    isHeadquarters?: boolean;
+  };
+  branchCallSign?: {
+    id: string;
+    callSign: string;
+  };
 }
 
 export interface PersonalNetStats {
@@ -97,6 +111,8 @@ export class DashboardV2Service {
     const nets = await this.netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
+      .leftJoinAndSelect('net.branch', 'branch')
+      .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
       .loadRelationCountAndMap('net.attendeeCount', 'net.attendees')
       .where('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NULL')
@@ -109,14 +125,21 @@ export class DashboardV2Service {
     return nets.map((net) => ({
       id: net.id,
       name: net.name,
-      frequency: net.frequency,
-      mode: net.mode,
       operatorCallSign: net.operator?.callSign || 'Unknown',
       attendeeCount: (net as any).attendeeCount || 0,
       startedAt: net.startedAt,
       durationMinutes: net.startedAt
         ? Math.floor((now.getTime() - new Date(net.startedAt).getTime()) / 60000)
         : 0,
+      branch: net.branch ? {
+        id: net.branch.id,
+        name: net.branch.name,
+        isHeadquarters: net.branch.isHeadquarters,
+      } : undefined,
+      branchCallSign: net.branchCallSign ? {
+        id: net.branchCallSign.id,
+        callSign: net.branchCallSign.callSign,
+      } : undefined,
     }));
   }
 
@@ -124,6 +147,8 @@ export class DashboardV2Service {
     const nets = await this.netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
+      .leftJoinAndSelect('net.branch', 'branch')
+      .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
       .where('net.startedAt IS NULL')
       .orderBy('net.createdAt', 'DESC')
       .limit(limit)
@@ -132,9 +157,16 @@ export class DashboardV2Service {
     return nets.map((net) => ({
       id: net.id,
       name: net.name,
-      frequency: net.frequency,
-      mode: net.mode,
       operatorCallSign: net.operator?.callSign || 'Unknown',
+      branch: net.branch ? {
+        id: net.branch.id,
+        name: net.branch.name,
+        isHeadquarters: net.branch.isHeadquarters,
+      } : undefined,
+      branchCallSign: net.branchCallSign ? {
+        id: net.branchCallSign.id,
+        callSign: net.branchCallSign.callSign,
+      } : undefined,
     }));
   }
 
@@ -142,6 +174,8 @@ export class DashboardV2Service {
     const nets = await this.netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
+      .leftJoinAndSelect('net.branch', 'branch')
+      .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
       .loadRelationCountAndMap('net.attendeeCount', 'net.attendees')
       .where('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NOT NULL')
@@ -157,12 +191,19 @@ export class DashboardV2Service {
       return {
         id: net.id,
         name: net.name,
-        frequency: net.frequency,
-        mode: net.mode,
         operatorCallSign: net.operator?.callSign || 'Unknown',
         attendeeCount: (net as any).attendeeCount || 0,
         startedAt: net.startedAt,
         durationMinutes: duration,
+        branch: net.branch ? {
+          id: net.branch.id,
+          name: net.branch.name,
+          isHeadquarters: net.branch.isHeadquarters,
+        } : undefined,
+        branchCallSign: net.branchCallSign ? {
+          id: net.branchCallSign.id,
+          callSign: net.branchCallSign.callSign,
+        } : undefined,
       };
     });
   }

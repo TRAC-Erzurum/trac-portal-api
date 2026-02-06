@@ -6,6 +6,7 @@ import {
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { BranchCallSign } from './branch-call-sign.entity';
 import { BranchType } from '../enums/branch-type.enum';
+import { Net } from '../../net/entities/net.entity';
 
 @Entity('branches')
 export class Branch extends BaseEntity {
@@ -37,4 +38,7 @@ export class Branch extends BaseEntity {
     cascade: true,
   })
   callSigns: BranchCallSign[];
+
+  @OneToMany(() => Net, (net) => net.branch)
+  nets: Net[];
 }

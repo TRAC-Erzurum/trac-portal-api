@@ -1,12 +1,12 @@
 import { Column, Entity, Unique } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
-import { InfrastructureType } from '../enums/infrastructure-type.enum';
+import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
 
-@Entity('infrastructure_tutorials')
+@Entity('communication_channel_tutorials')
 @Unique(['type', 'locale'])
-export class InfrastructureTutorial extends BaseEntity {
-  @Column({ nullable: false, type: 'enum', enum: InfrastructureType })
-  type: InfrastructureType;
+export class CommunicationChannelTutorial extends BaseEntity {
+  @Column({ nullable: false, type: 'enum', enum: CommunicationChannelType })
+  type: CommunicationChannelType;
 
   @Column({ nullable: false })
   title: string;

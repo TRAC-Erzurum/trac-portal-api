@@ -14,6 +14,10 @@ export class NetQueryDto {
   @IsIn(['all', 'week', 'month', '3months'])
   dateFilter?: 'all' | 'week' | 'month' | '3months' = 'all';
 
+  @IsString()
+  @IsOptional()
+  branchId?: string;
+
   @IsOptional()
   @Transform(({ value }) => parseInt(value, 10))
   limit?: number = 50;

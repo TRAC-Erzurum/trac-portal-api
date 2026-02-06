@@ -1,4 +1,4 @@
-export enum InfrastructureType {
+export enum CommunicationChannelType {
   VHF_UHF_REPEATER = 'vhf_uhf_repeater',
   ECHOLINK = 'echolink',
   APRS = 'aprs',

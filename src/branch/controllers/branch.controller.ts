@@ -107,4 +107,9 @@ export class BranchController {
       );
     }
   }
+
+  @Get(':id/nets')
+  async getBranchNets(@Param('id') id: string) {
+    return this.branchService.getBranchNets(id);
+  }
 }

@@ -1,6 +1,5 @@
 import {
   IsString,
-  IsNotEmpty,
   IsEnum,
   IsOptional,
   IsNumber,
@@ -8,24 +7,20 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { InfrastructureType } from '../enums/infrastructure-type.enum';
+import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
 
-export class CreateInfrastructureDto {
-  @IsString()
-  @IsNotEmpty()
-  branchId: string;
-
-  @IsEnum(InfrastructureType)
-  @IsNotEmpty()
-  type: InfrastructureType;
+export class UpdateCommunicationChannelDto {
+  @IsEnum(CommunicationChannelType)
+  @IsOptional()
+  type?: CommunicationChannelType;
 
   @IsString()
   @IsOptional()
   repeaterMode?: string;
 
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @IsString()
   @IsOptional()

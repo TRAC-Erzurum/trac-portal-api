@@ -291,6 +291,7 @@ export class OperatorService {
     query: string,
     sortBy: 'managed' | 'attended' | 'default' = 'default',
     limit: number = 10,
+    branchId?: string,
   ): Promise<Operator[]> {
     const searchTerm = `%${(query ?? '').trim().toLowerCase()}%`;
 
@@ -306,13 +307,28 @@ export class OperatorService {
         { search: searchTerm },
       );
 
+    // Filter by branch membership if branchId provided
+    if (branchId) {
+      qb.innerJoin(
+        'user_branch_memberships',
+        'membership',
+        'membership.userId = user.id AND membership.branchId = :branchId AND membership.status = :status',
+        { branchId, status: 'approved' }
+      );
+    }
+
     if (sortBy === 'managed') {
       qb.leftJoin('operator.nets', 'net')
         .addSelect('COUNT(DISTINCT net.id)', 'managedCount')
         .addSelect('MAX(net.endedAt)', 'lastNetDate')
         .groupBy('operator.id')
-        .addGroupBy('user.id')
-        .orderBy('COUNT(DISTINCT net.id)', 'DESC')
+        .addGroupBy('user.id');
+      
+      if (branchId) {
+        qb.addGroupBy('membership.id');
+      }
+      
+      qb.orderBy('COUNT(DISTINCT net.id)', 'DESC')
         .addOrderBy('MAX(net.endedAt)', 'DESC', 'NULLS LAST')
         .addOrderBy('operator.callSign', 'ASC');
 
@@ -322,8 +338,13 @@ export class OperatorService {
       qb.leftJoin('operator.attendees', 'attendee')
         .addSelect('COUNT(DISTINCT attendee.id)', 'attendedCount')
         .groupBy('operator.id')
-        .addGroupBy('user.id')
-        .orderBy('COUNT(DISTINCT attendee.id)', 'DESC')
+        .addGroupBy('user.id');
+      
+      if (branchId) {
+        qb.addGroupBy('membership.id');
+      }
+      
+      qb.orderBy('COUNT(DISTINCT attendee.id)', 'DESC')
         .addOrderBy('operator.callSign', 'ASC');
 
       const result = await qb.limit(limit).getRawAndEntities();
@@ -397,29 +418,36 @@ export class OperatorService {
     };
   }
 
-  async getRecentNets(id: string, limit: number = 10, offset: number = 0): Promise<OperatorNetItem[]> {
+  async getRecentNets(id: string, limit: number = 10, offset: number = 0, branchId?: string): Promise<OperatorNetItem[]> {
     const fetchLimit = limit + offset + 50;
-    
-    const [attendedNets, managedNets] = await Promise.all([
-      this.attendeeRepository
-        .createQueryBuilder('attendee')
-        .leftJoinAndSelect('attendee.net', 'net')
-        .where('attendee.operatorId = :id', { id })
-        .andWhere('net.endedAt IS NOT NULL')
-        .orderBy('net.endedAt', 'DESC')
-        .limit(fetchLimit)
-        .getMany(),
 
-      this.netRepository
-        .createQueryBuilder('net')
-        .leftJoin('net.attendees', 'attendee')
-        .addSelect('COUNT(attendee.id)', 'attendeeCount')
-        .where('net.operatorId = :id', { id })
-        .andWhere('net.endedAt IS NOT NULL')
-        .groupBy('net.id')
-        .orderBy('net.endedAt', 'DESC')
-        .limit(fetchLimit)
-        .getRawAndEntities(),
+    const attendedQb = this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .leftJoinAndSelect('attendee.net', 'net')
+      .where('attendee.operatorId = :id', { id })
+      .andWhere('net.endedAt IS NOT NULL')
+      .orderBy('net.endedAt', 'DESC')
+      .limit(fetchLimit);
+    if (branchId) {
+      attendedQb.andWhere('net.branchId = :branchId', { branchId });
+    }
+
+    const managedQb = this.netRepository
+      .createQueryBuilder('net')
+      .leftJoin('net.attendees', 'attendee')
+      .addSelect('COUNT(attendee.id)', 'attendeeCount')
+      .where('net.operatorId = :id', { id })
+      .andWhere('net.endedAt IS NOT NULL')
+      .groupBy('net.id')
+      .orderBy('net.endedAt', 'DESC')
+      .limit(fetchLimit);
+    if (branchId) {
+      managedQb.andWhere('net.branchId = :branchId', { branchId });
+    }
+
+    const [attendedNets, managedNets] = await Promise.all([
+      attendedQb.getMany(),
+      managedQb.getRawAndEntities(),
     ]);
 
     const attended: OperatorNetItem[] = attendedNets.map((a) => ({

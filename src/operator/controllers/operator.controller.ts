@@ -49,8 +49,9 @@ export class OperatorController {
     @Query('q') query: string,
     @Query('sortBy') sortBy?: 'managed' | 'attended' | 'default',
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
+    @Query('branchId') branchId?: string,
   ): Promise<Operator[]> {
-    return this.operatorService.search(query, sortBy || 'default', Math.min(limit, 50));
+    return this.operatorService.search(query, sortBy || 'default', Math.min(limit, 50), branchId);
   }
 
   @Get(':id')
@@ -71,8 +72,9 @@ export class OperatorController {
     @Param('id') id: string,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    @Query('branchId') branchId?: string,
   ): Promise<OperatorNetItem[]> {
-    return this.operatorService.getRecentNets(id, Math.min(limit, 50), offset);
+    return this.operatorService.getRecentNets(id, Math.min(limit, 50), offset, branchId);
   }
 
   @Post('import')
