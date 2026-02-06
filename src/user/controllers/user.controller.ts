@@ -10,7 +10,9 @@ import {
   UseInterceptors,
   BadRequestException,
   Req,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { UserService } from '../services/user.service';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { ICurrentUser } from '../types/user.types';
@@ -32,6 +34,7 @@ import { RequestWithUser } from '../../shared/types/request.types';
 import { UpdateCurrentBranchDto } from '../dto/update-current-branch.dto';
 import { AuthService } from '../../auth/services/auth.service';
 import { AuthUser } from '../../auth/types/auth.types';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('user')
 @Roles(Role.GUEST)
@@ -39,6 +42,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly authService: AuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get('profile')
@@ -241,19 +245,8 @@ export class UserController {
   async updateCurrentBranch(
     @CurrentUser() user: ICurrentUser,
     @Body() dto: UpdateCurrentBranchDto,
-    @Req() req: RequestWithUser,
   ) {
-    await this.userService.validateBranchMembership(user.id, dto.branchId);
-
-    const authUser: AuthUser = {
-      id: user.id,
-      email: user.email,
-      role: req.user.role,
-      callSign: req.user.callSign,
-      provider: user.provider,
-      currentBranchId: dto.branchId,
-    };
-
-    return this.authService.generateToken(authUser, dto.branchId);
+    await this.userService.updateCurrentBranch(user.id, dto.branchId);
+    return { success: true };
   }
 }

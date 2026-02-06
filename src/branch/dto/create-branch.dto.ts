@@ -24,6 +24,10 @@ export class CreateBranchDto {
 
   @IsString()
   @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
   address?: string;
 
   @IsString()

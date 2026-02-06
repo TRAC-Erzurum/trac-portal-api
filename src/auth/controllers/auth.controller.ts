@@ -23,6 +23,9 @@ import { AllowWithoutCallsign } from '../decorators/allow-without-callsign.decor
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { PasswordResetRequestDto } from '../dto/password-reset-request.dto';
+import { MembershipService } from '../../branch/services/membership.service';
+import { BranchService } from '../../branch/services/branch.service';
+import { UserService } from '../../user/services/user.service';
 
 interface RequestWithUser extends Request {
   user: AuthUser;
@@ -32,9 +35,28 @@ interface RequestWithUser extends Request {
 export class AuthController {
   constructor(
     private authService: AuthService,
+    private membershipService: MembershipService,
+    private branchService: BranchService,
+    private userService: UserService,
     @Inject(CAPTCHA_SERVICE) private captchaService: CaptchaService,
     private configService: ConfigService,
   ) {}
+
+  private getCookieOptions() {
+    const cookieOptions: any = {
+      httpOnly: true,
+      secure: this.configService.get<string>('NODE_ENV') === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000,
+    };
+
+    const domain = this.configService.get<string>('DOMAIN');
+    if (domain && this.configService.get<string>('NODE_ENV') === 'production') {
+      cookieOptions.domain = domain;
+    }
+
+    return cookieOptions;
+  }
 
   @Public()
   @Get('google')
@@ -51,28 +73,32 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
     const { access_token } = this.authService.login(req.user);
-
-    res.cookie('auth_token', access_token, {
-      httpOnly: true,
-      secure: this.configService.get<string>('NODE_ENV') === 'production',
-      sameSite: 'strict',
-      domain: this.configService.get<string>('DOMAIN'),
-      maxAge: 24 * 60 * 60 * 1000,
-    });
-
+    res.cookie('auth_token', access_token, this.getCookieOptions());
     res.redirect('/');
   }
 
   @Get('check')
   @AllowWithoutCallsign()
-  checkAuth(@Req() req: RequestWithUser) {
-    return { user: req.user };
+  async checkAuth(@Req() req: RequestWithUser) {
+    const user = await this.userService.findOne(req.user.id);
+    return { 
+      user: {
+        ...req.user,
+        currentBranchId: user.currentBranchId,
+      }
+    };
   }
 
   @Get('logout')
   @AllowWithoutCallsign()
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie('auth_token');
+  }
+
+  @Public()
+  @Get('branches')
+  async getBranchesForRegistration() {
+    return this.branchService.findAll({ includeInactive: false });
   }
 
   @Public()
@@ -91,14 +117,7 @@ export class AuthController {
     );
 
     const { access_token } = this.authService.login(authUser);
-
-    res.cookie('auth_token', access_token, {
-      httpOnly: true,
-      secure: this.configService.get<string>('NODE_ENV') === 'production',
-      sameSite: 'strict',
-      domain: this.configService.get<string>('DOMAIN'),
-      maxAge: 24 * 60 * 60 * 1000,
-    });
+    res.cookie('auth_token', access_token, this.getCookieOptions());
   }
 
   @Public()
@@ -116,15 +135,7 @@ export class AuthController {
     );
 
     const { access_token } = this.authService.login(authUser);
-
-    res.cookie('auth_token', access_token, {
-      httpOnly: true,
-      secure: this.configService.get<string>('NODE_ENV') === 'production',
-      sameSite: 'strict',
-      domain: this.configService.get<string>('DOMAIN'),
-      maxAge: 24 * 60 * 60 * 1000,
-    });
-
+    res.cookie('auth_token', access_token, this.getCookieOptions());
     return { isTemporaryPassword: authUser.isTemporaryPassword };
   }
 
@@ -137,6 +148,29 @@ export class AuthController {
     await this.captchaService.verify(dto.captchaToken, ip);
     await this.authService.createPasswordResetRequest(dto.callSign);
     return { message: 'Talebiniz alındı' };
+  }
+
+  @Get('admin/pending-requests/count')
+  @Roles(Role.ADMIN)
+  async getAdminPendingRequestsCount(@Req() req: RequestWithUser) {
+    const [membershipCount, passwordResetCount] = await Promise.all([
+      this.membershipService.getPendingRequestsCountForAdmin(req.user.id),
+      this.authService.getPendingPasswordResetRequestsCount(),
+    ]);
+    return { total: membershipCount + passwordResetCount };
+  }
+
+  @Get('admin/pending-requests')
+  @Roles(Role.ADMIN)
+  async getAdminPendingRequests(@Req() req: RequestWithUser) {
+    const [membershipRequests, passwordResetRequests] = await Promise.all([
+      this.membershipService.getPendingRequestsForAdmin(req.user.id),
+      this.authService.getPendingPasswordResetRequests(),
+    ]);
+    return {
+      membershipRequests: membershipRequests.branches,
+      passwordResetRequests,
+    };
   }
 
   @Get('password-reset-requests')

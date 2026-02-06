@@ -37,12 +37,16 @@ export class InfrastructureController {
     @Query('type') type?: InfrastructureType,
     @Query('search') search?: string,
     @Query('includeInactive') includeInactive?: string,
+    @Query('pageNumber') pageNumber?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
     const options: {
       branchId?: string;
       type?: InfrastructureType;
       search?: string;
       includeInactive?: boolean;
+      pageNumber?: number;
+      pageSize?: number;
     } = {};
 
     if (branchId) {
@@ -59,6 +63,14 @@ export class InfrastructureController {
 
     if (includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN) {
       options.includeInactive = true;
+    }
+
+    if (pageNumber) {
+      options.pageNumber = parseInt(pageNumber, 10);
+    }
+
+    if (pageSize) {
+      options.pageSize = parseInt(pageSize, 10);
     }
 
     return this.infrastructureService.findAll(options);
@@ -121,10 +133,16 @@ export class BranchInfrastructureController {
     @Param('branchId') branchId: string,
     @Req() req: RequestWithUser,
     @Query('includeInactive') includeInactive?: string,
+    @Query('pageNumber') pageNumber?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('type') type?: string,
   ) {
     const includeInactiveFlag =
       includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN;
-    return this.infrastructureService.findByBranch(branchId, includeInactiveFlag);
+    const page = pageNumber ? parseInt(pageNumber, 10) : undefined;
+    const size = pageSize ? parseInt(pageSize, 10) : undefined;
+    return this.infrastructureService.findByBranch(branchId, includeInactiveFlag, page, size, search, type);
   }
 
   @Post()

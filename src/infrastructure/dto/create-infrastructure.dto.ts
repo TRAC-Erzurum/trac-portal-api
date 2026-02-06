@@ -37,6 +37,10 @@ export class CreateInfrastructureDto {
 
   @IsString()
   @IsOptional()
+  district?: string;
+
+  @IsString()
+  @IsOptional()
   location?: string;
 
   @IsNumber()

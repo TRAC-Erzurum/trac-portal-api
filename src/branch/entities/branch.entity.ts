@@ -30,6 +30,9 @@ export class Branch extends BaseEntity {
   @Column({ nullable: true })
   email: string;
 
+  @Column({ nullable: true })
+  city: string;
+
   @OneToMany(() => BranchCallSign, (callSign) => callSign.branch, {
     cascade: true,
   })

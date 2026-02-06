@@ -81,7 +81,9 @@ export class InfrastructureService {
     type?: InfrastructureType;
     search?: string;
     includeInactive?: boolean;
-  } = {}): Promise<BranchInfrastructure[]> {
+    pageNumber?: number;
+    pageSize?: number;
+  } = {}): Promise<{ data: BranchInfrastructure[]; total: number }> {
     const qb = this.infrastructureRepository
       .createQueryBuilder('infra')
       .leftJoinAndSelect('infra.branch', 'branch')
@@ -107,14 +109,33 @@ export class InfrastructureService {
       );
     }
 
-    return qb.getMany();
+    const total = await qb.getCount();
+
+    if (options.pageNumber && options.pageSize) {
+      qb.skip((options.pageNumber - 1) * options.pageSize).take(options.pageSize);
+    }
+
+    const data = await qb.getMany();
+
+    return { data, total };
   }
 
   async findByBranch(
     branchId: string,
     includeInactive: boolean = false,
-  ): Promise<BranchInfrastructure[]> {
-    return this.findAll({ branchId, includeInactive });
+    pageNumber?: number,
+    pageSize?: number,
+    search?: string,
+    type?: string,
+  ): Promise<{ data: BranchInfrastructure[]; total: number }> {
+    return this.findAll({ 
+      branchId, 
+      includeInactive, 
+      pageNumber, 
+      pageSize, 
+      search, 
+      type: type as InfrastructureType 
+    });
   }
 
   async findOne(id: string): Promise<BranchInfrastructure> {

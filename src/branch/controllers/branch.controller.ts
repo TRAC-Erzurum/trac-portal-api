@@ -44,8 +44,10 @@ export class BranchController {
     @Req() req: RequestWithUser,
     @Query('includeInactive') includeInactive?: string,
     @Query('search') search?: string,
+    @Query('pageNumber') pageNumber?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    const options: { includeInactive?: boolean; search?: string } = {};
+    const options: { includeInactive?: boolean; search?: string; pageNumber?: number; pageSize?: number } = {};
 
     // Only SUPER_ADMIN can use includeInactive
     if (includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN) {
@@ -54,6 +56,14 @@ export class BranchController {
 
     if (search) {
       options.search = search;
+    }
+
+    if (pageNumber) {
+      options.pageNumber = parseInt(pageNumber, 10);
+    }
+
+    if (pageSize) {
+      options.pageSize = parseInt(pageSize, 10);
     }
 
     return this.branchService.findAll(options);

@@ -32,6 +32,10 @@ export class UpdateInfrastructureDto {
 
   @IsString()
   @IsOptional()
+  district?: string;
+
+  @IsString()
+  @IsOptional()
   location?: string;
 
   @IsNumber()

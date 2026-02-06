@@ -12,7 +12,7 @@ import { AuthModule } from '../auth/auth.module';
   imports: [
     TypeOrmModule.forFeature([User, UserBranchMembership]),
     OperatorModule,
-    BranchModule,
+    forwardRef(() => BranchModule),
     forwardRef(() => AuthModule),
   ],
   controllers: [UserController],

@@ -20,7 +20,6 @@ export interface AuthUser {
   fullName?: string | null;
   picture?: string | null;
   isTemporaryPassword?: boolean;
-  currentBranchId?: string;
 }
 
 export interface JwtPayload {
@@ -29,5 +28,4 @@ export interface JwtPayload {
   provider: string;
   role: Role;
   callSign?: string;
-  currentBranchId?: string;
 }

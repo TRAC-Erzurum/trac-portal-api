@@ -1,4 +1,13 @@
-import { IsString, IsNotEmpty, MinLength, IsEmail, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  MinLength,
+  IsEmail,
+  IsOptional,
+  IsArray,
+  IsUUID,
+  ArrayMinSize,
+} from 'class-validator';
 
 export class RegisterDto {
   @IsEmail()
@@ -13,6 +22,11 @@ export class RegisterDto {
   @IsNotEmpty()
   @MinLength(6)
   password: string;
+
+  @IsArray()
+  @ArrayMinSize(1, { message: 'error.atLeastOneBranchRequired' })
+  @IsUUID('4', { each: true })
+  branchIds: string[];
 
   @IsString()
   @IsOptional()

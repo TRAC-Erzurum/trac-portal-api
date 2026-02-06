@@ -36,6 +36,10 @@ export class UpdateBranchDto {
 
   @IsString()
   @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
   address?: string;
 
   @IsString()

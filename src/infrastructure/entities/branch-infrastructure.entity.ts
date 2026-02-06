@@ -30,6 +30,9 @@ export class BranchInfrastructure extends BaseEntity {
   @Column({ nullable: true })
   location: string;
 
+  @Column({ nullable: true })
+  district: string;
+
   @Column({ nullable: true, type: 'decimal', precision: 10, scale: 7 })
   latitude: number;
 

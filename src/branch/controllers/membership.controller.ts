@@ -1,19 +1,27 @@
 import {
+  Body,
   Controller,
-  Post,
-  Get,
-  Patch,
   Delete,
+  Get,
   Param,
+  Patch,
+  Post,
   Req,
+  UseGuards,
   NotFoundException,
+  Query,
 } from '@nestjs/common';
 import { MembershipService } from '../services/membership.service';
-import { Roles } from '../../auth/decorators/roles.decorator';
-import { Role } from '../../auth/enums/role.enum';
 import { RequestWithUser } from '../../shared/types/request.types';
 import { CurrentUser } from '../../user/decorators/current-user.decorator';
 import { ICurrentUser } from '../../user/types/user.types';
+import { BranchAdminGuard } from '../guards/branch-admin.guard';
+import { BranchMemberGuard } from '../guards/branch-member.guard';
+import { ApproveMembershipDto } from '../dto/approve-membership.dto';
+import { RejectMembershipDto } from '../dto/reject-membership.dto';
+import { UpdateMembershipRoleDto } from '../dto/update-membership-role.dto';
+import { AddMemberDto } from '../dto/add-member.dto';
+import { BranchRole } from '../enums/branch-role.enum';
 
 @Controller('branches')
 export class MembershipController {
@@ -27,14 +35,40 @@ export class MembershipController {
     return this.membershipService.join(user.id, branchId);
   }
 
+  @Post(':branchId/members/add')
+  @UseGuards(BranchAdminGuard)
+  async addMember(
+    @Param('branchId') branchId: string,
+    @Body() dto: AddMemberDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.membershipService.addMemberDirectly(
+      branchId,
+      dto.userId,
+      dto.role ?? BranchRole.MEMBER,
+      req.user.id,
+      req.user.callSign || '',
+    );
+  }
+
+  @Get(':branchId/pending-requests')
+  @UseGuards(BranchAdminGuard)
+  async getPendingRequests(@Param('branchId') branchId: string) {
+    return this.membershipService.getPendingMembershipsByBranch(branchId);
+  }
+
   @Patch(':branchId/members/:userId/approve')
-  @Roles(Role.SUPER_ADMIN)
+  @UseGuards(BranchAdminGuard)
   async approve(
     @Param('branchId') branchId: string,
     @Param('userId') userId: string,
+    @Body() dto: ApproveMembershipDto,
     @Req() req: RequestWithUser,
   ) {
-    const membership = await this.membershipService.findMembership(userId, branchId);
+    const membership = await this.membershipService.findMembership(
+      userId,
+      branchId,
+    );
     if (!membership) {
       throw new NotFoundException('error.membershipNotFound');
     }
@@ -42,17 +76,22 @@ export class MembershipController {
       membership.id,
       req.user.id,
       req.user.callSign || '',
+      dto.role ?? BranchRole.MEMBER,
     );
   }
 
   @Patch(':branchId/members/:userId/reject')
-  @Roles(Role.SUPER_ADMIN)
+  @UseGuards(BranchAdminGuard)
   async reject(
     @Param('branchId') branchId: string,
     @Param('userId') userId: string,
+    @Body() dto: RejectMembershipDto,
     @Req() req: RequestWithUser,
   ) {
-    const membership = await this.membershipService.findMembership(userId, branchId);
+    const membership = await this.membershipService.findMembership(
+      userId,
+      branchId,
+    );
     if (!membership) {
       throw new NotFoundException('error.membershipNotFound');
     }
@@ -60,11 +99,29 @@ export class MembershipController {
       membership.id,
       req.user.id,
       req.user.callSign || '',
+      dto.rejectionReason,
+    );
+  }
+
+  @Patch(':branchId/members/:membershipId/role')
+  @UseGuards(BranchAdminGuard)
+  async updateRole(
+    @Param('branchId') branchId: string,
+    @Param('membershipId') membershipId: string,
+    @Body() dto: UpdateMembershipRoleDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.membershipService.updateRole(
+      membershipId,
+      dto.role,
+      req.user.id,
+      req.user.callSign || '',
+      branchId,
     );
   }
 
   @Delete(':branchId/members/:userId')
-  @Roles(Role.SUPER_ADMIN)
+  @UseGuards(BranchAdminGuard)
   async remove(
     @Param('branchId') branchId: string,
     @Param('userId') userId: string,
@@ -80,12 +137,16 @@ export class MembershipController {
   }
 
   @Get(':branchId/members')
-  async getMembers(@Param('branchId') branchId: string) {
-    return this.membershipService.getMembersByBranch(branchId);
-  }
-
-  @Get('users/me/branches')
-  async getUserBranches(@CurrentUser() user: ICurrentUser) {
-    return this.membershipService.getUserBranches(user.id);
+  @UseGuards(BranchMemberGuard)
+  async getMembers(
+    @Param('branchId') branchId: string,
+    @Query('pageNumber') pageNumber?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+  ) {
+    const page = pageNumber ? parseInt(pageNumber, 10) : undefined;
+    const size = pageSize ? parseInt(pageSize, 10) : undefined;
+    return this.membershipService.getMembersByBranch(branchId, page, size, search, role);
   }
 }

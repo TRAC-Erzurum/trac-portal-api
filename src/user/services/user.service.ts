@@ -10,7 +10,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial, ILike } from 'typeorm';
 import { User } from '../entities/user.entity';
-import { Role } from '../../auth/enums/role.enum';
+import { Role, GlobalRole } from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
 import { OperatorService } from '../../operator/services/operator.service';
 import { UpdateUserDto } from '../dto/update-user.dto';
@@ -21,6 +21,7 @@ import { AuthUser } from '../../auth/types/auth.types';
 import { BranchService } from '../../branch/services/branch.service';
 import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
+import { BranchRole } from '../../branch/enums/branch-role.enum';
 
 @Injectable()
 export class UserService {
@@ -42,11 +43,13 @@ export class UserService {
 
   async create(user: DeepPartial<User>, createdBy: string): Promise<User> {
     const userCount = await this.userRepository.count();
-    
+
     if (userCount === 0) {
       user.role = Role.SUPER_ADMIN;
+      user.globalRole = GlobalRole.SUPER_ADMIN;
     } else {
       user.role = Role.GUEST;
+      user.globalRole = GlobalRole.GUEST;
     }
     
     user.createdBy = createdBy;
@@ -96,6 +99,25 @@ export class UserService {
       where: { id },
       relations: { operator: true },
     });
+  }
+
+  async getEffectiveRole(userId: string): Promise<Role> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    if (!user) return Role.GUEST;
+    if (user.globalRole === GlobalRole.SUPER_ADMIN) return Role.SUPER_ADMIN;
+    const memberships = await this.membershipRepository.find({
+      where: { userId, status: MembershipStatus.APPROVED },
+    });
+    if (memberships.length === 0) return Role.GUEST;
+    const hasAdmin = memberships.some((m) => m.role === BranchRole.ADMIN || m.role === BranchRole.PRESIDENT);
+    const hasMember = memberships.some((m) => m.role === BranchRole.MEMBER);
+    const hasVolunteer = memberships.some((m) => m.role === BranchRole.VOLUNTEER);
+    if (hasAdmin) return Role.ADMIN;
+    if (hasMember) return Role.MEMBER;
+    if (hasVolunteer) return Role.VOLUNTEER;
+    return Role.GUEST;
   }
 
   async exists(id: string): Promise<boolean> {
@@ -269,7 +291,7 @@ export class UserService {
     newPassword: string,
     adminUser: AuthUser,
   ): Promise<void> {
-    const targetUser = await this.findOne(targetUserId);
+    const targetEffectiveRole = await this.getEffectiveRole(targetUserId);
 
     const roleHierarchy = {
       [Role.SUPER_ADMIN]: 5,
@@ -280,10 +302,12 @@ export class UserService {
     };
 
     if (adminUser.role !== Role.SUPER_ADMIN) {
-      if (roleHierarchy[targetUser.role] >= roleHierarchy[adminUser.role]) {
+      if (roleHierarchy[targetEffectiveRole] >= roleHierarchy[adminUser.role]) {
         throw new ForbiddenException('error.cannotResetHigherRolePassword');
       }
     }
+
+    const targetUser = await this.findOne(targetUserId);
 
     const salt = crypto.randomBytes(16).toString('hex');
 
@@ -300,13 +324,13 @@ export class UserService {
   }
 
   async isAdmin(userId: string): Promise<boolean> {
-    const user = await this.findOne(userId);
-    return user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN;
+    const role = await this.getEffectiveRole(userId);
+    return role === Role.ADMIN || role === Role.SUPER_ADMIN;
   }
 
   async isSuperAdmin(userId: string): Promise<boolean> {
-    const user = await this.findOne(userId);
-    return user.role === Role.SUPER_ADMIN;
+    const role = await this.getEffectiveRole(userId);
+    return role === Role.SUPER_ADMIN;
   }
 
   async forceSetPassword(userId: string, newPassword: string): Promise<void> {
@@ -334,8 +358,8 @@ export class UserService {
   async validateBranchMembership(userId: string, branchId: string): Promise<void> {
     await this.branchService.findOne(branchId);
 
-    const user = await this.findOne(userId);
-    if (user.role === Role.SUPER_ADMIN) {
+    const effectiveRole = await this.getEffectiveRole(userId);
+    if (effectiveRole === Role.SUPER_ADMIN) {
       return;
     }
 
@@ -350,5 +374,13 @@ export class UserService {
     if (!membership) {
       throw new ForbiddenException('error.notBranchMember');
     }
+  }
+
+  async updateCurrentBranch(userId: string, branchId: string): Promise<void> {
+    await this.validateBranchMembership(userId, branchId);
+    
+    const user = await this.findOne(userId);
+    user.currentBranchId = branchId;
+    await this.userRepository.save(user);
   }
 }

@@ -5,3 +5,8 @@ export enum Role {
   VOLUNTEER = 'volunteer',
   GUEST = 'guest',
 }
+
+export enum GlobalRole {
+  GUEST = 'guest',
+  SUPER_ADMIN = 'super_admin',
+}

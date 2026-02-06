@@ -29,6 +29,15 @@ export class UserBranchMembership extends BaseEntity {
   @Column({ type: 'enum', enum: MembershipStatus, default: MembershipStatus.PENDING })
   status: MembershipStatus;
 
+  @Column({ nullable: true })
+  processedBy: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  processedAt: Date | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  rejectionReason: string | null;
+
   @ManyToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;

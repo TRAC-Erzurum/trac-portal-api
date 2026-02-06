@@ -6,6 +6,7 @@ export enum ActivityType {
   MEMBERSHIP_APPROVED = 'membership.approved',
   MEMBERSHIP_REJECTED = 'membership.rejected',
   MEMBERSHIP_REMOVED = 'membership.removed',
+  MEMBERSHIP_ROLE_UPDATED = 'membership.role_updated',
 }
 
 export enum EntityType {

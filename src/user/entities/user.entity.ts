@@ -1,6 +1,6 @@
 import { Entity, Column, OneToOne } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import { Role } from '../../auth/enums/role.enum';
+import { Role, GlobalRole } from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
 import { BaseEntity } from '../../shared/entities/base.entity';
 
@@ -33,9 +33,20 @@ export class User extends BaseEntity {
   @Column({ type: 'enum', enum: Role, default: Role.GUEST })
   role: Role;
 
+  @Column({
+    type: 'enum',
+    enum: GlobalRole,
+    enumName: 'global_role_enum',
+    default: GlobalRole.GUEST,
+  })
+  globalRole: GlobalRole;
+
   @Column({ default: false })
   @Exclude()
   isTemporaryPassword: boolean;
+
+  @Column({ nullable: true, type: 'uuid' })
+  currentBranchId: string | null;
 
   @OneToOne(() => Operator, (operator) => operator.user)
   operator: Operator;

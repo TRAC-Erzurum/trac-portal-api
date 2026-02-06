@@ -113,8 +113,8 @@ export class BranchService {
   }
 
   async findAll(
-    options: { includeInactive?: boolean; search?: string } = {},
-  ): Promise<Branch[]> {
+    options: { includeInactive?: boolean; search?: string; pageNumber?: number; pageSize?: number } = {},
+  ): Promise<{ data: Branch[]; total: number }> {
     const qb = this.branchRepository
       .createQueryBuilder('branch')
       .leftJoinAndSelect('branch.callSigns', 'callSigns')
@@ -132,7 +132,15 @@ export class BranchService {
       );
     }
 
-    return qb.getMany();
+    const total = await qb.getCount();
+
+    if (options.pageNumber && options.pageSize) {
+      qb.skip((options.pageNumber - 1) * options.pageSize).take(options.pageSize);
+    }
+
+    const data = await qb.getMany();
+
+    return { data, total };
   }
 
   async findOne(id: string): Promise<Branch> {
@@ -147,6 +155,12 @@ export class BranchService {
     }
 
     return branch;
+  }
+
+  async findHeadquarters(): Promise<Branch | null> {
+    return this.branchRepository.findOne({
+      where: { isHeadquarters: true, isActive: true },
+    });
   }
 
   async update(
