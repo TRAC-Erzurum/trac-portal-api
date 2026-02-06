@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateUserBranchMembershipTable1770237900000
-  implements MigrationInterface
-{
+export class CreateUserBranchMembershipTable1770237900000 implements MigrationInterface {
   name = 'CreateUserBranchMembershipTable1770237900000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -56,7 +54,9 @@ export class CreateUserBranchMembershipTable1770237900000
       `DROP INDEX IF EXISTS "IDX_user_branch_memberships_userId"`,
     );
     await queryRunner.query(`DROP TABLE IF EXISTS "user_branch_memberships"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."membership_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."membership_status_enum"`,
+    );
     await queryRunner.query(`DROP TYPE IF EXISTS "public"."branch_role_enum"`);
   }
 }

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AssignDefaultSimplexToExistingNets1770380567674
-  implements MigrationInterface
-{
+export class AssignDefaultSimplexToExistingNets1770380567674 implements MigrationInterface {
   name = 'AssignDefaultSimplexToExistingNets1770380567674';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

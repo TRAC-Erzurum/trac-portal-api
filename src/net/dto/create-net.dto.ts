@@ -1,4 +1,11 @@
-import { IsString, IsUUID, IsArray, ValidateNested, IsNotEmpty, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsUUID,
+  IsArray,
+  ValidateNested,
+  IsNotEmpty,
+  IsOptional,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { NetCommunicationChannelDto } from './net-communication-channel.dto';
 

@@ -50,7 +50,9 @@ export class CreateBranchTables1770237857767 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "UQ_branch_call_signs_default"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "UQ_branch_call_signs_default"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "branch_call_signs"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "branches"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "public"."branch_type_enum"`);

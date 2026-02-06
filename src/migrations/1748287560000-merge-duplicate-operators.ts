@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class MergeDuplicateOperators1748287560000
-  implements MigrationInterface
-{
+export class MergeDuplicateOperators1748287560000 implements MigrationInterface {
   name = 'MergeDuplicateOperators1748287560000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -203,7 +201,7 @@ export class MergeDuplicateOperators1748287560000
     console.log('\n🎉 Migration completed successfully!');
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(_queryRunner: QueryRunner): Promise<void> {
     console.log(
       '⚠️  WARNING: This migration cannot be reversed automatically.',
     );

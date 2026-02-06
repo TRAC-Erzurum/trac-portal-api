@@ -82,11 +82,23 @@ export class UpdateInfrastructureToneFields1770320660902 implements MigrationInt
       WHERE "txDcsCode" IS NOT NULL;
     `);
 
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "txCtcssTone"`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "rxCtcssTone"`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "txDcsCode"`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "txDcsPolarity"`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "rxDcsCode"`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "rxDcsPolarity"`);
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "txCtcssTone"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "rxCtcssTone"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "txDcsCode"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "txDcsPolarity"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "rxDcsCode"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "rxDcsPolarity"`,
+    );
   }
 }

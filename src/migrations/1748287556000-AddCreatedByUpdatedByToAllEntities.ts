@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddCreatedByUpdatedByToAllEntities1748287556000
-  implements MigrationInterface
-{
+export class AddCreatedByUpdatedByToAllEntities1748287556000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add to users table
     await queryRunner.query(`

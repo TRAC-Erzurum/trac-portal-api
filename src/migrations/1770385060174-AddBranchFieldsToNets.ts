@@ -26,7 +26,10 @@ export class AddBranchFieldsToNets1770385060174 implements MigrationInterface {
     const netCountResult = await queryRunner.query(`
       SELECT COUNT(*) as count FROM "nets";
     `);
-    const netCount = netCountResult && netCountResult[0] ? parseInt(netCountResult[0].count) : 0;
+    const netCount =
+      netCountResult && netCountResult[0]
+        ? parseInt(String(netCountResult[0].count), 10)
+        : 0;
 
     if (netCount > 0) {
       // Find HQ branch (isHeadquarters=true) - required if nets exist
@@ -43,22 +46,29 @@ export class AddBranchFieldsToNets1770385060174 implements MigrationInterface {
       const hqBranchId = hqBranch[0].id;
 
       // Find default call sign for HQ branch
-      const hqCallSign = await queryRunner.query(`
+      const hqCallSign = await queryRunner.query(
+        `
         SELECT id FROM "branch_call_signs" 
         WHERE "branchId" = $1 AND "isDefault" = true 
         LIMIT 1;
-      `, [hqBranchId]);
+      `,
+        [hqBranchId],
+      );
 
-      const hqCallSignId = hqCallSign && hqCallSign.length > 0 ? hqCallSign[0].id : null;
+      const hqCallSignId =
+        hqCallSign && hqCallSign.length > 0 ? hqCallSign[0].id : null;
 
       // Set all existing nets to HQ branch
-      await queryRunner.query(`
+      await queryRunner.query(
+        `
         UPDATE "nets" 
         SET "branchId" = $1, 
             "branchCallSignId" = $2,
             "isActive" = true
         WHERE "branchId" IS NULL;
-      `, [hqBranchId, hqCallSignId]);
+      `,
+        [hqBranchId, hqCallSignId],
+      );
     }
 
     // Make branchId required after setting values (or if no nets exist, it's safe to make it NOT NULL)

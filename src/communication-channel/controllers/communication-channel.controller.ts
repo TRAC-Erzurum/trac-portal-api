@@ -19,7 +19,9 @@ import { CommunicationChannelType } from '../enums/communication-channel-type.en
 
 @Controller('communication-channel')
 export class CommunicationChannelController {
-  constructor(private readonly communicationChannelService: CommunicationChannelService) {}
+  constructor(
+    private readonly communicationChannelService: CommunicationChannelService,
+  ) {}
 
   @Post()
   @Roles(Role.SUPER_ADMIN)
@@ -27,7 +29,10 @@ export class CommunicationChannelController {
     @Body() createCommunicationChannelDto: CreateCommunicationChannelDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.communicationChannelService.create(createCommunicationChannelDto, req.user.id);
+    return this.communicationChannelService.create(
+      createCommunicationChannelDto,
+      req.user.id,
+    );
   }
 
   @Get()
@@ -101,7 +106,11 @@ export class CommunicationChannelController {
     @Body() updateCommunicationChannelDto: UpdateCommunicationChannelDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.communicationChannelService.update(id, updateCommunicationChannelDto, req.user.id);
+    return this.communicationChannelService.update(
+      id,
+      updateCommunicationChannelDto,
+      req.user.id,
+    );
   }
 
   @Patch(':id/activate')
@@ -126,7 +135,9 @@ export class CommunicationChannelController {
 
 @Controller('branches/:branchId/communication-channel')
 export class BranchCommunicationChannelController {
-  constructor(private readonly communicationChannelService: CommunicationChannelService) {}
+  constructor(
+    private readonly communicationChannelService: CommunicationChannelService,
+  ) {}
 
   @Get()
   async findByBranch(
@@ -142,7 +153,14 @@ export class BranchCommunicationChannelController {
       includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN;
     const page = pageNumber ? parseInt(pageNumber, 10) : undefined;
     const size = pageSize ? parseInt(pageSize, 10) : undefined;
-    return this.communicationChannelService.findByBranch(branchId, includeInactiveFlag, page, size, search, type);
+    return this.communicationChannelService.findByBranch(
+      branchId,
+      includeInactiveFlag,
+      page,
+      size,
+      search,
+      type,
+    );
   }
 
   @Post()

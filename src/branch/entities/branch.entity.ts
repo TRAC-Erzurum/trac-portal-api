@@ -1,8 +1,4 @@
-import {
-  Column,
-  Entity,
-  OneToMany,
-} from 'typeorm';
+import { Column, Entity, OneToMany } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { BranchCallSign } from './branch-call-sign.entity';
 import { BranchType } from '../enums/branch-type.enum';

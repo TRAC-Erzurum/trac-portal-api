@@ -26,11 +26,13 @@ export class NetController {
 
   @Post()
   @Roles(Role.MEMBER)
-  create(
-    @Body() createNetDto: CreateNetDto,
-    @Req() req: RequestWithUser,
-  ) {
-    return this.netService.create(createNetDto, req.user.email, req.user.callSign, req.user.id);
+  create(@Body() createNetDto: CreateNetDto, @Req() req: RequestWithUser) {
+    return this.netService.create(
+      createNetDto,
+      req.user.email,
+      req.user.callSign,
+      req.user.id,
+    );
   }
 
   @Put(':id')
@@ -40,7 +42,12 @@ export class NetController {
     @Body() updateNetDto: UpdateNetDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.netService.update(id, updateNetDto, req.user.email, req.user.id);
+    return this.netService.update(
+      id,
+      updateNetDto,
+      req.user.email,
+      req.user.id,
+    );
   }
 
   @Delete(':id')
@@ -67,7 +74,12 @@ export class NetController {
     @Body() startNetDto: StartNetDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.netService.startNet(id, req.user.email, req.user.callSign, startNetDto.addOperatorAsAttendee);
+    return this.netService.startNet(
+      id,
+      req.user.email,
+      req.user.callSign,
+      startNetDto.addOperatorAsAttendee,
+    );
   }
 
   @Patch(':id/end')
@@ -93,6 +105,11 @@ export class NetController {
     @Req() req: RequestWithUser,
   ) {
     const isSuperAdmin = req.user.role === Role.SUPER_ADMIN;
-    return this.netService.changeOperator(id, operatorId, req.user.email, isSuperAdmin);
+    return this.netService.changeOperator(
+      id,
+      operatorId,
+      req.user.email,
+      isSuperAdmin,
+    );
   }
 }

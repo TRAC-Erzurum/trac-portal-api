@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddCityToBranchAndDistrictToInfra1738828803000
-  implements MigrationInterface
-{
+export class AddCityToBranchAndDistrictToInfra1738828803000 implements MigrationInterface {
   name = 'AddCityToBranchAndDistrictToInfra1738828803000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

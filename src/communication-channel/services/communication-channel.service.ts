@@ -1,6 +1,4 @@
 import {
-  BadRequestException,
-  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -73,28 +71,34 @@ export class CommunicationChannelService {
     communicationChannel.updatedBy = [];
 
     try {
-      return await this.communicationChannelRepository.save(communicationChannel);
+      return await this.communicationChannelRepository.save(
+        communicationChannel,
+      );
     } catch (error) {
       console.error('Communication channel save error:', error);
       throw new InternalServerErrorException('error.internal');
     }
   }
 
-  async findAll(options: {
-    branchId?: string;
-    type?: CommunicationChannelType;
-    search?: string;
-    includeInactive?: boolean;
-    pageNumber?: number;
-    pageSize?: number;
-  } = {}): Promise<{ data: BranchCommunicationChannel[]; total: number }> {
+  async findAll(
+    options: {
+      branchId?: string;
+      type?: CommunicationChannelType;
+      search?: string;
+      includeInactive?: boolean;
+      pageNumber?: number;
+      pageSize?: number;
+    } = {},
+  ): Promise<{ data: BranchCommunicationChannel[]; total: number }> {
     const qb = this.communicationChannelRepository
       .createQueryBuilder('channel')
       .leftJoinAndSelect('channel.branch', 'branch')
       .orderBy('channel.name', 'ASC');
 
     if (options.branchId) {
-      qb.andWhere('channel.branchId = :branchId', { branchId: options.branchId });
+      qb.andWhere('channel.branchId = :branchId', {
+        branchId: options.branchId,
+      });
     }
 
     if (options.type) {
@@ -116,7 +120,9 @@ export class CommunicationChannelService {
     const total = await qb.getCount();
 
     if (options.pageNumber && options.pageSize) {
-      qb.skip((options.pageNumber - 1) * options.pageSize).take(options.pageSize);
+      qb.skip((options.pageNumber - 1) * options.pageSize).take(
+        options.pageSize,
+      );
     }
 
     const data = await qb.getMany();
@@ -132,13 +138,13 @@ export class CommunicationChannelService {
     search?: string,
     type?: string,
   ): Promise<{ data: BranchCommunicationChannel[]; total: number }> {
-    return this.findAll({ 
-      branchId, 
-      includeInactive, 
-      pageNumber, 
-      pageSize, 
-      search, 
-      type: type as CommunicationChannelType 
+    return this.findAll({
+      branchId,
+      includeInactive,
+      pageNumber,
+      pageSize,
+      search,
+      type: type as CommunicationChannelType,
     });
   }
 
@@ -164,47 +170,80 @@ export class CommunicationChannelService {
     const communicationChannel = await this.findOne(id);
 
     if (dto.type !== undefined) communicationChannel.type = dto.type;
-    if (dto.repeaterMode !== undefined) communicationChannel.repeaterMode = dto.repeaterMode;
+    if (dto.repeaterMode !== undefined)
+      communicationChannel.repeaterMode = dto.repeaterMode;
     if (dto.name !== undefined) communicationChannel.name = dto.name;
-    if (dto.description !== undefined) communicationChannel.description = dto.description;
-    if (dto.isActive !== undefined) communicationChannel.isActive = dto.isActive;
+    if (dto.description !== undefined)
+      communicationChannel.description = dto.description;
+    if (dto.isActive !== undefined)
+      communicationChannel.isActive = dto.isActive;
 
-    if (dto.location !== undefined) communicationChannel.location = dto.location;
-    if (dto.district !== undefined) communicationChannel.district = dto.district;
-    if (dto.latitude !== undefined) communicationChannel.latitude = dto.latitude;
-    if (dto.longitude !== undefined) communicationChannel.longitude = dto.longitude;
-    if (dto.altitude !== undefined) communicationChannel.altitude = dto.altitude;
-    if (dto.coverage !== undefined) communicationChannel.coverage = dto.coverage;
+    if (dto.location !== undefined)
+      communicationChannel.location = dto.location;
+    if (dto.district !== undefined)
+      communicationChannel.district = dto.district;
+    if (dto.latitude !== undefined)
+      communicationChannel.latitude = dto.latitude;
+    if (dto.longitude !== undefined)
+      communicationChannel.longitude = dto.longitude;
+    if (dto.altitude !== undefined)
+      communicationChannel.altitude = dto.altitude;
+    if (dto.coverage !== undefined)
+      communicationChannel.coverage = dto.coverage;
 
-    if (dto.rxFrequency !== undefined) communicationChannel.rxFrequency = dto.rxFrequency;
-    if (dto.txFrequency !== undefined) communicationChannel.txFrequency = dto.txFrequency;
+    if (dto.rxFrequency !== undefined)
+      communicationChannel.rxFrequency = dto.rxFrequency;
+    if (dto.txFrequency !== undefined)
+      communicationChannel.txFrequency = dto.txFrequency;
     if (dto.offset !== undefined) communicationChannel.offset = dto.offset;
-    if (dto.txCtcssTone !== undefined) communicationChannel.txCtcssTone = dto.txCtcssTone;
-    if (dto.rxCtcssTone !== undefined) communicationChannel.rxCtcssTone = dto.rxCtcssTone;
-    if (dto.txDcsCode !== undefined) communicationChannel.txDcsCode = dto.txDcsCode;
-    if (dto.txDcsPolarity !== undefined) communicationChannel.txDcsPolarity = dto.txDcsPolarity;
-    if (dto.rxDcsCode !== undefined) communicationChannel.rxDcsCode = dto.rxDcsCode;
-    if (dto.rxDcsPolarity !== undefined) communicationChannel.rxDcsPolarity = dto.rxDcsPolarity;
+    if (dto.txCtcssTone !== undefined)
+      communicationChannel.txCtcssTone = dto.txCtcssTone;
+    if (dto.rxCtcssTone !== undefined)
+      communicationChannel.rxCtcssTone = dto.rxCtcssTone;
+    if (dto.txDcsCode !== undefined)
+      communicationChannel.txDcsCode = dto.txDcsCode;
+    if (dto.txDcsPolarity !== undefined)
+      communicationChannel.txDcsPolarity = dto.txDcsPolarity;
+    if (dto.rxDcsCode !== undefined)
+      communicationChannel.rxDcsCode = dto.rxDcsCode;
+    if (dto.rxDcsPolarity !== undefined)
+      communicationChannel.rxDcsPolarity = dto.rxDcsPolarity;
 
-    if (dto.echolinkNode !== undefined) communicationChannel.echolinkNode = dto.echolinkNode;
-    if (dto.echolinkName !== undefined) communicationChannel.echolinkName = dto.echolinkName;
+    if (dto.echolinkNode !== undefined)
+      communicationChannel.echolinkNode = dto.echolinkNode;
+    if (dto.echolinkName !== undefined)
+      communicationChannel.echolinkName = dto.echolinkName;
 
-    if (dto.aprsFrequency !== undefined) communicationChannel.aprsFrequency = dto.aprsFrequency;
-    if (dto.aprsIsIgate !== undefined) communicationChannel.aprsIsIgate = dto.aprsIsIgate;
-    if (dto.aprsIsDigipeater !== undefined) communicationChannel.aprsIsDigipeater = dto.aprsIsDigipeater;
-    if (dto.aprsIgateMode !== undefined) communicationChannel.aprsIgateMode = dto.aprsIgateMode;
-    if (dto.aprsDigipeaterType !== undefined) communicationChannel.aprsDigipeaterType = dto.aprsDigipeaterType;
-    if (dto.aprsPath !== undefined) communicationChannel.aprsPath = dto.aprsPath;
-    if (dto.aprsServer !== undefined) communicationChannel.aprsServer = dto.aprsServer;
-    if (dto.digipeater !== undefined) communicationChannel.digipeater = dto.digipeater;
+    if (dto.aprsFrequency !== undefined)
+      communicationChannel.aprsFrequency = dto.aprsFrequency;
+    if (dto.aprsIsIgate !== undefined)
+      communicationChannel.aprsIsIgate = dto.aprsIsIgate;
+    if (dto.aprsIsDigipeater !== undefined)
+      communicationChannel.aprsIsDigipeater = dto.aprsIsDigipeater;
+    if (dto.aprsIgateMode !== undefined)
+      communicationChannel.aprsIgateMode = dto.aprsIgateMode;
+    if (dto.aprsDigipeaterType !== undefined)
+      communicationChannel.aprsDigipeaterType = dto.aprsDigipeaterType;
+    if (dto.aprsPath !== undefined)
+      communicationChannel.aprsPath = dto.aprsPath;
+    if (dto.aprsServer !== undefined)
+      communicationChannel.aprsServer = dto.aprsServer;
+    if (dto.digipeater !== undefined)
+      communicationChannel.digipeater = dto.digipeater;
 
-    if (dto.hfFrequencyRange !== undefined) communicationChannel.hfFrequencyRange = dto.hfFrequencyRange;
+    if (dto.hfFrequencyRange !== undefined)
+      communicationChannel.hfFrequencyRange = dto.hfFrequencyRange;
     if (dto.hfMode !== undefined) communicationChannel.hfMode = dto.hfMode;
 
-    communicationChannel.updatedBy = [...(communicationChannel.updatedBy || []), updatedBy];
+    communicationChannel.updatedBy = [
+      ...(communicationChannel.updatedBy || []),
+      updatedBy,
+    ];
 
     try {
-      return await this.communicationChannelRepository.save(communicationChannel);
+      return await this.communicationChannelRepository.save(
+        communicationChannel,
+      );
     } catch (error) {
       console.error('Communication channel update error:', error);
       throw new InternalServerErrorException('error.internal');
@@ -218,13 +257,19 @@ export class CommunicationChannelService {
     const communicationChannel = await this.findOne(id);
 
     // Check if communication channel is used in active nets
-    const netChannelRepository = this.communicationChannelRepository.manager.getRepository(NetCommunicationChannel);
-    const netRepository = this.communicationChannelRepository.manager.getRepository(Net);
+    const _netChannelRepository =
+      this.communicationChannelRepository.manager.getRepository(
+        NetCommunicationChannel,
+      );
+    const netRepository =
+      this.communicationChannelRepository.manager.getRepository(Net);
 
     const activeNetsCount = await netRepository
       .createQueryBuilder('net')
       .innerJoin('net.communicationChannels', 'netChannel')
-      .where('netChannel.communicationChannelId = :communicationChannelId', { communicationChannelId: id })
+      .where('netChannel.communicationChannelId = :communicationChannelId', {
+        communicationChannelId: id,
+      })
       .andWhere('net.isActive = :isActive', { isActive: true })
       .andWhere('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NULL')
@@ -236,10 +281,15 @@ export class CommunicationChannelService {
     }
 
     communicationChannel.isActive = false;
-    communicationChannel.updatedBy = [...(communicationChannel.updatedBy || []), updatedBy];
+    communicationChannel.updatedBy = [
+      ...(communicationChannel.updatedBy || []),
+      updatedBy,
+    ];
 
     try {
-      return await this.communicationChannelRepository.save(communicationChannel);
+      return await this.communicationChannelRepository.save(
+        communicationChannel,
+      );
     } catch (error) {
       console.error('Communication channel deactivate error:', error);
       throw new InternalServerErrorException('error.internal');
@@ -253,10 +303,15 @@ export class CommunicationChannelService {
     const communicationChannel = await this.findOne(id);
 
     communicationChannel.isActive = true;
-    communicationChannel.updatedBy = [...(communicationChannel.updatedBy || []), updatedBy];
+    communicationChannel.updatedBy = [
+      ...(communicationChannel.updatedBy || []),
+      updatedBy,
+    ];
 
     try {
-      return await this.communicationChannelRepository.save(communicationChannel);
+      return await this.communicationChannelRepository.save(
+        communicationChannel,
+      );
     } catch (error) {
       console.error('Communication channel activate error:', error);
       throw new InternalServerErrorException('error.internal');
@@ -297,7 +352,9 @@ export class CommunicationChannelService {
     return tutorial;
   }
 
-  async getAllTutorials(locale: string = 'tr'): Promise<CommunicationChannelTutorial[]> {
+  async getAllTutorials(
+    locale: string = 'tr',
+  ): Promise<CommunicationChannelTutorial[]> {
     return this.tutorialRepository.find({
       where: { locale },
       order: { type: 'ASC' },

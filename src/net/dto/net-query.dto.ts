@@ -19,10 +19,14 @@ export class NetQueryDto {
   branchId?: string;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
+  @IsIn(['selected', 'my-branches', 'all'])
+  branchFilter?: 'selected' | 'my-branches' | 'all';
+
+  @IsOptional()
+  @Transform(({ value }) => parseInt(String(value), 10))
   limit?: number = 50;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
+  @Transform(({ value }) => parseInt(String(value), 10))
   offset?: number = 0;
 }

@@ -115,11 +115,7 @@ export class DashboardService {
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
-      .loadRelationCountAndMap(
-        'net.attendeeCount',
-        'net.attendees',
-        'attendee',
-      )
+      .loadRelationCountAndMap('net.attendeeCount', 'net.attendees', 'attendee')
       .where('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NULL')
       .orderBy('net.startedAt', 'DESC')
@@ -134,11 +130,7 @@ export class DashboardService {
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
-      .loadRelationCountAndMap(
-        'net.attendeeCount',
-        'net.attendees',
-        'attendee',
-      )
+      .loadRelationCountAndMap('net.attendeeCount', 'net.attendees', 'attendee')
       .where('net.startedAt IS NULL')
       .orderBy('net.createdAt', 'DESC')
       .limit(6 - activeNets.length)
@@ -154,11 +146,7 @@ export class DashboardService {
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
-      .loadRelationCountAndMap(
-        'net.attendeeCount',
-          'net.attendees',
-        'attendee',
-      )
+      .loadRelationCountAndMap('net.attendeeCount', 'net.attendees', 'attendee')
       .where('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NOT NULL')
       .orderBy('net.startedAt', 'DESC')
@@ -281,8 +269,10 @@ export class DashboardService {
         currentStreak = 1;
         maxStreak = 1;
       } else if (index > 0) {
-        const prevDate = new Date(operatorAttendances[index - 1].net_date);
-        const currDate = new Date(attendance.net_date);
+        const prevDate = new Date(
+          String(operatorAttendances[index - 1].net_date),
+        );
+        const currDate = new Date(String(attendance.net_date));
         const daysDiff =
           (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
 
@@ -360,7 +350,7 @@ export class DashboardService {
         type: 'net',
         data: topActiveCities.map((city) => ({
           netId: null,
-          netName: startCase(city.city),
+          netName: startCase(String(city.city)),
           operatorCallSign: null,
           value: `${city.value} katılım`,
         })),
@@ -416,7 +406,7 @@ export class DashboardService {
 
   private calculateConsecutiveRecord(attendances: Attendee[]): number {
     const filteredAttendances = attendances.filter(
-      (attendance) => attendance.net?.endedAt != null
+      (attendance) => attendance.net?.endedAt != null,
     );
 
     if (!filteredAttendances.length) return 0;
@@ -449,41 +439,32 @@ export class DashboardService {
   }
 
   async getNetStats() {
-    const [totalNets, totalAttendees, averageAttendees] = await Promise.all(
-      [
-        this.netRepository.count({
-          where: {
-            startedAt: Not(IsNull()),
-          },
-        }),
+    const [totalNets, totalAttendees, averageAttendees] = await Promise.all([
+      this.netRepository.count({
+        where: {
+          startedAt: Not(IsNull()),
+        },
+      }),
 
-        this.attendeeRepository
-          .createQueryBuilder('attendee')
-          .innerJoin('attendee.net', 'net')
-          .where('net.startedAt IS NOT NULL')
-          .getCount(),
+      this.attendeeRepository
+        .createQueryBuilder('attendee')
+        .innerJoin('attendee.net', 'net')
+        .where('net.startedAt IS NOT NULL')
+        .getCount(),
 
-        this.netRepository
-            .createQueryBuilder('net')
-          .select('ROUND(AVG(attendee_count)::numeric, 1)', 'average')
-          .from((subQuery) => {
-            return subQuery
-              .select([
-                'net.id',
-                'COUNT(DISTINCT attendee.id) as attendee_count',
-              ])
-              .from('nets', 'net')
-              .leftJoin(
-                'attendees',
-                'attendee',
-                'attendee.netId = net.id',
-              )
-              .where('net.startedAt IS NOT NULL')
-              .groupBy('net.id');
-          }, 'net_stats')
-          .getRawOne(),
-      ],
-    );
+      this.netRepository
+        .createQueryBuilder('net')
+        .select('ROUND(AVG(attendee_count)::numeric, 1)', 'average')
+        .from((subQuery) => {
+          return subQuery
+            .select(['net.id', 'COUNT(DISTINCT attendee.id) as attendee_count'])
+            .from('nets', 'net')
+            .leftJoin('attendees', 'attendee', 'attendee.netId = net.id')
+            .where('net.startedAt IS NOT NULL')
+            .groupBy('net.id');
+        }, 'net_stats')
+        .getRawOne(),
+    ]);
 
     return {
       totalNets,

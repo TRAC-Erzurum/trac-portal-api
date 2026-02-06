@@ -14,6 +14,7 @@ import { UserBranchMembership } from '../entities/user-branch-membership.entity'
 import { User } from '../../user/entities/user.entity';
 import { CreateBranchDto } from '../dto/create-branch.dto';
 import { UpdateBranchDto } from '../dto/update-branch.dto';
+import { DeleteBranchDto } from '../dto/delete-branch.dto';
 import { Role } from '../../auth/enums/role.enum';
 import { BranchRole } from '../enums/branch-role.enum';
 import { MembershipStatus } from '../enums/membership-status.enum';
@@ -34,7 +35,7 @@ export class BranchService {
   async create(
     dto: CreateBranchDto,
     createdBy: string,
-    actorCallSign: string,
+    _actorCallSign: string,
   ): Promise<Branch> {
     // Check if branch name already exists
     const existingBranch = await this.branchRepository.findOne({
@@ -113,7 +114,12 @@ export class BranchService {
   }
 
   async findAll(
-    options: { includeInactive?: boolean; search?: string; pageNumber?: number; pageSize?: number } = {},
+    options: {
+      includeInactive?: boolean;
+      search?: string;
+      pageNumber?: number;
+      pageSize?: number;
+    } = {},
   ): Promise<{ data: Branch[]; total: number }> {
     const qb = this.branchRepository
       .createQueryBuilder('branch')
@@ -135,7 +141,9 @@ export class BranchService {
     const total = await qb.getCount();
 
     if (options.pageNumber && options.pageSize) {
-      qb.skip((options.pageNumber - 1) * options.pageSize).take(options.pageSize);
+      qb.skip((options.pageNumber - 1) * options.pageSize).take(
+        options.pageSize,
+      );
     }
 
     const data = await qb.getMany();
@@ -288,7 +296,7 @@ export class BranchService {
   async deactivate(
     id: string,
     updatedBy: string,
-    actorCallSign: string,
+    _actorCallSign: string,
   ): Promise<Branch> {
     const branch = await this.findOne(id);
 
@@ -312,7 +320,7 @@ export class BranchService {
   async activate(
     id: string,
     updatedBy: string,
-    actorCallSign: string,
+    _actorCallSign: string,
   ): Promise<Branch> {
     const branch = await this.findOne(id);
 
@@ -337,6 +345,48 @@ export class BranchService {
       .getMany();
   }
 
+  async delete(id: string, dto: DeleteBranchDto): Promise<void> {
+    const branch = await this.findOne(id);
+
+    if (branch.isHeadquarters) {
+      throw new ForbiddenException('error.cannotDeleteHeadquarters');
+    }
+
+    if (branch.name.trim() !== dto.branchName.trim()) {
+      throw new BadRequestException('error.branchNameMismatch');
+    }
+
+    const manager = this.branchRepository.manager;
+    await manager.transaction(async (tx) => {
+      const { Net } = await import('../../net/entities/net.entity');
+      const { Attendee } = await import('../../net/entities/attendee.entity');
+      const { NetCommunicationChannel } =
+        await import('../../net/entities/net-communication-channel.entity');
+
+      const netRepo = tx.getRepository(Net);
+      const attendeeRepo = tx.getRepository(Attendee);
+      const netChannelRepo = tx.getRepository(NetCommunicationChannel);
+
+      const nets = await netRepo.find({
+        where: { branchId: id },
+        select: ['id'],
+      });
+      const netIds = nets.map((n) => n.id);
+
+      for (const netId of netIds) {
+        await attendeeRepo.delete({ net: { id: netId } });
+        await netChannelRepo.delete({ netId });
+      }
+      if (netIds.length > 0) {
+        await netRepo.delete({ branchId: id });
+      }
+
+      await tx.getRepository(UserBranchMembership).delete({ branchId: id });
+      await tx.getRepository(BranchCallSign).delete({ branchId: id });
+      await tx.getRepository(Branch).delete(id);
+    });
+  }
+
   async getBranchNets(branchId: string): Promise<any[]> {
     // Import Net repository dynamically to avoid circular dependency
     const { Net } = await import('../../net/entities/net.entity');
@@ -348,7 +398,10 @@ export class BranchService {
       .leftJoinAndSelect('operator.user', 'user')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
       .leftJoinAndSelect('net.communicationChannels', 'communicationChannels')
-      .leftJoinAndSelect('communicationChannels.communicationChannel', 'channelDetails')
+      .leftJoinAndSelect(
+        'communicationChannels.communicationChannel',
+        'channelDetails',
+      )
       .leftJoin('net.attendees', 'attendee')
       .addSelect('COUNT(DISTINCT attendee.id)', 'attendeeCount')
       .where('net.branchId = :branchId', { branchId })

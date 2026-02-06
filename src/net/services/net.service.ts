@@ -15,8 +15,14 @@ import { Repository } from 'typeorm';
 import { CreateNetDto } from '../dto/create-net.dto';
 import { OperatorService } from '../../operator/services/operator.service';
 import { UpdateNetDto } from '../dto/update-net.dto';
-import { ActivityEvent, ACTIVITY_EVENT } from '../../activity/events/activity.events';
-import { ActivityType, EntityType } from '../../activity/enums/activity-type.enum';
+import {
+  ActivityEvent,
+  ACTIVITY_EVENT,
+} from '../../activity/events/activity.events';
+import {
+  ActivityType,
+  EntityType,
+} from '../../activity/enums/activity-type.enum';
 import { BranchService } from '../../branch/services/branch.service';
 import { MembershipService } from '../../branch/services/membership.service';
 import { UserService } from '../../user/services/user.service';
@@ -38,7 +44,12 @@ export class NetService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async create(createNetDto: CreateNetDto, createdBy: string, actorCallSign: string, userId: string) {
+  async create(
+    createNetDto: CreateNetDto,
+    createdBy: string,
+    actorCallSign: string,
+    userId: string,
+  ) {
     // Validate operator
     const operator = await this.operatorService.findOne(
       createNetDto.operatorId,
@@ -57,12 +68,17 @@ export class NetService {
     // Check user is SUPER_ADMIN or has approved membership in branch
     const effectiveRole = await this.userService.getEffectiveRole(userId);
     if (effectiveRole !== Role.SUPER_ADMIN) {
-      await this.userService.validateBranchMembership(userId, createNetDto.branchId);
+      await this.userService.validateBranchMembership(
+        userId,
+        createNetDto.branchId,
+      );
     }
 
     // Validate branchCallSignId belongs to branch if provided
     if (createNetDto.branchCallSignId) {
-      const branchCallSign = await this.branchService.findOne(createNetDto.branchId);
+      const branchCallSign = await this.branchService.findOne(
+        createNetDto.branchId,
+      );
       const callSignExists = branchCallSign.callSigns?.some(
         (cs) => cs.id === createNetDto.branchCallSignId,
       );
@@ -72,8 +88,13 @@ export class NetService {
     }
 
     // Validate at least one communication channel or simplex
-    if (!createNetDto.communicationChannels || createNetDto.communicationChannels.length === 0) {
-      throw new BadRequestException('error.atLeastOneCommunicationChannelRequired');
+    if (
+      !createNetDto.communicationChannels ||
+      createNetDto.communicationChannels.length === 0
+    ) {
+      throw new BadRequestException(
+        'error.atLeastOneCommunicationChannelRequired',
+      );
     }
 
     const hasCommunicationChannel = createNetDto.communicationChannels.some(
@@ -84,7 +105,9 @@ export class NetService {
     );
 
     if (!hasCommunicationChannel && !hasSimplex) {
-      throw new BadRequestException('error.atLeastOneCommunicationChannelRequired');
+      throw new BadRequestException(
+        'error.atLeastOneCommunicationChannelRequired',
+      );
     }
 
     // Create net
@@ -101,16 +124,19 @@ export class NetService {
       const saved = await this.netRepository.save(net);
 
       // Create net communication channel records
-      const channelRecords = createNetDto.communicationChannels.map((channelDto) => {
-        const netChannel = new NetCommunicationChannel();
-        netChannel.net = saved;
-        netChannel.communicationChannelId = channelDto.communicationChannelId || null;
-        netChannel.isSimplexAdHoc = channelDto.isSimplexAdHoc || false;
-        netChannel.simplexFrequency = channelDto.simplexFrequency || null;
-        netChannel.createdBy = createdBy;
-        netChannel.updatedBy = [];
-        return netChannel;
-      });
+      const channelRecords = createNetDto.communicationChannels.map(
+        (channelDto) => {
+          const netChannel = new NetCommunicationChannel();
+          netChannel.net = saved;
+          netChannel.communicationChannelId =
+            channelDto.communicationChannelId || null;
+          netChannel.isSimplexAdHoc = channelDto.isSimplexAdHoc || false;
+          netChannel.simplexFrequency = channelDto.simplexFrequency || null;
+          netChannel.createdBy = createdBy;
+          netChannel.updatedBy = [];
+          return netChannel;
+        },
+      );
 
       await this.netCommunicationChannelRepository.save(channelRecords);
 
@@ -141,7 +167,7 @@ export class NetService {
     id: string,
     updateNetDto: UpdateNetDto,
     updatedBy: string,
-    userId: string,
+    _userId: string,
   ) {
     // Validate operator
     const operator = await this.operatorService.findOne(
@@ -161,7 +187,9 @@ export class NetService {
     // Validate branchCallSignId belongs to branch if provided
     if (updateNetDto.branchCallSignId !== undefined) {
       if (updateNetDto.branchCallSignId) {
-        const branch = await this.branchService.findOne(netWithChannels.branchId);
+        const branch = await this.branchService.findOne(
+          netWithChannels.branchId,
+        );
         const callSignExists = branch.callSigns?.some(
           (cs) => cs.id === updateNetDto.branchCallSignId,
         );
@@ -174,7 +202,9 @@ export class NetService {
     // Validate communication channels if provided
     if (updateNetDto.communicationChannels !== undefined) {
       if (updateNetDto.communicationChannels.length === 0) {
-        throw new BadRequestException('error.atLeastOneCommunicationChannelRequired');
+        throw new BadRequestException(
+          'error.atLeastOneCommunicationChannelRequired',
+        );
       }
 
       const hasCommunicationChannel = updateNetDto.communicationChannels.some(
@@ -185,23 +215,28 @@ export class NetService {
       );
 
       if (!hasCommunicationChannel && !hasSimplex) {
-        throw new BadRequestException('error.atLeastOneCommunicationChannelRequired');
+        throw new BadRequestException(
+          'error.atLeastOneCommunicationChannelRequired',
+        );
       }
 
       // Delete existing communication channel records
       await this.netCommunicationChannelRepository.delete({ netId: id });
 
       // Create new communication channel records
-      const channelRecords = updateNetDto.communicationChannels.map((channelDto) => {
-        const netChannel = new NetCommunicationChannel();
-        netChannel.netId = id;
-        netChannel.communicationChannelId = channelDto.communicationChannelId || null;
-        netChannel.isSimplexAdHoc = channelDto.isSimplexAdHoc || false;
-        netChannel.simplexFrequency = channelDto.simplexFrequency || null;
-        netChannel.createdBy = updatedBy;
-        netChannel.updatedBy = [];
-        return netChannel;
-      });
+      const channelRecords = updateNetDto.communicationChannels.map(
+        (channelDto) => {
+          const netChannel = new NetCommunicationChannel();
+          netChannel.netId = id;
+          netChannel.communicationChannelId =
+            channelDto.communicationChannelId || null;
+          netChannel.isSimplexAdHoc = channelDto.isSimplexAdHoc || false;
+          netChannel.simplexFrequency = channelDto.simplexFrequency || null;
+          netChannel.createdBy = updatedBy;
+          netChannel.updatedBy = [];
+          return netChannel;
+        },
+      );
 
       await this.netCommunicationChannelRepository.save(channelRecords);
     }
@@ -234,7 +269,12 @@ export class NetService {
     await this.netRepository.delete(id);
   }
 
-  async startNet(id: string, updatedBy: string, actorCallSign: string, addOperatorAsAttendee: boolean = false) {
+  async startNet(
+    id: string,
+    updatedBy: string,
+    actorCallSign: string,
+    addOperatorAsAttendee: boolean = false,
+  ) {
     const net = await this.findOne(id);
     net.startedAt = new Date();
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
@@ -308,7 +348,10 @@ export class NetService {
       .leftJoinAndSelect('net.branch', 'branch')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
       .leftJoinAndSelect('net.communicationChannels', 'communicationChannels')
-      .leftJoinAndSelect('communicationChannels.communicationChannel', 'channelDetails')
+      .leftJoinAndSelect(
+        'communicationChannels.communicationChannel',
+        'channelDetails',
+      )
       .where('net.id = :id', { id })
       .getOne();
 
@@ -328,16 +371,27 @@ export class NetService {
     };
   }
 
-  async findAll(query: {
-    search?: string;
-    status?: 'all' | 'active' | 'pending' | 'completed';
-    dateFilter?: 'all' | 'week' | 'month' | '3months';
-    branchId?: string;
-    limit?: number;
-    offset?: number;
-  } = {}, userId?: string) {
-    const { search, status = 'all', dateFilter = 'all', branchId } = query;
-    const usePagination = query.limit !== undefined || query.offset !== undefined;
+  async findAll(
+    query: {
+      search?: string;
+      status?: 'all' | 'active' | 'pending' | 'completed';
+      dateFilter?: 'all' | 'week' | 'month' | '3months';
+      branchId?: string;
+      branchFilter?: 'selected' | 'my-branches' | 'all';
+      limit?: number;
+      offset?: number;
+    } = {},
+    userId?: string,
+  ) {
+    const {
+      search,
+      status = 'all',
+      dateFilter = 'all',
+      branchId,
+      branchFilter,
+    } = query;
+    const usePagination =
+      query.limit !== undefined || query.offset !== undefined;
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
 
@@ -363,16 +417,16 @@ export class NetService {
       );
     }
 
-    if (branchId) {
+    if (branchFilter === 'all') {
+      // No branch filter: system-wide nets
+    } else if (branchId) {
       qb.andWhere('net.branchId = :branchId', { branchId });
     } else if (userId) {
-      // If no specific branch is selected, filter by user's branches
       const userBranches = await this.membershipService.getUserBranches(userId);
-      const userBranchIds = userBranches.map(m => m.branchId);
+      const userBranchIds = userBranches.map((m) => m.branchId);
       if (userBranchIds.length > 0) {
         qb.andWhere('net.branchId IN (:...userBranchIds)', { userBranchIds });
       } else {
-        // User has no branch memberships, return empty
         qb.andWhere('1 = 0');
       }
     }
@@ -397,7 +451,9 @@ export class NetService {
       } else {
         cutoff = new Date(now.getFullYear(), now.getMonth() - 2, 1);
       }
-      qb.andWhere('COALESCE(net.startedAt, net.createdAt) >= :cutoff', { cutoff });
+      qb.andWhere('COALESCE(net.startedAt, net.createdAt) >= :cutoff', {
+        cutoff,
+      });
     }
 
     qb.orderBy(
@@ -444,7 +500,12 @@ export class NetService {
     return this.netRepository.save(net);
   }
 
-  async changeOperator(id: string, operatorId: string, updatedBy: string, isSuperAdmin: boolean = false) {
+  async changeOperator(
+    id: string,
+    operatorId: string,
+    updatedBy: string,
+    isSuperAdmin: boolean = false,
+  ) {
     const net = await this.findOne(id);
 
     if (net.startedAt && !isSuperAdmin) {

@@ -12,7 +12,7 @@ export class CleanupGlobalRoles1770375198174 implements MigrationInterface {
     `);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(_queryRunner: QueryRunner): Promise<void> {
     // Cannot reliably reverse this migration
   }
 }

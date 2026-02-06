@@ -63,7 +63,7 @@ export class ActivityService {
       take: limit,
     });
 
-    return activities.map(this.toFeedItem);
+    return activities.map((a) => this.toFeedItem(a));
   }
 
   async findRecentGlobal(limit: number = 10): Promise<ActivityFeedItem[]> {
@@ -72,7 +72,7 @@ export class ActivityService {
       take: limit,
     });
 
-    return activities.map(this.toFeedItem);
+    return activities.map((a) => this.toFeedItem(a));
   }
 
   async findByEntity(
@@ -86,7 +86,7 @@ export class ActivityService {
       take: limit,
     });
 
-    return activities.map(this.toFeedItem);
+    return activities.map((a) => this.toFeedItem(a));
   }
 
   private toFeedItem(activity: Activity): ActivityFeedItem {

@@ -19,8 +19,14 @@ import { BranchRole } from '../enums/branch-role.enum';
 import { MembershipStatus } from '../enums/membership-status.enum';
 import { Role } from '../../auth/enums/role.enum';
 import { GlobalRole } from '../../auth/enums/role.enum';
-import { ActivityEvent, ACTIVITY_EVENT } from '../../activity/events/activity.events';
-import { ActivityType, EntityType } from '../../activity/enums/activity-type.enum';
+import {
+  ActivityEvent,
+  ACTIVITY_EVENT,
+} from '../../activity/events/activity.events';
+import {
+  ActivityType,
+  EntityType,
+} from '../../activity/enums/activity-type.enum';
 import { UserService } from '../../user/services/user.service';
 
 @Injectable()
@@ -94,12 +100,14 @@ export class MembershipService {
       return saved;
     }
 
-    const branch = await this.branchRepository.findOne({ where: { id: branchId } });
+    const branch = await this.branchRepository.findOne({
+      where: { id: branchId },
+    });
     if (!branch) {
       throw new NotFoundException('error.branchNotFound');
     }
 
-    const user = await this.userRepository.findOne({ 
+    const user = await this.userRepository.findOne({
       where: { id: userId },
       relations: ['operator'],
     });
@@ -116,7 +124,7 @@ export class MembershipService {
     membership.updatedBy = [];
 
     const saved = await this.membershipRepository.save(membership);
-    
+
     saved.user = user;
     saved.branch = branch;
 
@@ -142,7 +150,9 @@ export class MembershipService {
       }
     }
 
-    const branch = await this.branchRepository.findOne({ where: { id: branchId } });
+    const branch = await this.branchRepository.findOne({
+      where: { id: branchId },
+    });
     if (!branch) {
       throw new NotFoundException('error.branchNotFound');
     }
@@ -311,7 +321,9 @@ export class MembershipService {
     removedBy: string,
     actorCallSign: string,
   ): Promise<void> {
-    const branch = await this.branchRepository.findOne({ where: { id: branchId } });
+    const branch = await this.branchRepository.findOne({
+      where: { id: branchId },
+    });
     if (!branch) {
       throw new NotFoundException('error.branchNotFound');
     }
@@ -382,7 +394,9 @@ export class MembershipService {
       .leftJoinAndSelect('user.operator', 'operator')
       .leftJoinAndSelect('membership.branch', 'branch')
       .where('membership.branchId = :branchId', { branchId })
-      .andWhere('membership.status = :status', { status: MembershipStatus.APPROVED });
+      .andWhere('membership.status = :status', {
+        status: MembershipStatus.APPROVED,
+      });
 
     if (search) {
       queryBuilder.andWhere(
@@ -421,7 +435,10 @@ export class MembershipService {
     });
   }
 
-  async findMembership(userId: string, branchId: string): Promise<UserBranchMembership | null> {
+  async findMembership(
+    userId: string,
+    branchId: string,
+  ): Promise<UserBranchMembership | null> {
     return this.membershipRepository.findOne({
       where: { userId, branchId },
       relations: ['user', 'branch'],
@@ -470,8 +487,12 @@ export class MembershipService {
       throw new ForbiddenException('error.cannotChangeSuperAdminRole');
     }
 
-    if ((membership.role === BranchRole.ADMIN || membership.role === BranchRole.PRESIDENT) && 
-        role !== BranchRole.ADMIN && role !== BranchRole.PRESIDENT) {
+    if (
+      (membership.role === BranchRole.ADMIN ||
+        membership.role === BranchRole.PRESIDENT) &&
+      role !== BranchRole.ADMIN &&
+      role !== BranchRole.PRESIDENT
+    ) {
       const adminCount = await this.membershipRepository.count({
         where: [
           {
@@ -505,7 +526,11 @@ export class MembershipService {
           membership.userId,
           actorCallSign,
           null,
-          { branchId: membership.branchId, branchName: membership.branch.name, newRole: role },
+          {
+            branchId: membership.branchId,
+            branchName: membership.branch.name,
+            newRole: role,
+          },
         ),
       );
       return saved;
@@ -515,7 +540,9 @@ export class MembershipService {
     }
   }
 
-  async getPendingMembershipsByBranch(branchId: string): Promise<UserBranchMembership[]> {
+  async getPendingMembershipsByBranch(
+    branchId: string,
+  ): Promise<UserBranchMembership[]> {
     return this.membershipRepository.find({
       where: { branchId, status: MembershipStatus.PENDING },
       relations: ['user', 'user.operator', 'branch'],
@@ -525,17 +552,21 @@ export class MembershipService {
 
   async getPendingRequestsCountForAdmin(userId: string): Promise<number> {
     const effectiveRole = await this.userService.getEffectiveRole(userId);
-    
+
     if (effectiveRole === Role.SUPER_ADMIN) {
       return this.membershipRepository.count({
         where: { status: MembershipStatus.PENDING },
       });
     }
-    
+
     const adminMemberships = await this.membershipRepository.find({
       where: [
         { userId, status: MembershipStatus.APPROVED, role: BranchRole.ADMIN },
-        { userId, status: MembershipStatus.APPROVED, role: BranchRole.PRESIDENT },
+        {
+          userId,
+          status: MembershipStatus.APPROVED,
+          role: BranchRole.PRESIDENT,
+        },
       ],
     });
     let count = 0;
@@ -555,32 +586,39 @@ export class MembershipService {
     }>;
   }> {
     const effectiveRole = await this.userService.getEffectiveRole(userId);
-    
+
     let branches: Array<{ branchId: string; name: string }> = [];
-    
+
     if (effectiveRole === Role.SUPER_ADMIN) {
       const allBranches = await this.branchRepository.find({
         where: { isActive: true },
         select: ['id', 'name'],
       });
-      branches = allBranches.map(b => ({ branchId: b.id, name: b.name }));
+      branches = allBranches.map((b) => ({ branchId: b.id, name: b.name }));
     } else {
       const adminMemberships = await this.membershipRepository.find({
         where: [
           { userId, status: MembershipStatus.APPROVED, role: BranchRole.ADMIN },
-          { userId, status: MembershipStatus.APPROVED, role: BranchRole.PRESIDENT },
+          {
+            userId,
+            status: MembershipStatus.APPROVED,
+            role: BranchRole.PRESIDENT,
+          },
         ],
         relations: ['branch'],
       });
-      branches = adminMemberships.map(m => ({ branchId: m.branchId, name: m.branch.name }));
+      branches = adminMemberships.map((m) => ({
+        branchId: m.branchId,
+        name: m.branch.name,
+      }));
     }
-    
+
     const result: Array<{
       branchId: string;
       branchName: string;
       pendingMemberships: UserBranchMembership[];
     }> = [];
-    
+
     for (const branch of branches) {
       const pending = await this.getPendingMembershipsByBranch(branch.branchId);
       if (pending.length > 0 || effectiveRole === Role.SUPER_ADMIN) {
@@ -591,7 +629,7 @@ export class MembershipService {
         });
       }
     }
-    
+
     return { branches: result };
   }
 }

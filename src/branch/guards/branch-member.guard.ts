@@ -29,8 +29,8 @@ export class BranchMemberGuard implements CanActivate {
     }
 
     const membership = await this.membershipService.findMembership(
-      user.id,
-      branchId,
+      String(user.id),
+      String(branchId),
     );
     if (!membership || membership.status !== MembershipStatus.APPROVED) {
       throw new ForbiddenException('error.forbiddenDescription');

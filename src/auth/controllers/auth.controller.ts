@@ -17,7 +17,7 @@ import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { Role } from '../enums/role.enum';
 import { AuthUser } from '../types/auth.types';
-import { Request, Response } from 'express';
+import { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AllowWithoutCallsign } from '../decorators/allow-without-callsign.decorator';
 import { RegisterDto } from '../dto/register.dto';
@@ -42,8 +42,8 @@ export class AuthController {
     private configService: ConfigService,
   ) {}
 
-  private getCookieOptions() {
-    const cookieOptions: any = {
+  private getCookieOptions(): CookieOptions {
+    const cookieOptions: CookieOptions = {
       httpOnly: true,
       secure: this.configService.get<string>('NODE_ENV') === 'production',
       sameSite: 'strict',
@@ -81,11 +81,11 @@ export class AuthController {
   @AllowWithoutCallsign()
   async checkAuth(@Req() req: RequestWithUser) {
     const user = await this.userService.findOne(req.user.id);
-    return { 
+    return {
       user: {
         ...req.user,
         currentBranchId: user.currentBranchId,
-      }
+      },
     };
   }
 
@@ -182,7 +182,9 @@ export class AuthController {
   @Get('password-reset-requests/count')
   @Roles(Role.ADMIN)
   async getPendingPasswordResetRequestsCount() {
-    return { count: await this.authService.getPendingPasswordResetRequestsCount() };
+    return {
+      count: await this.authService.getPendingPasswordResetRequestsCount(),
+    };
   }
 
   @Post('password-reset-requests/:id/approve')

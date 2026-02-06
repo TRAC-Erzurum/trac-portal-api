@@ -1,3 +1,9 @@
-import { CommunicationChannelController, BranchCommunicationChannelController } from './communication-channel.controller';
+import {
+  CommunicationChannelController,
+  BranchCommunicationChannelController,
+} from './communication-channel.controller';
 
-export const controllers = [CommunicationChannelController, BranchCommunicationChannelController];
+export const controllers = [
+  CommunicationChannelController,
+  BranchCommunicationChannelController,
+];

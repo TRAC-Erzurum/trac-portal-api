@@ -36,11 +36,23 @@ export class AddAprsStationFields1770322702070 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsServer";`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsPath";`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsDigipeaterType";`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsIgateMode";`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsIsDigipeater";`);
-    await queryRunner.query(`ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsIsIgate";`);
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsServer";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsPath";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsDigipeaterType";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsIgateMode";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsIsDigipeater";`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "branch_infrastructure" DROP COLUMN IF EXISTS "aprsIsIgate";`,
+    );
   }
 }

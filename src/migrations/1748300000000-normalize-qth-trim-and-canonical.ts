@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class NormalizeQthTrimAndCanonical1748300000000
-  implements MigrationInterface
-{
+export class NormalizeQthTrimAndCanonical1748300000000 implements MigrationInterface {
   name = 'NormalizeQthTrimAndCanonical1748300000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

@@ -180,7 +180,7 @@ export class FixCallsignSpaces1748287570000 implements MigrationInterface {
     console.log('\\n🎉 Call sign space cleanup completed successfully!');
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(_queryRunner: QueryRunner): Promise<void> {
     console.log('⚠️  This migration cannot be safely reverted.');
     console.log('   The merged data cannot be automatically split back.');
     console.log('   Please restore from backup if needed.');

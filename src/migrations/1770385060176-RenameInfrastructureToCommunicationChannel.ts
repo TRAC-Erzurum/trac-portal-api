@@ -30,9 +30,15 @@ export class RenameInfrastructureToCommunicationChannel1770385060176 implements 
     `);
 
     // Step 6: Drop old indexes and create new ones for branch_communication_channels
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_infrastructure_branchId"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_infrastructure_type"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_infrastructure_isActive"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_infrastructure_branchId"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_infrastructure_type"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_infrastructure_isActive"`,
+    );
 
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS "IDX_branch_communication_channels_branchId" 
@@ -48,15 +54,21 @@ export class RenameInfrastructureToCommunicationChannel1770385060176 implements 
     `);
 
     // Step 7: Drop old indexes and create new ones for communication_channel_tutorials
-    await queryRunner.query(`DROP INDEX IF EXISTS "UQ_infrastructure_tutorials_type_locale"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "UQ_infrastructure_tutorials_type_locale"`,
+    );
     await queryRunner.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_communication_channel_tutorials_type_locale" 
       ON "communication_channel_tutorials" ("type", "locale");
     `);
 
     // Step 8: Drop old indexes and create new ones for net_communication_channels
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_net_infrastructure_netId"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_net_infrastructure_infrastructureId"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_net_infrastructure_netId"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_net_infrastructure_infrastructureId"`,
+    );
 
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS "IDX_net_communication_channels_netId" 
@@ -70,8 +82,12 @@ export class RenameInfrastructureToCommunicationChannel1770385060176 implements 
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Reverse Step 8: Restore net_infrastructure indexes
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_net_communication_channels_communicationChannelId"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_net_communication_channels_netId"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_net_communication_channels_communicationChannelId"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_net_communication_channels_netId"`,
+    );
 
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS "IDX_net_infrastructure_infrastructureId" 
@@ -83,16 +99,24 @@ export class RenameInfrastructureToCommunicationChannel1770385060176 implements 
     `);
 
     // Reverse Step 7: Restore infrastructure_tutorials indexes
-    await queryRunner.query(`DROP INDEX IF EXISTS "UQ_communication_channel_tutorials_type_locale"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "UQ_communication_channel_tutorials_type_locale"`,
+    );
     await queryRunner.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS "UQ_infrastructure_tutorials_type_locale" 
       ON "communication_channel_tutorials" ("type", "locale");
     `);
 
     // Reverse Step 6: Restore branch_infrastructure indexes
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_communication_channels_isActive"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_communication_channels_type"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_communication_channels_branchId"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_communication_channels_isActive"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_communication_channels_type"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_communication_channels_branchId"`,
+    );
 
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS "IDX_branch_infrastructure_isActive" 

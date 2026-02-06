@@ -26,6 +26,8 @@ export class SeedHeadquartersBranch1770237865903 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DELETE FROM branches WHERE "isHeadquarters" = true;`);
+    await queryRunner.query(
+      `DELETE FROM branches WHERE "isHeadquarters" = true;`,
+    );
   }
 }

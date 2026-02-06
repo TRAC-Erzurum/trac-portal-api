@@ -52,6 +52,19 @@ export interface PersonalNetStats {
   averageSignal: number;
 }
 
+export interface PersonalNetStatsBranchAware {
+  branch: {
+    participatedNets: number;
+    managedNets: number;
+    currentStreak: number;
+  };
+  global: {
+    totalParticipatedNets: number;
+    totalManagedNets: number;
+    longestStreak: number;
+  };
+}
+
 export interface LeaderboardEntry {
   rank: number;
   callSign: string;
@@ -78,6 +91,22 @@ export interface CommunityStats {
   topParticipants: LeaderboardEntry[];
   topNetManagers: LeaderboardEntry[];
   topNets: LeaderboardEntry[];
+}
+
+export interface CommunityStatsBranchAware {
+  branch: {
+    totalNets: number;
+    topOperators: LeaderboardEntry[];
+    topNets: LeaderboardEntry[];
+  };
+  global: {
+    totalUniqueParticipants: number;
+    totalCompletedNets: number;
+    monthlyStats: MonthlyStats[];
+    topParticipants: LeaderboardEntry[];
+    topNetManagers: LeaderboardEntry[];
+    topNets: LeaderboardEntry[];
+  };
 }
 
 @Injectable()
@@ -129,17 +158,23 @@ export class DashboardV2Service {
       attendeeCount: (net as any).attendeeCount || 0,
       startedAt: net.startedAt,
       durationMinutes: net.startedAt
-        ? Math.floor((now.getTime() - new Date(net.startedAt).getTime()) / 60000)
+        ? Math.floor(
+            (now.getTime() - new Date(net.startedAt).getTime()) / 60000,
+          )
         : 0,
-      branch: net.branch ? {
-        id: net.branch.id,
-        name: net.branch.name,
-        isHeadquarters: net.branch.isHeadquarters,
-      } : undefined,
-      branchCallSign: net.branchCallSign ? {
-        id: net.branchCallSign.id,
-        callSign: net.branchCallSign.callSign,
-      } : undefined,
+      branch: net.branch
+        ? {
+            id: net.branch.id,
+            name: net.branch.name,
+            isHeadquarters: net.branch.isHeadquarters,
+          }
+        : undefined,
+      branchCallSign: net.branchCallSign
+        ? {
+            id: net.branchCallSign.id,
+            callSign: net.branchCallSign.callSign,
+          }
+        : undefined,
     }));
   }
 
@@ -158,15 +193,19 @@ export class DashboardV2Service {
       id: net.id,
       name: net.name,
       operatorCallSign: net.operator?.callSign || 'Unknown',
-      branch: net.branch ? {
-        id: net.branch.id,
-        name: net.branch.name,
-        isHeadquarters: net.branch.isHeadquarters,
-      } : undefined,
-      branchCallSign: net.branchCallSign ? {
-        id: net.branchCallSign.id,
-        callSign: net.branchCallSign.callSign,
-      } : undefined,
+      branch: net.branch
+        ? {
+            id: net.branch.id,
+            name: net.branch.name,
+            isHeadquarters: net.branch.isHeadquarters,
+          }
+        : undefined,
+      branchCallSign: net.branchCallSign
+        ? {
+            id: net.branchCallSign.id,
+            callSign: net.branchCallSign.callSign,
+          }
+        : undefined,
     }));
   }
 
@@ -184,9 +223,14 @@ export class DashboardV2Service {
       .getMany();
 
     return nets.map((net) => {
-      const duration = net.startedAt && net.endedAt
-        ? Math.floor((new Date(net.endedAt).getTime() - new Date(net.startedAt).getTime()) / 60000)
-        : 0;
+      const duration =
+        net.startedAt && net.endedAt
+          ? Math.floor(
+              (new Date(net.endedAt).getTime() -
+                new Date(net.startedAt).getTime()) /
+                60000,
+            )
+          : 0;
 
       return {
         id: net.id,
@@ -195,52 +239,92 @@ export class DashboardV2Service {
         attendeeCount: (net as any).attendeeCount || 0,
         startedAt: net.startedAt,
         durationMinutes: duration,
-        branch: net.branch ? {
-          id: net.branch.id,
-          name: net.branch.name,
-          isHeadquarters: net.branch.isHeadquarters,
-        } : undefined,
-        branchCallSign: net.branchCallSign ? {
-          id: net.branchCallSign.id,
-          callSign: net.branchCallSign.callSign,
-        } : undefined,
+        branch: net.branch
+          ? {
+              id: net.branch.id,
+              name: net.branch.name,
+              isHeadquarters: net.branch.isHeadquarters,
+            }
+          : undefined,
+        branchCallSign: net.branchCallSign
+          ? {
+              id: net.branchCallSign.id,
+              callSign: net.branchCallSign.callSign,
+            }
+          : undefined,
       };
     });
   }
 
-  async getPersonalNetStats(userId: string): Promise<PersonalNetStats> {
-    const [attendedNets, managedNets, signalReadability, streak] = await Promise.all([
-      this.attendeeRepository.count({
-        where: { operator: { user: { id: userId } } },
-      }),
-      this.netRepository.count({
-        where: { operator: { user: { id: userId } } },
-      }),
+  async getPersonalNetStats(
+    userId: string,
+    branchId?: string,
+  ): Promise<PersonalNetStats | PersonalNetStatsBranchAware> {
+    const [attendedNets, managedNets, signalReadability, streak] =
+      await Promise.all([
+        this.attendeeRepository.count({
+          where: { operator: { user: { id: userId } } },
+        }),
+        this.netRepository.count({
+          where: { operator: { user: { id: userId } } },
+        }),
+        this.attendeeRepository
+          .createQueryBuilder('attendee')
+          .leftJoin('attendee.operator', 'operator')
+          .leftJoin('operator.user', 'user')
+          .select([
+            'ROUND(CAST(AVG(CAST(attendee.signalStrength AS DECIMAL(10,2))) AS DECIMAL(10,2))) as "avgSignal"',
+            'ROUND(CAST(AVG(CAST(attendee.readability AS DECIMAL(10,2))) AS DECIMAL(10,2))) as "avgReadability"',
+          ])
+          .where('user.id = :userId', { userId })
+          .getRawOne(),
+        this.calculateStreak(userId),
+      ]);
+
+    if (!branchId) {
+      return {
+        attendedNets,
+        managedNets,
+        streak,
+        averageReadability: signalReadability?.avgReadability || 0,
+        averageSignal: signalReadability?.avgSignal || 0,
+      };
+    }
+
+    const [branchAttended, branchManaged, branchStreak] = await Promise.all([
       this.attendeeRepository
         .createQueryBuilder('attendee')
+        .leftJoin('attendee.net', 'net')
         .leftJoin('attendee.operator', 'operator')
         .leftJoin('operator.user', 'user')
-        .select([
-          'ROUND(CAST(AVG(CAST(attendee.signalStrength AS DECIMAL(10,2))) AS DECIMAL(10,2))) as "avgSignal"',
-          'ROUND(CAST(AVG(CAST(attendee.readability AS DECIMAL(10,2))) AS DECIMAL(10,2))) as "avgReadability"',
-        ])
         .where('user.id = :userId', { userId })
-        .getRawOne(),
-      this.calculateStreak(userId),
+        .andWhere('net.branchId = :branchId', { branchId })
+        .andWhere('net.endedAt IS NOT NULL')
+        .getCount(),
+      this.netRepository.count({
+        where: { operator: { user: { id: userId } }, branchId },
+      }),
+      this.calculateStreakForBranch(userId, branchId),
     ]);
 
     return {
-      attendedNets,
-      managedNets,
-      streak,
-      averageReadability: signalReadability?.avgReadability || 0,
-      averageSignal: signalReadability?.avgSignal || 0,
+      branch: {
+        participatedNets: branchAttended,
+        managedNets: branchManaged,
+        currentStreak: branchStreak,
+      },
+      global: {
+        totalParticipatedNets: attendedNets,
+        totalManagedNets: managedNets,
+        longestStreak: streak,
+      },
     };
   }
 
-  async getCommunityStats(): Promise<CommunityStats> {
+  async getCommunityStats(
+    branchId?: string,
+  ): Promise<CommunityStats | CommunityStatsBranchAware> {
     const now = new Date();
-
     const last3Months = this.getLast3Months(now);
 
     const [
@@ -323,7 +407,7 @@ export class DashboardV2Service {
         callSign: op.callSign,
         operatorId: op.operatorId || null,
         picture: op.picture || null,
-        value: parseInt(op.value, 10),
+        value: parseInt(String(op.value), 10),
         label: 'attendance',
       }),
     );
@@ -334,7 +418,7 @@ export class DashboardV2Service {
         callSign: op.callSign,
         operatorId: op.operatorId || null,
         picture: op.picture || null,
-        value: parseInt(op.value, 10),
+        value: parseInt(String(op.value), 10),
         label: 'nets',
       }),
     );
@@ -343,13 +427,13 @@ export class DashboardV2Service {
       rank: index + 1,
       callSign: net.name,
       netId: net.netId || null,
-      value: parseInt(net.value, 10),
+      value: parseInt(String(net.value), 10),
       label: 'attendees',
     }));
 
-    return {
+    const globalStats: CommunityStats = {
       totalUniqueParticipants: parseInt(
-        totalUniqueParticipantsResult?.count || '0',
+        String(totalUniqueParticipantsResult?.count ?? '0'),
         10,
       ),
       totalCompletedNets: totalCompletedNetsResult,
@@ -358,15 +442,102 @@ export class DashboardV2Service {
       topNetManagers,
       topNets,
     };
+
+    if (!branchId) {
+      return globalStats;
+    }
+
+    const [branchTotalNets, branchTopManagersRaw, branchTopNetsRaw] =
+      await Promise.all([
+        this.netRepository.count({
+          where: { branchId, startedAt: Not(IsNull()), endedAt: Not(IsNull()) },
+        }),
+        this.netRepository
+          .createQueryBuilder('net')
+          .leftJoin('net.operator', 'operator')
+          .leftJoin('operator.user', 'user')
+          .select([
+            'operator.id as "operatorId"',
+            'operator.callSign as "callSign"',
+            'user.picture as "picture"',
+            'COUNT(net.id) as value',
+          ])
+          .where('net.branchId = :branchId', { branchId })
+          .andWhere('net.startedAt IS NOT NULL')
+          .andWhere('net.endedAt IS NOT NULL')
+          .groupBy('operator.id')
+          .addGroupBy('operator.callSign')
+          .addGroupBy('user.picture')
+          .orderBy('value', 'DESC')
+          .limit(5)
+          .getRawMany(),
+        this.netRepository
+          .createQueryBuilder('net')
+          .leftJoin('net.attendees', 'attendee')
+          .select([
+            'net.id as "netId"',
+            'net.name as name',
+            'COUNT(attendee.id) as value',
+          ])
+          .where('net.branchId = :branchId', { branchId })
+          .andWhere('net.startedAt IS NOT NULL')
+          .andWhere('net.endedAt IS NOT NULL')
+          .groupBy('net.id')
+          .addGroupBy('net.name')
+          .orderBy('value', 'DESC')
+          .limit(5)
+          .getRawMany(),
+      ]);
+
+    const branchTopOperators: LeaderboardEntry[] = branchTopManagersRaw.map(
+      (op, index) => ({
+        rank: index + 1,
+        callSign: op.callSign,
+        operatorId: op.operatorId || null,
+        picture: op.picture || null,
+        value: parseInt(String(op.value), 10),
+        label: 'nets',
+      }),
+    );
+
+    const branchTopNets: LeaderboardEntry[] = branchTopNetsRaw.map(
+      (net, index) => ({
+        rank: index + 1,
+        callSign: net.name,
+        netId: net.netId || null,
+        value: parseInt(String(net.value), 10),
+        label: 'attendees',
+      }),
+    );
+
+    return {
+      branch: {
+        totalNets: branchTotalNets,
+        topOperators: branchTopOperators,
+        topNets: branchTopNets,
+      },
+      global: globalStats,
+    };
   }
 
-  private getLast3Months(now: Date): { start: Date; end: Date; month: number; year: number }[] {
-    const months: { start: Date; end: Date; month: number; year: number }[] = [];
+  private getLast3Months(
+    now: Date,
+  ): { start: Date; end: Date; month: number; year: number }[] {
+    const months: { start: Date; end: Date; month: number; year: number }[] =
+      [];
 
     for (let i = 0; i < 3; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const start = new Date(date.getFullYear(), date.getMonth(), 1);
-      const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+      const end = new Date(
+        date.getFullYear(),
+        date.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
 
       months.push({
         start,
@@ -383,8 +554,18 @@ export class DashboardV2Service {
     months: { start: Date; end: Date; month: number; year: number }[],
   ): Promise<MonthlyStats[]> {
     const monthNames = [
-      'january', 'february', 'march', 'april', 'may', 'june',
-      'july', 'august', 'september', 'october', 'november', 'december',
+      'january',
+      'february',
+      'march',
+      'april',
+      'may',
+      'june',
+      'july',
+      'august',
+      'september',
+      'october',
+      'november',
+      'december',
     ];
 
     const stats: MonthlyStats[] = [];
@@ -416,8 +597,14 @@ export class DashboardV2Service {
         year,
         monthIndex: month,
         netsCount,
-        totalAttendees: parseInt(attendeesData?.totalAttendees || '0', 10),
-        uniqueParticipants: parseInt(attendeesData?.uniqueParticipants || '0', 10),
+        totalAttendees: parseInt(
+          String(attendeesData?.totalAttendees ?? '0'),
+          10,
+        ),
+        uniqueParticipants: parseInt(
+          String(attendeesData?.uniqueParticipants ?? '0'),
+          10,
+        ),
       });
     }
 
@@ -434,9 +621,9 @@ export class DashboardV2Service {
     if (userId) {
       query.where(
         'activity.userId = :userId OR ' +
-        'activity.actorCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId) OR ' +
-        'activity.targetCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId)',
-        { userId }
+          'activity.actorCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId) OR ' +
+          'activity.targetCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId)',
+        { userId: String(userId) },
       );
     }
 
@@ -462,7 +649,45 @@ export class DashboardV2Service {
     for (let i = 1; i < attendances.length; i++) {
       const prevDate = new Date(attendances[i - 1].net.endedAt);
       const currDate = new Date(attendances[i].net.endedAt);
-      const daysDiff = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+      const daysDiff =
+        (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (daysDiff <= 7) {
+        currentStreak++;
+        maxStreak = Math.max(maxStreak, currentStreak);
+      } else {
+        currentStreak = 1;
+      }
+    }
+
+    return maxStreak;
+  }
+
+  private async calculateStreakForBranch(
+    userId: string,
+    branchId: string,
+  ): Promise<number> {
+    const attendances = await this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .leftJoinAndSelect('attendee.net', 'net')
+      .leftJoin('attendee.operator', 'operator')
+      .leftJoin('operator.user', 'user')
+      .where('user.id = :userId', { userId })
+      .andWhere('net.branchId = :branchId', { branchId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .orderBy('net.endedAt', 'ASC')
+      .getMany();
+
+    if (!attendances.length) return 0;
+
+    let maxStreak = 1;
+    let currentStreak = 1;
+
+    for (let i = 1; i < attendances.length; i++) {
+      const prevDate = new Date(attendances[i - 1].net.endedAt);
+      const currDate = new Date(attendances[i].net.endedAt);
+      const daysDiff =
+        (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
 
       if (daysDiff <= 7) {
         currentStreak++;

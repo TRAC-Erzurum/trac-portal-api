@@ -103,4 +103,3 @@ export class RenameSessionToNet1763500000000 implements MigrationInterface {
     `);
   }
 }
-

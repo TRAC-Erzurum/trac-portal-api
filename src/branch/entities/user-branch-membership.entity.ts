@@ -1,11 +1,4 @@
-import {
-  Column,
-  Entity,
-  ManyToOne,
-  JoinColumn,
-  Unique,
-  Index,
-} from 'typeorm';
+import { Column, Entity, ManyToOne, JoinColumn, Unique, Index } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { User } from '../../user/entities/user.entity';
 import { Branch } from './branch.entity';
@@ -26,7 +19,11 @@ export class UserBranchMembership extends BaseEntity {
   @Column({ type: 'enum', enum: BranchRole, nullable: false })
   role: BranchRole;
 
-  @Column({ type: 'enum', enum: MembershipStatus, default: MembershipStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: MembershipStatus,
+    default: MembershipStatus.PENDING,
+  })
   status: MembershipStatus;
 
   @Column({ nullable: true })

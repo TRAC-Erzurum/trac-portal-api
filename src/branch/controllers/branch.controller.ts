@@ -1,20 +1,24 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { BranchService } from '../services/branch.service';
 import { CreateBranchDto } from '../dto/create-branch.dto';
 import { UpdateBranchDto } from '../dto/update-branch.dto';
 import { UpdateStatusDto } from '../dto/update-status.dto';
+import { DeleteBranchDto } from '../dto/delete-branch.dto';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
 import { RequestWithUser } from '../../shared/types/request.types';
+import { BranchAdminGuard } from '../guards/branch-admin.guard';
 
 @Controller('branches')
 export class BranchController {
@@ -47,7 +51,12 @@ export class BranchController {
     @Query('pageNumber') pageNumber?: string,
     @Query('pageSize') pageSize?: string,
   ) {
-    const options: { includeInactive?: boolean; search?: string; pageNumber?: number; pageSize?: number } = {};
+    const options: {
+      includeInactive?: boolean;
+      search?: string;
+      pageNumber?: number;
+      pageSize?: number;
+    } = {};
 
     // Only SUPER_ADMIN can use includeInactive
     if (includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN) {
@@ -74,15 +83,22 @@ export class BranchController {
     return this.branchService.findOne(id);
   }
 
-  @Patch(':id')
+  @Delete(':id')
   @Roles(Role.SUPER_ADMIN)
+  async delete(
+    @Param('id') id: string,
+    @Body() deleteBranchDto: DeleteBranchDto,
+  ) {
+    await this.branchService.delete(id, deleteBranchDto);
+  }
+
+  @Patch(':id')
+  @UseGuards(BranchAdminGuard)
   async update(
     @Param('id') id: string,
     @Body() updateBranchDto: UpdateBranchDto,
     @Req() req: RequestWithUser,
   ) {
-    // For now, only SUPER_ADMIN can edit branches
-    // TODO: Add check for branch ADMIN when membership exists
     return this.branchService.update(id, updateBranchDto, req.user.id);
   }
 

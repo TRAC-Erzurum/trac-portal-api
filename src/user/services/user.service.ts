@@ -51,7 +51,7 @@ export class UserService {
       user.role = Role.GUEST;
       user.globalRole = GlobalRole.GUEST;
     }
-    
+
     user.createdBy = createdBy;
     user.updatedBy = [];
 
@@ -111,9 +111,13 @@ export class UserService {
       where: { userId, status: MembershipStatus.APPROVED },
     });
     if (memberships.length === 0) return Role.GUEST;
-    const hasAdmin = memberships.some((m) => m.role === BranchRole.ADMIN || m.role === BranchRole.PRESIDENT);
+    const hasAdmin = memberships.some(
+      (m) => m.role === BranchRole.ADMIN || m.role === BranchRole.PRESIDENT,
+    );
     const hasMember = memberships.some((m) => m.role === BranchRole.MEMBER);
-    const hasVolunteer = memberships.some((m) => m.role === BranchRole.VOLUNTEER);
+    const hasVolunteer = memberships.some(
+      (m) => m.role === BranchRole.VOLUNTEER,
+    );
     if (hasAdmin) return Role.ADMIN;
     if (hasMember) return Role.MEMBER;
     if (hasVolunteer) return Role.VOLUNTEER;
@@ -356,7 +360,10 @@ export class UserService {
     await this.userRepository.save(user);
   }
 
-  async validateBranchMembership(userId: string, branchId: string): Promise<void> {
+  async validateBranchMembership(
+    userId: string,
+    branchId: string,
+  ): Promise<void> {
     await this.branchService.findOne(branchId);
 
     const effectiveRole = await this.getEffectiveRole(userId);
@@ -379,7 +386,7 @@ export class UserService {
 
   async updateCurrentBranch(userId: string, branchId: string): Promise<void> {
     await this.validateBranchMembership(userId, branchId);
-    
+
     const user = await this.findOne(userId);
     user.currentBranchId = branchId;
     await this.userRepository.save(user);

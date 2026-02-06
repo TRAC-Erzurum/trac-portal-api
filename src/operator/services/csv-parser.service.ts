@@ -22,13 +22,16 @@ export class CsvParserService {
               const normalizedCsvColumn = csvColumn.trim();
               const dataKeys = Object.keys(data);
               const matchingKey = dataKeys.find(
-                (key) => key.trim().toLowerCase() === normalizedCsvColumn.toLowerCase()
+                (key) =>
+                  key.trim().toLowerCase() ===
+                  normalizedCsvColumn.toLowerCase(),
               );
 
               if (matchingKey) {
                 mappedData[field] = data[matchingKey];
               } else {
-                mappedData[field] = data[normalizedCsvColumn] || data[csvColumn] || '';
+                mappedData[field] =
+                  data[normalizedCsvColumn] || data[csvColumn] || '';
               }
             }
           });

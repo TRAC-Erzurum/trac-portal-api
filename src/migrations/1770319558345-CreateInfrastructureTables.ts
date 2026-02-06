@@ -90,12 +90,22 @@ export class CreateInfrastructureTables1770319558345 implements MigrationInterfa
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "UQ_infrastructure_tutorials_type_locale"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "UQ_infrastructure_tutorials_type_locale"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "infrastructure_tutorials"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_infrastructure_isActive"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_infrastructure_type"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_branch_infrastructure_branchId"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_infrastructure_isActive"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_infrastructure_type"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_branch_infrastructure_branchId"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "branch_infrastructure"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."infrastructure_type_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."infrastructure_type_enum"`,
+    );
   }
 }

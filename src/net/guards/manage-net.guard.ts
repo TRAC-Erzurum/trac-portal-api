@@ -22,7 +22,7 @@ export class ManageNetGuard implements CanActivate {
     private netService: NetService,
     private userService: UserService,
     private membershipService: MembershipService,
-  ) { }
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const paramName = this.reflector.get<string>(

@@ -147,6 +147,12 @@ export class MembershipController {
   ) {
     const page = pageNumber ? parseInt(pageNumber, 10) : undefined;
     const size = pageSize ? parseInt(pageSize, 10) : undefined;
-    return this.membershipService.getMembersByBranch(branchId, page, size, search, role);
+    return this.membershipService.getMembersByBranch(
+      branchId,
+      page,
+      size,
+      search,
+      role,
+    );
   }
 }

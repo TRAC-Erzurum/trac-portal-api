@@ -1,10 +1,4 @@
-import {
-  Column,
-  Entity,
-  ManyToOne,
-  JoinColumn,
-  Index,
-} from 'typeorm';
+import { Column, Entity, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { Net } from './net.entity';
 import { BranchCommunicationChannel } from '../../communication-channel/entities/branch-communication-channel.entity';

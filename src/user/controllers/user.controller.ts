@@ -10,9 +10,7 @@ import {
   UseInterceptors,
   BadRequestException,
   Req,
-  Res,
 } from '@nestjs/common';
-import { Response } from 'express';
 import { UserService } from '../services/user.service';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { ICurrentUser } from '../types/user.types';
@@ -33,7 +31,6 @@ import { Express } from 'express';
 import { RequestWithUser } from '../../shared/types/request.types';
 import { UpdateCurrentBranchDto } from '../dto/update-current-branch.dto';
 import { AuthService } from '../../auth/services/auth.service';
-import { AuthUser } from '../../auth/types/auth.types';
 import { ConfigService } from '@nestjs/config';
 
 @Controller('user')
@@ -190,7 +187,7 @@ export class UserController {
     @Req() req: RequestWithUser,
   ) {
     const currentUser = await this.userService.findOne(user.id);
-    
+
     if (currentUser.picture && currentUser.picture.startsWith('/uploads/')) {
       const filePath = `.${currentUser.picture}`;
       await unlink(filePath).catch(() => {});

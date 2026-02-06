@@ -9,8 +9,14 @@ import { DeepPartial, IsNull, Not, Repository } from 'typeorm';
 import { Operator } from '../entities/operator.entity';
 import { Attendee } from '../../net/entities/attendee.entity';
 import { Net } from '../../net/entities/net.entity';
+import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
+import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 import { chunk, startCase } from 'lodash';
 import { OperatorQueryDto } from '../dto/operator-query.dto';
+
+export interface OperatorSearchResult extends Operator {
+  isBranchMember: boolean;
+}
 
 export interface OperatorStats {
   attendedNets: number;
@@ -37,6 +43,8 @@ export class OperatorService {
     private readonly attendeeRepository: Repository<Attendee>,
     @InjectRepository(Net)
     private readonly netRepository: Repository<Net>,
+    @InjectRepository(UserBranchMembership)
+    private readonly membershipRepository: Repository<UserBranchMembership>,
   ) {}
 
   async find(
@@ -76,9 +84,10 @@ export class OperatorService {
     return { data, total };
   }
 
-  async findWithStats(
-    query: OperatorQueryDto,
-  ): Promise<{ data: (Operator & { attendedCount: number; managedCount: number })[]; total: number }> {
+  async findWithStats(query: OperatorQueryDto): Promise<{
+    data: (Operator & { attendedCount: number; managedCount: number })[];
+    total: number;
+  }> {
     const baseQueryBuilder = this.operatorRepository
       .createQueryBuilder('operator')
       .leftJoinAndSelect('operator.user', 'user')
@@ -142,7 +151,10 @@ export class OperatorService {
     const total = await countQuery.getCount();
 
     const rawAndEntities = await baseQueryBuilder
-      .addSelect('CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END', 'user_priority')
+      .addSelect(
+        'CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END',
+        'user_priority',
+      )
       .orderBy('CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END', 'ASC')
       .addOrderBy('operator.callSign', 'ASC')
       .offset((query.pageNumber - 1) * query.pageSize)
@@ -151,8 +163,14 @@ export class OperatorService {
 
     const data = rawAndEntities.entities.map((entity, idx) => ({
       ...entity,
-      attendedCount: parseInt(rawAndEntities.raw[idx]?.attendedCount || '0', 10),
-      managedCount: parseInt(rawAndEntities.raw[idx]?.managedCount || '0', 10),
+      attendedCount: parseInt(
+        String(rawAndEntities.raw[idx]?.attendedCount ?? '0'),
+        10,
+      ),
+      managedCount: parseInt(
+        String(rawAndEntities.raw[idx]?.managedCount ?? '0'),
+        10,
+      ),
     }));
 
     return { data, total };
@@ -264,11 +282,19 @@ export class OperatorService {
         operator.callSign = (record.callSign ?? '').trim().toUpperCase();
         operator.prefix = (record.prefix ?? '').trim() || undefined;
         operator.suffix = (record.suffix ?? '').trim() || undefined;
-        operator.country = (record.country ?? '').trim() ? startCase((record.country ?? '').trim()) : undefined;
-        operator.city = (record.city ?? '').trim() ? startCase((record.city ?? '').trim()) : undefined;
-        operator.district = (record.district ?? '').trim() ? startCase((record.district ?? '').trim()) : undefined;
+        operator.country = (record.country ?? '').trim()
+          ? startCase((record.country ?? '').trim())
+          : undefined;
+        operator.city = (record.city ?? '').trim()
+          ? startCase((record.city ?? '').trim())
+          : undefined;
+        operator.district = (record.district ?? '').trim()
+          ? startCase((record.district ?? '').trim())
+          : undefined;
         operator.gridSquare = (record.gridSquare ?? '').trim() || undefined;
-        operator.fullName = (record.fullName ?? '').trim() ? startCase((record.fullName ?? '').trim()) : undefined;
+        operator.fullName = (record.fullName ?? '').trim()
+          ? startCase((record.fullName ?? '').trim())
+          : undefined;
         operator.createdBy = createdBy;
         operator.updatedBy = [];
         return operator;
@@ -291,8 +317,8 @@ export class OperatorService {
     query: string,
     sortBy: 'managed' | 'attended' | 'default' = 'default',
     limit: number = 10,
-    branchId?: string,
-  ): Promise<Operator[]> {
+    priorityBranchId?: string,
+  ): Promise<OperatorSearchResult[]> {
     const searchTerm = `%${(query ?? '').trim().toLowerCase()}%`;
 
     const qb = this.operatorRepository
@@ -307,52 +333,59 @@ export class OperatorService {
         { search: searchTerm },
       );
 
-    // Filter by branch membership if branchId provided
-    if (branchId) {
-      qb.innerJoin(
-        'user_branch_memberships',
-        'membership',
-        'membership.userId = user.id AND membership.branchId = :branchId AND membership.status = :status',
-        { branchId, status: 'approved' }
-      );
-    }
-
+    const fetchLimit = priorityBranchId ? Math.min(limit * 5, 50) : limit;
+    let entities: Operator[];
     if (sortBy === 'managed') {
       qb.leftJoin('operator.nets', 'net')
         .addSelect('COUNT(DISTINCT net.id)', 'managedCount')
         .addSelect('MAX(net.endedAt)', 'lastNetDate')
         .groupBy('operator.id')
-        .addGroupBy('user.id');
-      
-      if (branchId) {
-        qb.addGroupBy('membership.id');
-      }
-      
-      qb.orderBy('COUNT(DISTINCT net.id)', 'DESC')
+        .addGroupBy('user.id')
+        .orderBy('COUNT(DISTINCT net.id)', 'DESC')
         .addOrderBy('MAX(net.endedAt)', 'DESC', 'NULLS LAST')
         .addOrderBy('operator.callSign', 'ASC');
-
-      const result = await qb.limit(limit).getRawAndEntities();
-      return result.entities;
+      const result = await qb.limit(fetchLimit).getRawAndEntities();
+      entities = result.entities;
     } else if (sortBy === 'attended') {
       qb.leftJoin('operator.attendees', 'attendee')
         .addSelect('COUNT(DISTINCT attendee.id)', 'attendedCount')
         .groupBy('operator.id')
-        .addGroupBy('user.id');
-      
-      if (branchId) {
-        qb.addGroupBy('membership.id');
-      }
-      
-      qb.orderBy('COUNT(DISTINCT attendee.id)', 'DESC')
+        .addGroupBy('user.id')
+        .orderBy('COUNT(DISTINCT attendee.id)', 'DESC')
         .addOrderBy('operator.callSign', 'ASC');
-
-      const result = await qb.limit(limit).getRawAndEntities();
-      return result.entities;
+      const result = await qb.limit(fetchLimit).getRawAndEntities();
+      entities = result.entities;
     } else {
       qb.orderBy('operator.callSign', 'ASC');
-      return qb.limit(limit).getMany();
+      entities = await qb.limit(fetchLimit).getMany();
     }
+
+    let branchMemberUserIds: Set<string> = new Set();
+    if (priorityBranchId) {
+      const memberships = await this.membershipRepository.find({
+        where: {
+          branchId: priorityBranchId,
+          status: MembershipStatus.APPROVED,
+        },
+        select: ['userId'],
+      });
+      branchMemberUserIds = new Set(memberships.map((m) => m.userId));
+    }
+
+    const withFlag: OperatorSearchResult[] = entities.map((op) => ({
+      ...op,
+      isBranchMember: op.user?.id ? branchMemberUserIds.has(op.user.id) : false,
+    }));
+
+    if (priorityBranchId) {
+      withFlag.sort((a, b) => {
+        if (a.isBranchMember !== b.isBranchMember)
+          return a.isBranchMember ? -1 : 1;
+        return (a.callSign || '').localeCompare(b.callSign || '');
+      });
+    }
+
+    return withFlag.slice(0, limit);
   }
 
   async delete(id: string): Promise<void> {
@@ -380,7 +413,7 @@ export class OperatorService {
   }
 
   async getStats(id: string): Promise<OperatorStats> {
-    const operator = await this.findOne(id);
+    const _operator = await this.findOne(id);
 
     const [attendedNets, managedNets, signalReadability, streak] =
       await Promise.all([
@@ -413,12 +446,18 @@ export class OperatorService {
       attendedNets,
       managedNets,
       streak,
-      averageReadability: parseFloat(signalReadability?.avgReadability) || 0,
-      averageSignal: parseFloat(signalReadability?.avgSignal) || 0,
+      averageReadability:
+        parseFloat(String(signalReadability?.avgReadability ?? 0)) || 0,
+      averageSignal: parseFloat(String(signalReadability?.avgSignal ?? 0)) || 0,
     };
   }
 
-  async getRecentNets(id: string, limit: number = 10, offset: number = 0, branchId?: string): Promise<OperatorNetItem[]> {
+  async getRecentNets(
+    id: string,
+    limit: number = 10,
+    offset: number = 0,
+    branchId?: string,
+  ): Promise<OperatorNetItem[]> {
     const fetchLimit = limit + offset + 50;
 
     const attendedQb = this.attendeeRepository
@@ -462,18 +501,22 @@ export class OperatorService {
       name: net.name,
       date: net.endedAt,
       role: 'managed' as const,
-      attendeeCount: parseInt(managedNets.raw[idx]?.attendeeCount || '0', 10),
+      attendeeCount: parseInt(
+        String(managedNets.raw[idx]?.attendeeCount ?? '0'),
+        10,
+      ),
     }));
 
-    const all = [...attended, ...managed]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const all = [...attended, ...managed].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
 
     const uniqueNets = new Map<string, OperatorNetItem>();
     for (const net of all) {
       if (!uniqueNets.has(net.id)) {
         uniqueNets.set(net.id, net);
       } else {
-        const existing = uniqueNets.get(net.id)!;
+        const _existing = uniqueNets.get(net.id);
         if (net.role === 'managed') {
           uniqueNets.set(net.id, { ...net, role: 'managed' });
         }

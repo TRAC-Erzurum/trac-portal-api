@@ -1,7 +1,16 @@
-import { Controller, Get, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+} from '@nestjs/common';
 import { CurrentUser } from '../../user/decorators/current-user.decorator';
 import { User } from '../../user/entities/user.entity';
-import { ActivityService, ActivityFeedItem } from '../services/activity.service';
+import {
+  ActivityService,
+  ActivityFeedItem,
+} from '../services/activity.service';
 
 @Controller('activity')
 export class ActivityController {

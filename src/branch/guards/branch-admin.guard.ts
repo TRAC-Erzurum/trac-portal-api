@@ -28,20 +28,20 @@ export class BranchAdminGuard implements CanActivate {
       return true;
     }
 
-    const branchId =
-      request.params.branchId ?? request.params.id;
+    const branchId = request.params.branchId ?? request.params.id;
     if (!branchId) {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 
     const membership = await this.membershipService.findMembership(
-      user.id,
-      branchId,
+      String(user.id),
+      String(branchId),
     );
     if (
       !membership ||
       membership.status !== MembershipStatus.APPROVED ||
-      (membership.role !== BranchRole.ADMIN && membership.role !== BranchRole.PRESIDENT)
+      (membership.role !== BranchRole.ADMIN &&
+        membership.role !== BranchRole.PRESIDENT)
     ) {
       throw new ForbiddenException('error.forbiddenDescription');
     }

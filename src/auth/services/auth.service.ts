@@ -16,6 +16,7 @@ import { BranchService } from '../../branch/services/branch.service';
 import { MembershipService } from '../../branch/services/membership.service';
 import { BranchRole } from 'src/branch/enums/branch-role.enum';
 import { MembershipStatus } from 'src/branch/enums/membership-status.enum';
+import { Role } from '../enums/role.enum';
 import {
   PasswordResetRequest,
   PasswordResetStatus,
@@ -68,7 +69,7 @@ export class AuthService {
     );
 
     const hqBranch = await this.branchService.findHeadquarters();
-    if (hqBranch && createdUser.role !== 'guest') {
+    if (hqBranch && createdUser.role !== Role.GUEST) {
       await this.membershipService.createMembership(
         createdUser.id,
         hqBranch.id,
@@ -163,7 +164,7 @@ export class AuthService {
     );
 
     const hqBranch = await this.branchService.findHeadquarters();
-    if (hqBranch && user.role !== 'guest') {
+    if (hqBranch && user.role !== Role.GUEST) {
       await this.membershipService.createMembership(
         user.id,
         hqBranch.id,
@@ -191,14 +192,19 @@ export class AuthService {
     });
 
     if (existingPending) {
-      this.logger.log(`Password reset request already pending for ${normalizedCallSign}`);
+      this.logger.log(
+        `Password reset request already pending for ${normalizedCallSign}`,
+      );
       return;
     }
 
-    const operator = await this.operatorService.findByCallSign(normalizedCallSign);
+    const operator =
+      await this.operatorService.findByCallSign(normalizedCallSign);
 
     if (!operator) {
-      this.logger.warn(`Password reset requested for unknown call sign: ${normalizedCallSign}`);
+      this.logger.warn(
+        `Password reset requested for unknown call sign: ${normalizedCallSign}`,
+      );
     }
 
     const request = this.passwordResetRequestRepository.create({
@@ -243,14 +249,19 @@ export class AuthService {
     }
 
     const newPassword = this.generateRandomPassword();
-    await this.userService.forceSetPassword(request.operator.user.id, newPassword);
+    await this.userService.forceSetPassword(
+      request.operator.user.id,
+      newPassword,
+    );
 
     request.status = PasswordResetStatus.COMPLETED;
     request.processedBy = adminId;
     request.processedAt = new Date();
     await this.passwordResetRequestRepository.save(request);
 
-    this.logger.log(`Password reset approved for ${request.callSign} by admin ${adminId}`);
+    this.logger.log(
+      `Password reset approved for ${request.callSign} by admin ${adminId}`,
+    );
 
     return { newPassword };
   }
@@ -272,7 +283,9 @@ export class AuthService {
     request.processedAt = new Date();
     await this.passwordResetRequestRepository.save(request);
 
-    this.logger.log(`Password reset rejected for ${request.callSign} by admin ${adminId}`);
+    this.logger.log(
+      `Password reset rejected for ${request.callSign} by admin ${adminId}`,
+    );
   }
 
   private generateRandomPassword(): string {

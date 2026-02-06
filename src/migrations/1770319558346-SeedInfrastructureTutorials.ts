@@ -154,7 +154,7 @@ export class SeedInfrastructureTutorials1770319558346 implements MigrationInterf
       {
         type: 'echolink',
         locale: 'tr',
-        title: 'EchoLink\'e Nasıl Bağlanılır?',
+        title: "EchoLink'e Nasıl Bağlanılır?",
         content: `## EchoLink Kullanımı
 
 ### EchoLink Nedir?
@@ -426,7 +426,7 @@ HF (High Frequency) band covers frequencies from 3-30 MHz. It enables long-dista
     for (const tutorial of tutorials) {
       const escapedContent = tutorial.content.replace(/'/g, "''");
       const escapedTitle = tutorial.title.replace(/'/g, "''");
-      
+
       await queryRunner.query(`
         INSERT INTO "infrastructure_tutorials" ("type", "locale", "title", "content")
         VALUES ('${tutorial.type}', '${tutorial.locale}', '${escapedTitle}', '${escapedContent}')
