@@ -1143,13 +1143,13 @@ export class DashboardV2Service {
     const countriesRaw = await this.attendeeRepository
       .createQueryBuilder('attendee')
       .innerJoin('attendee.net', 'net')
-      .select('LOWER(TRIM(attendee.country))', 'country')
+      .select('TRIM(attendee.country)', 'country')
       .addSelect('COUNT(attendee.id)', 'count')
       .where('attendee.country IS NOT NULL')
       .andWhere("TRIM(attendee.country) != ''")
       .andWhere('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NOT NULL')
-      .groupBy('LOWER(TRIM(attendee.country))')
+      .groupBy('TRIM(attendee.country)')
       .orderBy('count', 'DESC')
       .limit(50)
       .getRawMany();
@@ -1157,13 +1157,13 @@ export class DashboardV2Service {
     const citiesRaw = await this.attendeeRepository
       .createQueryBuilder('attendee')
       .innerJoin('attendee.net', 'net')
-      .select('LOWER(TRIM(attendee.city))', 'city')
+      .select('TRIM(attendee.city)', 'city')
       .addSelect('COUNT(attendee.id)', 'count')
       .where('attendee.city IS NOT NULL')
       .andWhere("TRIM(attendee.city) != ''")
       .andWhere('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NOT NULL')
-      .groupBy('LOWER(TRIM(attendee.city))')
+      .groupBy('TRIM(attendee.city)')
       .orderBy('count', 'DESC')
       .limit(100)
       .getRawMany();
@@ -1171,8 +1171,8 @@ export class DashboardV2Service {
     const districtsRaw = await this.attendeeRepository
       .createQueryBuilder('attendee')
       .innerJoin('attendee.net', 'net')
-      .select('LOWER(TRIM(attendee.city))', 'city')
-      .addSelect('LOWER(TRIM(attendee.district))', 'district')
+      .select('TRIM(attendee.city)', 'city')
+      .addSelect('TRIM(attendee.district)', 'district')
       .addSelect('COUNT(attendee.id)', 'count')
       .where('attendee.city IS NOT NULL')
       .andWhere("TRIM(attendee.city) != ''")
@@ -1180,8 +1180,8 @@ export class DashboardV2Service {
       .andWhere("TRIM(attendee.district) != ''")
       .andWhere('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NOT NULL')
-      .groupBy('LOWER(TRIM(attendee.city))')
-      .addGroupBy('LOWER(TRIM(attendee.district))')
+      .groupBy('TRIM(attendee.city)')
+      .addGroupBy('TRIM(attendee.district)')
       .orderBy('count', 'DESC')
       .limit(100)
       .getRawMany();
