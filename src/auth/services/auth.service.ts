@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -7,6 +12,11 @@ import { UserService } from 'src/user/services/user.service';
 import { GoogleProfile } from '../types/auth.types';
 import { RegisterDto } from '../dto/register.dto';
 import { OperatorService } from '../../operator/services/operator.service';
+import { BranchService } from '../../branch/services/branch.service';
+import { MembershipService } from '../../branch/services/membership.service';
+import { BranchRole } from 'src/branch/enums/branch-role.enum';
+import { MembershipStatus } from 'src/branch/enums/membership-status.enum';
+import { Role } from '../enums/role.enum';
 import {
   PasswordResetRequest,
   PasswordResetStatus,
@@ -21,6 +31,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly operatorService: OperatorService,
+    private readonly branchService: BranchService,
+    private readonly membershipService: MembershipService,
     @InjectRepository(PasswordResetRequest)
     private readonly passwordResetRequestRepository: Repository<PasswordResetRequest>,
   ) {}
@@ -30,10 +42,11 @@ export class AuthService {
 
     const existingUser = await this.userService.findByEmail(email);
     if (existingUser) {
+      const role = await this.userService.getEffectiveRole(existingUser.id);
       return {
         id: existingUser.id,
         email: existingUser.email,
-        role: existingUser.role,
+        role,
         callSign: existingUser.operator?.callSign,
         provider: existingUser.provider,
         providerId: existingUser.providerId,
@@ -55,10 +68,22 @@ export class AuthService {
       email,
     );
 
+    const hqBranch = await this.branchService.findHeadquarters();
+    if (hqBranch && createdUser.role !== Role.GUEST) {
+      await this.membershipService.createMembership(
+        createdUser.id,
+        hqBranch.id,
+        BranchRole.VOLUNTEER,
+        MembershipStatus.APPROVED,
+        email,
+      );
+    }
+
+    const role = await this.userService.getEffectiveRole(createdUser.id);
     return {
       id: createdUser.id,
       email: createdUser.email,
-      role: createdUser.role,
+      role,
       callSign: createdUser.operator?.callSign,
       provider: createdUser.provider,
       providerId: createdUser.providerId,
@@ -72,11 +97,12 @@ export class AuthService {
     password: string,
   ): Promise<AuthUser> {
     const user = await this.userService.validate(identifier, password);
+    const role = await this.userService.getEffectiveRole(user.id);
 
     return {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role,
       callSign: user.operator?.callSign,
       provider: user.provider,
       isTemporaryPassword: user.isTemporaryPassword,
@@ -84,6 +110,10 @@ export class AuthService {
   }
 
   login(user: AuthUser): { access_token: string } {
+    return this.generateToken(user);
+  }
+
+  generateToken(user: AuthUser): { access_token: string } {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -101,6 +131,15 @@ export class AuthService {
       throw new ConflictException('error.userAlreadyExists');
     }
 
+    const uniqueBranchIds = [...new Set(dto.branchIds)];
+    for (const branchId of uniqueBranchIds) {
+      try {
+        await this.branchService.findOne(branchId);
+      } catch {
+        throw new BadRequestException('error.branchNotFound');
+      }
+    }
+
     const operator = await this.operatorService.create(
       {
         callSign: (dto.callSign ?? '').trim(),
@@ -112,7 +151,7 @@ export class AuthService {
       dto.email,
     );
 
-    await this.userService.create(
+    const user = await this.userService.create(
       {
         email: dto.email,
         password: dto.password,
@@ -123,6 +162,23 @@ export class AuthService {
       },
       dto.email,
     );
+
+    const hqBranch = await this.branchService.findHeadquarters();
+    if (hqBranch && user.role !== Role.GUEST) {
+      await this.membershipService.createMembership(
+        user.id,
+        hqBranch.id,
+        BranchRole.VOLUNTEER,
+        MembershipStatus.APPROVED,
+        dto.email,
+      );
+    }
+
+    for (const branchId of uniqueBranchIds) {
+      if (branchId !== hqBranch?.id) {
+        await this.membershipService.join(user.id, branchId);
+      }
+    }
   }
 
   async createPasswordResetRequest(callSign: string): Promise<void> {
@@ -136,14 +192,19 @@ export class AuthService {
     });
 
     if (existingPending) {
-      this.logger.log(`Password reset request already pending for ${normalizedCallSign}`);
+      this.logger.log(
+        `Password reset request already pending for ${normalizedCallSign}`,
+      );
       return;
     }
 
-    const operator = await this.operatorService.findByCallSign(normalizedCallSign);
+    const operator =
+      await this.operatorService.findByCallSign(normalizedCallSign);
 
     if (!operator) {
-      this.logger.warn(`Password reset requested for unknown call sign: ${normalizedCallSign}`);
+      this.logger.warn(
+        `Password reset requested for unknown call sign: ${normalizedCallSign}`,
+      );
     }
 
     const request = this.passwordResetRequestRepository.create({
@@ -173,7 +234,8 @@ export class AuthService {
   async approvePasswordResetRequest(
     requestId: string,
     adminId: string,
-  ): Promise<{ newPassword: string }> {
+    newPassword: string,
+  ): Promise<void> {
     const request = await this.passwordResetRequestRepository.findOne({
       where: { id: requestId, status: PasswordResetStatus.PENDING },
       relations: ['operator', 'operator.user'],
@@ -187,17 +249,19 @@ export class AuthService {
       throw new ConflictException('error.userNotFound');
     }
 
-    const newPassword = this.generateRandomPassword();
-    await this.userService.forceSetPassword(request.operator.user.id, newPassword);
+    await this.userService.forceSetPassword(
+      request.operator.user.id,
+      newPassword,
+    );
 
     request.status = PasswordResetStatus.COMPLETED;
     request.processedBy = adminId;
     request.processedAt = new Date();
     await this.passwordResetRequestRepository.save(request);
 
-    this.logger.log(`Password reset approved for ${request.callSign} by admin ${adminId}`);
-
-    return { newPassword };
+    this.logger.log(
+      `Password reset approved for ${request.callSign} by admin ${adminId}`,
+    );
   }
 
   async rejectPasswordResetRequest(
@@ -217,15 +281,9 @@ export class AuthService {
     request.processedAt = new Date();
     await this.passwordResetRequestRepository.save(request);
 
-    this.logger.log(`Password reset rejected for ${request.callSign} by admin ${adminId}`);
+    this.logger.log(
+      `Password reset rejected for ${request.callSign} by admin ${adminId}`,
+    );
   }
 
-  private generateRandomPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let password = '';
-    for (let i = 0; i < 10; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
-  }
 }

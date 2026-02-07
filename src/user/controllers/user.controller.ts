@@ -29,11 +29,18 @@ import { extname } from 'path';
 import { unlink } from 'fs/promises';
 import { Express } from 'express';
 import { RequestWithUser } from '../../shared/types/request.types';
+import { UpdateCurrentBranchDto } from '../dto/update-current-branch.dto';
+import { AuthService } from '../../auth/services/auth.service';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('user')
 @Roles(Role.GUEST)
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get('profile')
   @AllowWithoutCallsign()
@@ -180,7 +187,7 @@ export class UserController {
     @Req() req: RequestWithUser,
   ) {
     const currentUser = await this.userService.findOne(user.id);
-    
+
     if (currentUser.picture && currentUser.picture.startsWith('/uploads/')) {
       const filePath = `.${currentUser.picture}`;
       await unlink(filePath).catch(() => {});
@@ -229,5 +236,14 @@ export class UserController {
     @Req() req: RequestWithUser,
   ) {
     return this.userService.updateOperator(id, dto, req.user.email);
+  }
+
+  @Patch('me/current-branch')
+  async updateCurrentBranch(
+    @CurrentUser() user: ICurrentUser,
+    @Body() dto: UpdateCurrentBranchDto,
+  ) {
+    await this.userService.updateCurrentBranch(user.id, dto.branchId);
+    return { success: true };
   }
 }

@@ -29,12 +29,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
     const user = await this.userService.findOne(payload.sub);
+    const role = await this.userService.getEffectiveRole(payload.sub);
     return {
       id: payload.sub,
       email: payload.email,
-      role: user.role,
+      role,
       callSign: user.operator?.callSign,
       picture: user.picture,
+      provider: user.provider,
+      fullName: user.fullName,
+      isTemporaryPassword: user.isTemporaryPassword,
+      currentBranchId: user.currentBranchId,
     };
   }
 }

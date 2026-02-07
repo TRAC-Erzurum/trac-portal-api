@@ -14,11 +14,19 @@ export class NetQueryDto {
   @IsIn(['all', 'week', 'month', '3months'])
   dateFilter?: 'all' | 'week' | 'month' | '3months' = 'all';
 
+  @IsString()
   @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
+  branchId?: string;
+
+  @IsOptional()
+  @IsIn(['selected', 'my-branches', 'all'])
+  branchFilter?: 'selected' | 'my-branches' | 'all';
+
+  @IsOptional()
+  @Transform(({ value }) => parseInt(String(value), 10))
   limit?: number = 50;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
+  @Transform(({ value }) => parseInt(String(value), 10))
   offset?: number = 0;
 }

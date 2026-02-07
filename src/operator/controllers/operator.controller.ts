@@ -16,7 +16,12 @@ import {
 import { Operator } from '../entities/operator.entity';
 import { Role } from '../../auth/enums/role.enum';
 import { Roles } from '../../auth/decorators/roles.decorator';
-import { OperatorService, OperatorStats, OperatorNetItem } from '../services/operator.service';
+import {
+  OperatorService,
+  OperatorStats,
+  OperatorNetItem,
+  OperatorSearchResult,
+} from '../services/operator.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OperatorDto } from '../dto/operator.dto';
 import { CsvParserService } from '../services/csv-parser.service';
@@ -49,8 +54,14 @@ export class OperatorController {
     @Query('q') query: string,
     @Query('sortBy') sortBy?: 'managed' | 'attended' | 'default',
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
-  ): Promise<Operator[]> {
-    return this.operatorService.search(query, sortBy || 'default', Math.min(limit, 50));
+    @Query('priorityBranchId') priorityBranchId?: string,
+  ): Promise<OperatorSearchResult[]> {
+    return this.operatorService.search(
+      query,
+      sortBy || 'default',
+      Math.min(limit, 50),
+      priorityBranchId,
+    );
   }
 
   @Get(':id')
@@ -71,8 +82,14 @@ export class OperatorController {
     @Param('id') id: string,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    @Query('branchId') branchId?: string,
   ): Promise<OperatorNetItem[]> {
-    return this.operatorService.getRecentNets(id, Math.min(limit, 50), offset);
+    return this.operatorService.getRecentNets(
+      id,
+      Math.min(limit, 50),
+      offset,
+      branchId,
+    );
   }
 
   @Post('import')
@@ -83,7 +100,7 @@ export class OperatorController {
     @Body('mapping') mapping: string,
     @Req() req: RequestWithUser,
   ): Promise<void> {
-    const columnMapping = JSON.parse(mapping);
+    const columnMapping = JSON.parse(mapping) as Record<string, string>;
     const operators = await this.csvParserService.parse(
       file.buffer,
       columnMapping,

@@ -17,6 +17,8 @@ import { AppController } from './app.controller';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { QthModule } from './qth/qth.module';
+import { BranchModule } from './branch/branch.module';
+import { CommunicationChannelModule } from './communication-channel/communication-channel.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { QthModule } from './qth/qth.module';
     DashboardModule,
     ActivityModule,
     QthModule,
+    BranchModule,
+    CommunicationChannelModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',

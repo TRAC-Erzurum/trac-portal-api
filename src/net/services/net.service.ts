@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,12 +10,23 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Net } from '../entities/net.entity';
 import { Attendee } from '../entities/attendee.entity';
+import { NetCommunicationChannel } from '../entities/net-communication-channel.entity';
 import { Repository } from 'typeorm';
 import { CreateNetDto } from '../dto/create-net.dto';
 import { OperatorService } from '../../operator/services/operator.service';
 import { UpdateNetDto } from '../dto/update-net.dto';
-import { ActivityEvent, ACTIVITY_EVENT } from '../../activity/events/activity.events';
-import { ActivityType, EntityType } from '../../activity/enums/activity-type.enum';
+import {
+  ActivityEvent,
+  ACTIVITY_EVENT,
+} from '../../activity/events/activity.events';
+import {
+  ActivityType,
+  EntityType,
+} from '../../activity/enums/activity-type.enum';
+import { BranchService } from '../../branch/services/branch.service';
+import { MembershipService } from '../../branch/services/membership.service';
+import { UserService } from '../../user/services/user.service';
+import { Role } from '../../auth/enums/role.enum';
 
 @Injectable()
 export class NetService {
@@ -23,11 +35,22 @@ export class NetService {
     private readonly netRepository: Repository<Net>,
     @InjectRepository(Attendee)
     private readonly attendeeRepository: Repository<Attendee>,
+    private readonly membershipService: MembershipService,
+    @InjectRepository(NetCommunicationChannel)
+    private readonly netCommunicationChannelRepository: Repository<NetCommunicationChannel>,
     private readonly operatorService: OperatorService,
+    private readonly branchService: BranchService,
+    private readonly userService: UserService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async create(createNetDto: CreateNetDto, createdBy: string, actorCallSign: string) {
+  async create(
+    createNetDto: CreateNetDto,
+    createdBy: string,
+    actorCallSign: string,
+    userId: string,
+  ) {
+    // Validate operator
     const operator = await this.operatorService.findOne(
       createNetDto.operatorId,
     );
@@ -36,17 +59,87 @@ export class NetService {
       throw new NotFoundException('Operator not found');
     }
 
+    // Validate branch exists
+    const branch = await this.branchService.findOne(createNetDto.branchId);
+    if (!branch.isActive) {
+      throw new BadRequestException('error.branchInactive');
+    }
+
+    // Check user is SUPER_ADMIN or has approved membership in branch
+    const effectiveRole = await this.userService.getEffectiveRole(userId);
+    if (effectiveRole !== Role.SUPER_ADMIN) {
+      await this.userService.validateBranchMembership(
+        userId,
+        createNetDto.branchId,
+      );
+    }
+
+    // Validate branchCallSignId belongs to branch if provided
+    if (createNetDto.branchCallSignId) {
+      const branchCallSign = await this.branchService.findOne(
+        createNetDto.branchId,
+      );
+      const callSignExists = branchCallSign.callSigns?.some(
+        (cs) => cs.id === createNetDto.branchCallSignId,
+      );
+      if (!callSignExists) {
+        throw new BadRequestException('error.callSignNotInBranch');
+      }
+    }
+
+    // Validate at least one communication channel or simplex
+    if (
+      !createNetDto.communicationChannels ||
+      createNetDto.communicationChannels.length === 0
+    ) {
+      throw new BadRequestException(
+        'error.atLeastOneCommunicationChannelRequired',
+      );
+    }
+
+    const hasCommunicationChannel = createNetDto.communicationChannels.some(
+      (channel) => channel.communicationChannelId,
+    );
+    const hasSimplex = createNetDto.communicationChannels.some(
+      (channel) => channel.isSimplexAdHoc && channel.simplexFrequency,
+    );
+
+    if (!hasCommunicationChannel && !hasSimplex) {
+      throw new BadRequestException(
+        'error.atLeastOneCommunicationChannelRequired',
+      );
+    }
+
+    // Create net
     const net = new Net();
     net.name = createNetDto.name;
-    net.frequency = createNetDto.frequency;
-    net.mode = createNetDto.mode;
-    net.type = createNetDto.type;
     net.operator = operator;
+    net.branchId = createNetDto.branchId;
+    net.branchCallSignId = createNetDto.branchCallSignId || null;
+    net.isActive = true;
     net.createdBy = createdBy;
     net.updatedBy = [];
 
     try {
       const saved = await this.netRepository.save(net);
+
+      // Create net communication channel records
+      const channelRecords = createNetDto.communicationChannels.map(
+        (channelDto) => {
+          const netChannel = new NetCommunicationChannel();
+          netChannel.net = saved;
+          netChannel.communicationChannelId =
+            channelDto.communicationChannelId || null;
+          netChannel.isSimplexAdHoc = channelDto.isSimplexAdHoc || false;
+          netChannel.simplexFrequency = channelDto.simplexFrequency || null;
+          netChannel.createdBy = createdBy;
+          netChannel.updatedBy = [];
+          return netChannel;
+        },
+      );
+
+      await this.netCommunicationChannelRepository.save(channelRecords);
+
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
         new ActivityEvent(
@@ -56,10 +149,11 @@ export class NetService {
           null,
           actorCallSign,
           null,
-          { netName: saved.name, frequency: saved.frequency, mode: saved.mode },
+          { netName: saved.name },
         ),
       );
-      return saved;
+
+      return this.findOne(saved.id);
     } catch (error) {
       if (error.code === '23505') {
         throw new ConflictException('error.alreadyExists');
@@ -73,33 +167,114 @@ export class NetService {
     id: string,
     updateNetDto: UpdateNetDto,
     updatedBy: string,
+    _userId: string,
   ) {
+    // Validate operator
     const operator = await this.operatorService.findOne(
-        updateNetDto.operatorId,
+      updateNetDto.operatorId,
     );
 
     if (!operator) {
       throw new NotFoundException('Operator not found');
     }
 
-    const net = await this.findOne(id);
+    // First, fetch net with communication channels to validate
+    const netWithChannels = await this.findOne(id);
+
+    // BranchId is IMMUTABLE - cannot be changed
+    // This is enforced at the DTO level (not in UpdateNetDto), but we check here too for safety
+
+    // Validate branchCallSignId belongs to branch if provided
+    if (updateNetDto.branchCallSignId !== undefined) {
+      if (updateNetDto.branchCallSignId) {
+        const branch = await this.branchService.findOne(
+          netWithChannels.branchId,
+        );
+        const callSignExists = branch.callSigns?.some(
+          (cs) => cs.id === updateNetDto.branchCallSignId,
+        );
+        if (!callSignExists) {
+          throw new BadRequestException('error.callSignNotInBranch');
+        }
+      }
+    }
+
+    // Validate communication channels if provided
+    if (updateNetDto.communicationChannels !== undefined) {
+      if (updateNetDto.communicationChannels.length === 0) {
+        throw new BadRequestException(
+          'error.atLeastOneCommunicationChannelRequired',
+        );
+      }
+
+      const hasCommunicationChannel = updateNetDto.communicationChannels.some(
+        (channel) => channel.communicationChannelId,
+      );
+      const hasSimplex = updateNetDto.communicationChannels.some(
+        (channel) => channel.isSimplexAdHoc && channel.simplexFrequency,
+      );
+
+      if (!hasCommunicationChannel && !hasSimplex) {
+        throw new BadRequestException(
+          'error.atLeastOneCommunicationChannelRequired',
+        );
+      }
+
+      // Delete existing communication channel records
+      await this.netCommunicationChannelRepository.delete({ netId: id });
+
+      // Create new communication channel records
+      const channelRecords = updateNetDto.communicationChannels.map(
+        (channelDto) => {
+          const netChannel = new NetCommunicationChannel();
+          netChannel.netId = id;
+          netChannel.communicationChannelId =
+            channelDto.communicationChannelId || null;
+          netChannel.isSimplexAdHoc = channelDto.isSimplexAdHoc || false;
+          netChannel.simplexFrequency = channelDto.simplexFrequency || null;
+          netChannel.createdBy = updatedBy;
+          netChannel.updatedBy = [];
+          return netChannel;
+        },
+      );
+
+      await this.netCommunicationChannelRepository.save(channelRecords);
+    }
+
+    // Now fetch a fresh net entity WITHOUT communication channel relation to avoid TypeORM tracking issues
+    const net = await this.netRepository.findOne({
+      where: { id },
+      relations: ['operator', 'branch', 'branchCallSign'],
+    });
+
+    if (!net) {
+      throw new NotFoundException('Net not found');
+    }
+
+    // Update net fields
     net.name = updateNetDto.name;
-    net.frequency = updateNetDto.frequency;
-    net.mode = updateNetDto.mode;
-    net.type = updateNetDto.type;
     net.operator = operator;
     net.startedAt = updateNetDto.startedAt;
     net.endedAt = updateNetDto.endedAt;
+    if (updateNetDto.branchCallSignId !== undefined) {
+      net.branchCallSignId = updateNetDto.branchCallSignId;
+    }
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
 
-    return this.netRepository.save(net);
+    const saved = await this.netRepository.save(net);
+    return this.findOne(saved.id);
   }
 
   async delete(id: string) {
     await this.netRepository.delete(id);
   }
 
-  async startNet(id: string, updatedBy: string, actorCallSign: string, addOperatorAsAttendee: boolean = false) {
+  async startNet(
+    id: string,
+    updatedBy: string,
+    actorCallSign: string,
+    addOperatorAsAttendee: boolean = false,
+  ) {
     const net = await this.findOne(id);
     net.startedAt = new Date();
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
@@ -114,7 +289,7 @@ export class NetService {
         null,
         actorCallSign,
         null,
-        { netName: net.name, frequency: net.frequency },
+        { netName: net.name },
       ),
     );
 
@@ -170,32 +345,53 @@ export class NetService {
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
-      .leftJoin('net.attendees', 'attendee')
-      .addSelect('COUNT(DISTINCT attendee.id)', 'attendeeCount')
+      .leftJoinAndSelect('net.branch', 'branch')
+      .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
+      .leftJoinAndSelect('net.communicationChannels', 'communicationChannels')
+      .leftJoinAndSelect(
+        'communicationChannels.communicationChannel',
+        'channelDetails',
+      )
       .where('net.id = :id', { id })
-      .groupBy('net.id')
-      .addGroupBy('operator.id')
-      .addGroupBy('user.id')
-      .getRawAndEntities();
-    if (!net.entities[0]) {
+      .getOne();
+
+    if (!net) {
       throw new NotFoundException('Net not found');
     }
 
+    // Get attendee count separately
+    const attendeeCount = await this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .where('attendee.netId = :netId', { netId: id })
+      .getCount();
+
     return {
-      ...net.entities[0],
-      attendeeCount: Number(net.raw[0]?.attendeeCount || 0),
+      ...net,
+      attendeeCount,
     };
   }
 
-  async findAll(query: {
-    search?: string;
-    status?: 'all' | 'active' | 'pending' | 'completed';
-    dateFilter?: 'all' | 'week' | 'month' | '3months';
-    limit?: number;
-    offset?: number;
-  } = {}) {
-    const { search, status = 'all', dateFilter = 'all' } = query;
-    const usePagination = query.limit !== undefined || query.offset !== undefined;
+  async findAll(
+    query: {
+      search?: string;
+      status?: 'all' | 'active' | 'pending' | 'completed';
+      dateFilter?: 'all' | 'week' | 'month' | '3months';
+      branchId?: string;
+      branchFilter?: 'selected' | 'my-branches' | 'all';
+      limit?: number;
+      offset?: number;
+    } = {},
+    userId?: string,
+  ) {
+    const {
+      search,
+      status = 'all',
+      dateFilter = 'all',
+      branchId,
+      branchFilter,
+    } = query;
+    const usePagination =
+      query.limit !== undefined || query.offset !== undefined;
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
 
@@ -203,11 +399,15 @@ export class NetService {
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
+      .leftJoinAndSelect('net.branch', 'branch')
+      .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
       .leftJoin('net.attendees', 'attendee')
       .addSelect('COUNT(DISTINCT attendee.id)', 'attendeeCount')
       .groupBy('net.id')
       .addGroupBy('operator.id')
-      .addGroupBy('user.id');
+      .addGroupBy('user.id')
+      .addGroupBy('branch.id')
+      .addGroupBy('branchCallSign.id');
 
     if (search) {
       const searchTerm = `%${search.toLowerCase()}%`;
@@ -215,6 +415,20 @@ export class NetService {
         '(LOWER(net.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
         { search: searchTerm },
       );
+    }
+
+    if (branchFilter === 'all') {
+      // No branch filter: system-wide nets
+    } else if (branchId) {
+      qb.andWhere('net.branchId = :branchId', { branchId });
+    } else if (userId) {
+      const userBranches = await this.membershipService.getUserBranches(userId);
+      const userBranchIds = userBranches.map((m) => m.branchId);
+      if (userBranchIds.length > 0) {
+        qb.andWhere('net.branchId IN (:...userBranchIds)', { userBranchIds });
+      } else {
+        qb.andWhere('1 = 0');
+      }
     }
 
     if (status !== 'all') {
@@ -237,7 +451,9 @@ export class NetService {
       } else {
         cutoff = new Date(now.getFullYear(), now.getMonth() - 2, 1);
       }
-      qb.andWhere('COALESCE(net.startedAt, net.createdAt) >= :cutoff', { cutoff });
+      qb.andWhere('COALESCE(net.startedAt, net.createdAt) >= :cutoff', {
+        cutoff,
+      });
     }
 
     qb.orderBy(
@@ -284,7 +500,12 @@ export class NetService {
     return this.netRepository.save(net);
   }
 
-  async changeOperator(id: string, operatorId: string, updatedBy: string, isSuperAdmin: boolean = false) {
+  async changeOperator(
+    id: string,
+    operatorId: string,
+    updatedBy: string,
+    isSuperAdmin: boolean = false,
+  ) {
     const net = await this.findOne(id);
 
     if (net.startedAt && !isSuperAdmin) {

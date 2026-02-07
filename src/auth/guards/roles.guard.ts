@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Role } from '../enums/role.enum';
 import { ROLES_KEY } from '../decorators/roles.decorator';
@@ -40,7 +45,13 @@ export class RolesGuard implements CanActivate {
     }
 
     const roleHierarchy = {
-      [Role.SUPER_ADMIN]: [Role.SUPER_ADMIN, Role.ADMIN, Role.MEMBER, Role.VOLUNTEER, Role.GUEST],
+      [Role.SUPER_ADMIN]: [
+        Role.SUPER_ADMIN,
+        Role.ADMIN,
+        Role.MEMBER,
+        Role.VOLUNTEER,
+        Role.GUEST,
+      ],
       [Role.ADMIN]: [Role.ADMIN, Role.MEMBER, Role.VOLUNTEER, Role.GUEST],
       [Role.MEMBER]: [Role.MEMBER, Role.VOLUNTEER, Role.GUEST],
       [Role.VOLUNTEER]: [Role.VOLUNTEER, Role.GUEST],

@@ -1,9 +1,33 @@
-import { Mode } from '../../shared/enums/mode.enum';
-import { NetType } from '../../shared/enums/net-type.enum';
+import {
+  IsString,
+  IsUUID,
+  IsArray,
+  ValidateNested,
+  IsNotEmpty,
+  IsOptional,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { NetCommunicationChannelDto } from './net-communication-channel.dto';
+
 export class CreateNetDto {
+  @IsString()
+  @IsNotEmpty()
   name: string;
-  frequency: string;
-  mode: Mode;
+
+  @IsUUID()
+  @IsNotEmpty()
   operatorId: string;
-  type: NetType;
+
+  @IsUUID()
+  @IsNotEmpty()
+  branchId: string;
+
+  @IsUUID()
+  @IsOptional()
+  branchCallSignId?: string | null;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NetCommunicationChannelDto)
+  communicationChannels: NetCommunicationChannelDto[];
 }

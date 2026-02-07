@@ -22,7 +22,10 @@ export class ActivityListener {
         metadata: event.metadata,
       });
     } catch (error) {
-      this.logger.error(`Failed to create activity: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to create activity: ${error.message}`,
+        error.stack,
+      );
     }
   }
 }

@@ -13,8 +13,14 @@ import { NetService } from './net.service';
 import { OperatorService } from '../../operator/services/operator.service';
 import { Operator } from '../../operator/entities/operator.entity';
 import { PaginationDto } from '../../shared/dto/pagination.dto';
-import { ActivityEvent, ACTIVITY_EVENT } from '../../activity/events/activity.events';
-import { ActivityType, EntityType } from '../../activity/enums/activity-type.enum';
+import {
+  ActivityEvent,
+  ACTIVITY_EVENT,
+} from '../../activity/events/activity.events';
+import {
+  ActivityType,
+  EntityType,
+} from '../../activity/enums/activity-type.enum';
 
 @Injectable()
 export class AttendeeService {
@@ -27,7 +33,7 @@ export class AttendeeService {
   ) {}
 
   async addAttendeeToNet(
-      netId: string,
+    netId: string,
     dto: AttendeeDto,
     createdBy: string,
     actorCallSign: string,
@@ -175,15 +181,16 @@ export class AttendeeService {
       throw new NotFoundException('Attendee not found in this net');
     }
 
-    attendee.name = dto.name != null ? (String(dto.name).trim() || null) : attendee.name;
+    attendee.name =
+      dto.name != null ? String(dto.name).trim() || null : attendee.name;
     if ('country' in dto) {
-      attendee.country = (String(dto.country ?? '').trim() || null);
+      attendee.country = String(dto.country ?? '').trim() || null;
     }
     if ('city' in dto) {
-      attendee.city = (String(dto.city ?? '').trim() || null);
+      attendee.city = String(dto.city ?? '').trim() || null;
     }
     if ('district' in dto) {
-      attendee.district = (String(dto.district ?? '').trim() || null);
+      attendee.district = String(dto.district ?? '').trim() || null;
     }
     attendee.readability = dto.readability ?? attendee.readability;
     attendee.signalStrength = dto.signalStrength ?? attendee.signalStrength;

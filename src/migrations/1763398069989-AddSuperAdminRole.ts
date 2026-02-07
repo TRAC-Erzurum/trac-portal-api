@@ -10,9 +10,7 @@ export class AddSuperAdminRole1763398069989 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DELETE FROM "users" WHERE "role" = 'super_admin'`,
-    );
+    await queryRunner.query(`DELETE FROM "users" WHERE "role" = 'super_admin'`);
     await queryRunner.query(
       `ALTER TYPE "public"."users_role_enum" DROP VALUE IF EXISTS 'super_admin'`,
     );

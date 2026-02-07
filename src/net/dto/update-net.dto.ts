@@ -1,8 +1,14 @@
-import { IsDate, IsEnum, IsOptional } from 'class-validator';
-import { IsNotEmpty } from 'class-validator';
-import { IsString } from 'class-validator';
-import { Mode } from 'src/shared/enums/mode.enum';
-import { NetType } from 'src/shared/enums/net-type.enum';
+import {
+  IsDate,
+  IsOptional,
+  IsString,
+  IsNotEmpty,
+  IsUUID,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { NetCommunicationChannelDto } from './net-communication-channel.dto';
 
 export class UpdateNetDto {
   @IsString()
@@ -11,19 +17,17 @@ export class UpdateNetDto {
 
   @IsString()
   @IsNotEmpty()
-  frequency: string;
-
-  @IsEnum(Mode)
-  @IsNotEmpty()
-  mode: Mode;
-
-  @IsString()
-  @IsNotEmpty()
   operatorId: string;
 
-  @IsNotEmpty()
-  @IsEnum(NetType)
-  type: NetType;
+  @IsUUID()
+  @IsOptional()
+  branchCallSignId?: string | null;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NetCommunicationChannelDto)
+  @IsOptional()
+  communicationChannels?: NetCommunicationChannelDto[];
 
   @IsDate()
   @IsOptional()

@@ -26,7 +26,7 @@ export class Attendee extends BaseEntity {
   @Column({ nullable: true })
   signalStrength: number;
 
-    @ManyToOne(() => Net, (net) => net.attendees)
+  @ManyToOne(() => Net, (net) => net.attendees)
   net: Net;
 
   @ManyToOne(() => Operator, (operator) => operator.attendees)
