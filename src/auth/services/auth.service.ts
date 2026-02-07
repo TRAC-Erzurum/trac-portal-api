@@ -234,7 +234,8 @@ export class AuthService {
   async approvePasswordResetRequest(
     requestId: string,
     adminId: string,
-  ): Promise<{ newPassword: string }> {
+    newPassword: string,
+  ): Promise<void> {
     const request = await this.passwordResetRequestRepository.findOne({
       where: { id: requestId, status: PasswordResetStatus.PENDING },
       relations: ['operator', 'operator.user'],
@@ -248,7 +249,6 @@ export class AuthService {
       throw new ConflictException('error.userNotFound');
     }
 
-    const newPassword = this.generateRandomPassword();
     await this.userService.forceSetPassword(
       request.operator.user.id,
       newPassword,
@@ -262,8 +262,6 @@ export class AuthService {
     this.logger.log(
       `Password reset approved for ${request.callSign} by admin ${adminId}`,
     );
-
-    return { newPassword };
   }
 
   async rejectPasswordResetRequest(
@@ -288,12 +286,4 @@ export class AuthService {
     );
   }
 
-  private generateRandomPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let password = '';
-    for (let i = 0; i < 10; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
-  }
 }

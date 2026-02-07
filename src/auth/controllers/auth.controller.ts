@@ -22,6 +22,7 @@ import { ConfigService } from '@nestjs/config';
 import { AllowWithoutCallsign } from '../decorators/allow-without-callsign.decorator';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
+import { ApprovePasswordResetDto } from '../dto/approve-password-reset.dto';
 import { PasswordResetRequestDto } from '../dto/password-reset-request.dto';
 import { MembershipService } from '../../branch/services/membership.service';
 import { BranchService } from '../../branch/services/branch.service';
@@ -191,9 +192,14 @@ export class AuthController {
   @Roles(Role.ADMIN)
   async approvePasswordResetRequest(
     @Param('id') id: string,
+    @Body() dto: ApprovePasswordResetDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.authService.approvePasswordResetRequest(id, req.user.id);
+    await this.authService.approvePasswordResetRequest(
+      id,
+      req.user.id,
+      dto.newPassword,
+    );
   }
 
   @Post('password-reset-requests/:id/reject')

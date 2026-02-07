@@ -21,7 +21,7 @@ export class SeedDataErzurumBranchAndUhfRelay1770425152786
 
     await queryRunner.query(
       `INSERT INTO branch_call_signs ("branchId", "callSign", "isDefault")
-       SELECT $1, 'TA9', true
+       SELECT $1, 'YM9KE', true
        WHERE NOT EXISTS (SELECT 1 FROM branch_call_signs WHERE "branchId" = $1)`,
       [erzurumId],
     );

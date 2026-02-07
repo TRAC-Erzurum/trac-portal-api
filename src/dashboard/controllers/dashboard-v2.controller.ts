@@ -43,23 +43,26 @@ export class DashboardV2Controller {
 
   @Get('nets/active')
   async getActiveNets(
+    @CurrentUser() user: User,
     @Query('limit', new DefaultValuePipe(5), ParseIntPipe) limit: number,
   ): Promise<ActiveNet[]> {
-    return this.dashboardService.getActiveNets(Math.min(limit, 10));
+    return this.dashboardService.getActiveNets(Math.min(limit, 10), user.id);
   }
 
   @Get('nets/pending')
   async getPendingNets(
+    @CurrentUser() user: User,
     @Query('limit', new DefaultValuePipe(5), ParseIntPipe) limit: number,
   ): Promise<PendingNet[]> {
-    return this.dashboardService.getPendingNets(Math.min(limit, 10));
+    return this.dashboardService.getPendingNets(Math.min(limit, 10), user.id);
   }
 
   @Get('nets/recent')
   async getRecentNets(
+    @CurrentUser() user: User,
     @Query('limit', new DefaultValuePipe(3), ParseIntPipe) limit: number,
   ): Promise<ActiveNet[]> {
-    return this.dashboardService.getRecentCompletedNets(Math.min(limit, 10));
+    return this.dashboardService.getRecentCompletedNets(Math.min(limit, 10), user.id);
   }
 
   @Get('nets/personal')

@@ -28,6 +28,7 @@ import {
   EntityType,
 } from '../../activity/enums/activity-type.enum';
 import { UserService } from '../../user/services/user.service';
+import { Operator } from '../../operator/entities/operator.entity';
 
 @Injectable()
 export class MembershipService {
@@ -40,6 +41,8 @@ export class MembershipService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Net)
     private readonly netRepository: Repository<Net>,
+    @InjectRepository(Operator)
+    private readonly operatorRepository: Repository<Operator>,
     private readonly eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
@@ -190,7 +193,7 @@ export class MembershipService {
   ): Promise<UserBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['user', 'branch'],
+      relations: ['user', 'user.operator', 'branch'],
     });
 
     if (!membership) {
@@ -247,6 +250,7 @@ export class MembershipService {
         }
       }
 
+      const targetCallSign = membership.user?.operator?.callSign ?? null;
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
         new ActivityEvent(
@@ -255,7 +259,7 @@ export class MembershipService {
           saved.id,
           membership.userId,
           actorCallSign,
-          null,
+          targetCallSign,
           { branchId: membership.branchId, branchName: membership.branch.name },
         ),
       );
@@ -275,7 +279,7 @@ export class MembershipService {
   ): Promise<UserBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['user', 'branch'],
+      relations: ['user', 'user.operator', 'branch'],
     });
 
     if (!membership) {
@@ -294,7 +298,7 @@ export class MembershipService {
 
     try {
       const saved = await this.membershipRepository.save(membership);
-
+      const targetCallSign = membership.user?.operator?.callSign ?? null;
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
         new ActivityEvent(
@@ -303,7 +307,7 @@ export class MembershipService {
           saved.id,
           membership.userId,
           actorCallSign,
-          null,
+          targetCallSign,
           { branchId: membership.branchId, branchName: membership.branch.name },
         ),
       );
@@ -353,12 +357,14 @@ export class MembershipService {
 
     const membership = await this.membershipRepository.findOne({
       where: { userId, branchId },
-      relations: ['user', 'branch'],
+      relations: ['user', 'user.operator', 'branch'],
     });
 
     if (!membership) {
       throw new NotFoundException('error.membershipNotFound');
     }
+
+    const targetCallSign = membership.user?.operator?.callSign ?? null;
 
     try {
       await this.membershipRepository.remove(membership);
@@ -371,7 +377,7 @@ export class MembershipService {
           null,
           userId,
           actorCallSign,
-          null,
+          targetCallSign,
           { branchId, branchName: branch.name },
         ),
       );
@@ -462,7 +468,7 @@ export class MembershipService {
   ): Promise<UserBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['user', 'branch'],
+      relations: ['user', 'user.operator', 'branch'],
     });
 
     if (!membership) {
@@ -517,6 +523,15 @@ export class MembershipService {
 
     try {
       const saved = await this.membershipRepository.save(membership);
+      let targetCallSign =
+        membership.user?.operator?.callSign ?? null;
+      if (!targetCallSign) {
+        const operator = await this.operatorRepository.findOne({
+          where: { user: { id: membership.userId } },
+          select: ['callSign'],
+        });
+        targetCallSign = operator?.callSign ?? null;
+      }
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
         new ActivityEvent(
@@ -525,7 +540,7 @@ export class MembershipService {
           saved.id,
           membership.userId,
           actorCallSign,
-          null,
+          targetCallSign,
           {
             branchId: membership.branchId,
             branchName: membership.branch.name,

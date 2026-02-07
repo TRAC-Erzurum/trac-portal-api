@@ -5,13 +5,14 @@ import { services } from './services';
 import { controllers } from './controllers';
 import { User } from '../user/entities/user.entity';
 import { Net } from '../net/entities/net.entity';
+import { Operator } from '../operator/entities/operator.entity';
 import { BranchAdminGuard } from './guards/branch-admin.guard';
 import { BranchMemberGuard } from './guards/branch-member.guard';
 import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([...entities, User, Net]),
+    TypeOrmModule.forFeature([...entities, User, Net, Operator]),
     forwardRef(() => UserModule),
   ],
   controllers: [...controllers],

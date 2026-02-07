@@ -6,6 +6,14 @@ export class SeedDataDeleteOperatorYm9ke1770425152785
   name = 'SeedDataDeleteOperatorYm9ke1770425152785';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const ta9a = await queryRunner.query(
+      `SELECT id FROM operators WHERE "callSign" = 'TA9A' LIMIT 1`,
+    );
+    const ta9aId = ta9a?.[0]?.id;
+    if (!ta9aId) {
+      return;
+    }
+
     const ym9ke = await queryRunner.query(
       `SELECT id FROM operators WHERE "callSign" = 'YM9KE' LIMIT 1`,
     );
@@ -14,20 +22,10 @@ export class SeedDataDeleteOperatorYm9ke1770425152785
       return;
     }
 
-    const netsOfYm9ke = await queryRunner.query(
-      `SELECT id FROM nets WHERE "operatorId" = $1`,
-      [ym9keId],
+    await queryRunner.query(
+      `UPDATE nets SET "operatorId" = $1 WHERE "operatorId" = $2`,
+      [ta9aId, ym9keId],
     );
-    for (const net of netsOfYm9ke || []) {
-      await queryRunner.query(
-        `DELETE FROM net_communication_channels WHERE "netId" = $1`,
-        [net.id],
-      );
-      await queryRunner.query(`DELETE FROM attendees WHERE "netId" = $1`, [
-        net.id,
-      ]);
-      await queryRunner.query(`DELETE FROM nets WHERE id = $1`, [net.id]);
-    }
     await queryRunner.query(`DELETE FROM attendees WHERE "operatorId" = $1`, [
       ym9keId,
     ]);

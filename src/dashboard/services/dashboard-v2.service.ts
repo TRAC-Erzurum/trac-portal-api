@@ -5,6 +5,8 @@ import { Net } from '../../net/entities/net.entity';
 import { Attendee } from '../../net/entities/attendee.entity';
 import { Operator } from '../../operator/entities/operator.entity';
 import { Activity } from '../../activity/entities/activity.entity';
+import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
+import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 
 export interface StatusResponse {
   activeNetsCount: number;
@@ -199,7 +201,17 @@ export class DashboardV2Service {
     private readonly operatorRepository: Repository<Operator>,
     @InjectRepository(Activity)
     private readonly activityRepository: Repository<Activity>,
+    @InjectRepository(UserBranchMembership)
+    private readonly membershipRepository: Repository<UserBranchMembership>,
   ) {}
+
+  private async getBranchIdsForUser(userId: string): Promise<string[]> {
+    const memberships = await this.membershipRepository.find({
+      where: { userId, status: MembershipStatus.APPROVED },
+      select: ['branchId'],
+    });
+    return memberships.map((m) => m.branchId);
+  }
 
   async getStatus(): Promise<StatusResponse> {
     const activeNetsCount = await this.netRepository.count({
@@ -215,15 +227,24 @@ export class DashboardV2Service {
     };
   }
 
-  async getActiveNets(limit: number = 5): Promise<ActiveNet[]> {
-    const nets = await this.netRepository
+  async getActiveNets(limit: number = 5, userId?: string): Promise<ActiveNet[]> {
+    const branchIds = userId ? await this.getBranchIdsForUser(userId) : null;
+    if (branchIds !== null && branchIds.length === 0) return [];
+
+    const qb = this.netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('net.branch', 'branch')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
       .loadRelationCountAndMap('net.attendeeCount', 'net.attendees')
       .where('net.startedAt IS NOT NULL')
-      .andWhere('net.endedAt IS NULL')
+      .andWhere('net.endedAt IS NULL');
+
+    if (branchIds !== null) {
+      qb.andWhere('net.branchId IN (:...branchIds)', { branchIds });
+    }
+
+    const nets = await qb
       .orderBy('net.startedAt', 'DESC')
       .limit(limit)
       .getMany();
@@ -257,13 +278,22 @@ export class DashboardV2Service {
     }));
   }
 
-  async getPendingNets(limit: number = 5): Promise<PendingNet[]> {
-    const nets = await this.netRepository
+  async getPendingNets(limit: number = 5, userId?: string): Promise<PendingNet[]> {
+    const branchIds = userId ? await this.getBranchIdsForUser(userId) : null;
+    if (branchIds !== null && branchIds.length === 0) return [];
+
+    const qb = this.netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('net.branch', 'branch')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
-      .where('net.startedAt IS NULL')
+      .where('net.startedAt IS NULL');
+
+    if (branchIds !== null) {
+      qb.andWhere('net.branchId IN (:...branchIds)', { branchIds });
+    }
+
+    const nets = await qb
       .orderBy('net.createdAt', 'DESC')
       .limit(limit)
       .getMany();
@@ -288,15 +318,24 @@ export class DashboardV2Service {
     }));
   }
 
-  async getRecentCompletedNets(limit: number = 3): Promise<ActiveNet[]> {
-    const nets = await this.netRepository
+  async getRecentCompletedNets(limit: number = 3, userId?: string): Promise<ActiveNet[]> {
+    const branchIds = userId ? await this.getBranchIdsForUser(userId) : null;
+    if (branchIds !== null && branchIds.length === 0) return [];
+
+    const qb = this.netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('net.branch', 'branch')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
       .loadRelationCountAndMap('net.attendeeCount', 'net.attendees')
       .where('net.startedAt IS NOT NULL')
-      .andWhere('net.endedAt IS NOT NULL')
+      .andWhere('net.endedAt IS NOT NULL');
+
+    if (branchIds !== null) {
+      qb.andWhere('net.branchId IN (:...branchIds)', { branchIds });
+    }
+
+    const nets = await qb
       .orderBy('net.endedAt', 'DESC')
       .limit(limit)
       .getMany();

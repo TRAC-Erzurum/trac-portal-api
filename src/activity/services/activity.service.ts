@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Activity } from '../entities/activity.entity';
+import { Operator } from '../../operator/entities/operator.entity';
 import { ActivityType, EntityType } from '../enums/activity-type.enum';
 
 export interface CreateActivityDto {
@@ -32,6 +33,8 @@ export class ActivityService {
   constructor(
     @InjectRepository(Activity)
     private readonly activityRepository: Repository<Activity>,
+    @InjectRepository(Operator)
+    private readonly operatorRepository: Repository<Operator>,
   ) {}
 
   async create(dto: CreateActivityDto): Promise<Activity> {
@@ -54,14 +57,20 @@ export class ActivityService {
     userId: string,
     limit: number = 10,
   ): Promise<ActivityFeedItem[]> {
-    const activities = await this.activityRepository.find({
-      where: [
-        { userId },
-        { targetCallSign: await this.getCallSignForUser(userId) },
-      ],
-      order: { createdAt: 'DESC' },
-      take: limit,
-    });
+    const callSign = await this.getCallSignForUser(userId);
+    const qb = this.activityRepository
+      .createQueryBuilder('activity')
+      .where('activity.userId = :userId', { userId });
+    if (callSign) {
+      qb.orWhere('activity.actorCallSign = :callSign', { callSign }).orWhere(
+        'activity.targetCallSign = :callSign',
+        { callSign },
+      );
+    }
+    const activities = await qb
+      .orderBy('activity.createdAt', 'DESC')
+      .take(limit)
+      .getMany();
 
     return activities.map((a) => this.toFeedItem(a));
   }
@@ -103,10 +112,10 @@ export class ActivityService {
   }
 
   private async getCallSignForUser(userId: string): Promise<string | null> {
-    const activity = await this.activityRepository.findOne({
-      where: { userId },
-      select: ['actorCallSign'],
+    const operator = await this.operatorRepository.findOne({
+      where: { user: { id: userId } },
+      select: ['callSign'],
     });
-    return activity?.actorCallSign || null;
+    return operator?.callSign ?? null;
   }
 }
