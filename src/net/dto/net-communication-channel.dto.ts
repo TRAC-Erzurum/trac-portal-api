@@ -1,4 +1,4 @@
-import { IsUUID, IsBoolean, IsString, IsOptional } from 'class-validator';
+import { IsUUID, IsBoolean, IsString, IsOptional, ValidateIf, IsNotEmpty } from 'class-validator';
 
 export class NetCommunicationChannelDto {
   @IsUUID()
@@ -9,7 +9,8 @@ export class NetCommunicationChannelDto {
   @IsOptional()
   isSimplexAdHoc?: boolean;
 
+  @ValidateIf((o) => o.isSimplexAdHoc === true)
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   simplexFrequency?: string | null;
 }
