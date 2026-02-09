@@ -30,6 +30,9 @@ export class Operator extends BaseEntity {
   @Column({ nullable: true })
   fullName: string;
 
+  @Column({ nullable: true, type: 'int', unique: true })
+  dmrId: number;
+
   @OneToOne(() => User, { eager: true })
   @JoinColumn()
   user: User;

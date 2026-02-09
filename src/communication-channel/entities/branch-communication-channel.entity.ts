@@ -1,7 +1,11 @@
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { Branch } from '../../branch/entities/branch.entity';
-import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
+import {
+  CommunicationChannelType,
+  DmrNetwork,
+} from '../enums/communication-channel-type.enum';
+import { RepeaterTalkgroup } from './repeater-talkgroup.entity';
 
 @Entity('branch_communication_channels')
 export class BranchCommunicationChannel extends BaseEntity {
@@ -107,4 +111,19 @@ export class BranchCommunicationChannel extends BaseEntity {
 
   @Column({ nullable: true })
   hfMode: string;
+
+  // DMR fields
+  @Column({ nullable: true, type: 'smallint' })
+  dmrColorCode: number;
+
+  @Column({ nullable: true, type: 'enum', enum: DmrNetwork })
+  dmrNetwork: DmrNetwork;
+
+  @Column({ nullable: true, type: 'int' })
+  dmrRepeaterId: number;
+
+  @OneToMany(() => RepeaterTalkgroup, (tg) => tg.communicationChannel, {
+    cascade: true,
+  })
+  talkgroups: RepeaterTalkgroup[];
 }
