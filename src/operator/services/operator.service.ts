@@ -5,10 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, IsNull, Not, Repository } from 'typeorm';
+import { DeepPartial, IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
 import { Operator } from '../entities/operator.entity';
 import { Attendee } from '../../net/entities/attendee.entity';
 import { Net } from '../../net/entities/net.entity';
+import { Branch } from '../../branch/entities/branch.entity';
 import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 import { chunk, startCase } from 'lodash';
@@ -34,8 +35,21 @@ export interface OperatorNetItem {
   attendeeCount?: number;
 }
 
+export interface RelevanceContext {
+  selfOperatorId: string | null;
+  city: string | null;
+  district: string | null;
+  callSignRegion: string | null;
+  userNonHqBranchIds: string[];
+}
+
 @Injectable()
 export class OperatorService {
+  private contextCache = new Map<
+    string,
+    { data: RelevanceContext; expiresAt: number }
+  >();
+
   constructor(
     @InjectRepository(Operator)
     private readonly operatorRepository: Repository<Operator>,
@@ -43,48 +57,161 @@ export class OperatorService {
     private readonly attendeeRepository: Repository<Attendee>,
     @InjectRepository(Net)
     private readonly netRepository: Repository<Net>,
+    @InjectRepository(Branch)
+    private readonly branchRepository: Repository<Branch>,
     @InjectRepository(UserBranchMembership)
     private readonly membershipRepository: Repository<UserBranchMembership>,
   ) {}
 
-  async find(
-    query: OperatorQueryDto,
-  ): Promise<{ data: Operator[]; total: number }> {
-    const baseQueryBuilder = this.operatorRepository
-      .createQueryBuilder('operator')
-      .leftJoinAndSelect('operator.user', 'user');
+  // ── Relevance helpers ──────────────────────────────────────────────
 
-    if (query.search) {
-      const searchTerm = `%${(query.search || '').trim().toLowerCase()}%`;
-      baseQueryBuilder.where(
-        '(LOWER(operator.callSign) LIKE :search OR ' +
-          'LOWER(operator.fullName) LIKE :search OR ' +
-          'LOWER(operator.country) LIKE :search OR ' +
-          'LOWER(operator.city) LIKE :search OR ' +
-          'LOWER(operator.district) LIKE :search OR ' +
-          'LOWER(user.fullName) LIKE :search)',
-        { search: searchTerm },
+  private async getUserRelevanceContext(
+    userId: string,
+  ): Promise<RelevanceContext> {
+    // 1. Get the user's operator record
+    const userOperator = await this.operatorRepository.findOne({
+      where: { user: { id: userId } },
+    });
+
+    // 2. Get user's non-HQ branch IDs
+    let userNonHqBranchIds: string[] = [];
+    const memberships = await this.membershipRepository.find({
+      where: { userId, status: MembershipStatus.APPROVED },
+      select: ['branchId'],
+    });
+    if (memberships.length > 0) {
+      const branchIds = memberships.map((m) => m.branchId);
+      const nonHqBranches = await this.branchRepository
+        .createQueryBuilder('branch')
+        .select('branch.id')
+        .where('branch.id IN (:...branchIds)', { branchIds })
+        .andWhere('branch.isHeadquarters = false')
+        .andWhere('branch.isActive = true')
+        .getMany();
+      userNonHqBranchIds = nonHqBranches.map((b) => b.id);
+    }
+
+    // 3. Extract callsign region digit
+    let callSignRegion: string | null = null;
+    if (userOperator?.callSign) {
+      const match = userOperator.callSign.match(/^[A-Za-z]+(\d)/);
+      callSignRegion = match ? match[1] : null;
+    }
+
+    return {
+      selfOperatorId: userOperator?.id ?? null,
+      city: userOperator?.city ?? null,
+      district: userOperator?.district ?? null,
+      callSignRegion,
+      userNonHqBranchIds,
+    };
+  }
+
+  async getContextCached(userId: string): Promise<RelevanceContext> {
+    const cached = this.contextCache.get(userId);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
+    const data = await this.getUserRelevanceContext(userId);
+    this.contextCache.set(userId, {
+      data,
+      expiresAt: Date.now() + 5 * 60_000,
+    });
+    return data;
+  }
+
+  /**
+   * Attaches relevance scoring to a query builder as `relevance_score`.
+   * Callers should ORDER BY 'relevance_score' DESC after calling this.
+   * Assumes the query builder already has `operator` and `user` aliases.
+   */
+  buildRelevanceScore(
+    qb: SelectQueryBuilder<any>,
+    ctx: RelevanceContext,
+  ): void {
+    const parts: string[] = [];
+
+    // Self: +999
+    if (ctx.selfOperatorId) {
+      parts.push(
+        `CASE WHEN "operator"."id" = :relSelfOpId THEN 999 ELSE 0 END`,
+      );
+      qb.setParameter('relSelfOpId', ctx.selfOperatorId);
+    }
+
+    // Registered user account: +2
+    parts.push(`CASE WHEN "user"."id" IS NOT NULL THEN 2 ELSE 0 END`);
+
+    // Shared non-HQ branches: +8 per shared branch
+    if (ctx.userNonHqBranchIds.length > 0) {
+      parts.push(
+        `COALESCE((` +
+          `SELECT COUNT(DISTINCT m_rel."branchId") * 8 ` +
+          `FROM "user_branch_memberships" m_rel ` +
+          `INNER JOIN "branches" b_rel ON b_rel."id" = m_rel."branchId" ` +
+          `WHERE m_rel."userId" = "user"."id" ` +
+          `AND m_rel."branchId" IN (:...relBranchIds) ` +
+          `AND m_rel."status" = 'approved' ` +
+          `AND b_rel."isHeadquarters" = false` +
+          `), 0)`,
+      );
+      qb.setParameter('relBranchIds', ctx.userNonHqBranchIds);
+    }
+
+    // Same callsign region digit: +7
+    if (ctx.callSignRegion) {
+      parts.push(
+        `CASE WHEN SUBSTRING("operator"."callSign" FROM '^[A-Za-z]+(\\d)') = :relRegion THEN 7 ELSE 0 END`,
+      );
+      qb.setParameter('relRegion', ctx.callSignRegion);
+    }
+
+    // Same city: +4
+    if (ctx.city) {
+      parts.push(
+        `CASE WHEN "operator"."city" = :relCity THEN 4 ELSE 0 END`,
+      );
+      qb.setParameter('relCity', ctx.city);
+    }
+
+    // Shared nets (90 days): +2 per net, max 5 nets = max +10
+    if (ctx.selfOperatorId) {
+      parts.push(
+        `COALESCE((` +
+          `SELECT LEAST(COUNT(DISTINCT a_peer."netId"), 5) * 2 ` +
+          `FROM "attendees" a_peer ` +
+          `INNER JOIN "attendees" a_self ON a_self."netId" = a_peer."netId" ` +
+          `INNER JOIN "nets" n_rel ON n_rel."id" = a_peer."netId" ` +
+          `WHERE a_self."operatorId" = :relSelfOpId2 ` +
+          `AND a_peer."operatorId" = "operator"."id" ` +
+          `AND a_peer."operatorId" != :relSelfOpId2 ` +
+          `AND n_rel."endedAt" > :relNinetyDaysAgo` +
+          `), 0)`,
+      );
+      qb.setParameter('relSelfOpId2', ctx.selfOperatorId);
+      qb.setParameter(
+        'relNinetyDaysAgo',
+        new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
       );
     }
 
-    const total = await baseQueryBuilder.getCount();
+    // Same district: +1
+    if (ctx.district) {
+      parts.push(
+        `CASE WHEN "operator"."district" = :relDistrict THEN 1 ELSE 0 END`,
+      );
+      qb.setParameter('relDistrict', ctx.district);
+    }
 
-    const data = await baseQueryBuilder
-      .addSelect(
-        'CASE WHEN "user"."id" IS NULL THEN 1 ELSE 0 END',
-        'user_sort_priority',
-      )
-      .orderBy('user_sort_priority', 'ASC')
-      .addOrderBy('operator.createdAt', 'ASC')
-      .addOrderBy('operator.callSign', 'ASC')
-      .skip((query.pageNumber - 1) * query.pageSize)
-      .take(query.pageSize)
-      .getMany();
-
-    return { data, total };
+    const scoreExpr =
+      parts.length > 0 ? `(${parts.join(' + ')})` : '0';
+    qb.addSelect(scoreExpr, 'relevance_score');
   }
 
-  async findWithStats(query: OperatorQueryDto): Promise<{
+  // ── Query methods ─────────────────────────────────────────────────
+
+  async findWithStats(
+    query: OperatorQueryDto,
+    userId?: string,
+  ): Promise<{
     data: (Operator & { attendedCount: number; managedCount: number })[];
     total: number;
   }> {
@@ -150,13 +277,24 @@ export class OperatorService {
 
     const total = await countQuery.getCount();
 
+    // Apply relevance scoring or fall back to default sort
+    if (userId) {
+      const ctx = await this.getContextCached(userId);
+      this.buildRelevanceScore(baseQueryBuilder, ctx);
+      baseQueryBuilder
+        .orderBy('relevance_score', 'DESC')
+        .addOrderBy('operator.callSign', 'ASC');
+    } else {
+      baseQueryBuilder
+        .addSelect(
+          'CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END',
+          'user_priority',
+        )
+        .orderBy('CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END', 'ASC')
+        .addOrderBy('operator.callSign', 'ASC');
+    }
+
     const rawAndEntities = await baseQueryBuilder
-      .addSelect(
-        'CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END',
-        'user_priority',
-      )
-      .orderBy('CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END', 'ASC')
-      .addOrderBy('operator.callSign', 'ASC')
       .offset((query.pageNumber - 1) * query.pageSize)
       .limit(query.pageSize)
       .getRawAndEntities();
@@ -176,11 +314,24 @@ export class OperatorService {
     return { data, total };
   }
 
-  async findAllWithUser(): Promise<Operator[]> {
-    return this.operatorRepository.find({
-      where: { user: Not(IsNull()) },
-      relations: { user: true },
-    });
+  async findAllWithUser(userId?: string): Promise<Operator[]> {
+    const qb = this.operatorRepository
+      .createQueryBuilder('operator')
+      .leftJoinAndSelect('operator.user', 'user')
+      .where('user.id IS NOT NULL');
+
+    if (userId) {
+      const ctx = await this.getContextCached(userId);
+      this.buildRelevanceScore(qb, ctx);
+      qb.orderBy('relevance_score', 'DESC').addOrderBy(
+        'operator.callSign',
+        'ASC',
+      );
+    } else {
+      qb.orderBy('operator.callSign', 'ASC');
+    }
+
+    return qb.getMany();
   }
 
   async findOne(id: string): Promise<Operator> {
@@ -318,6 +469,7 @@ export class OperatorService {
     sortBy: 'managed' | 'attended' | 'default' = 'default',
     limit: number = 10,
     priorityBranchId?: string,
+    userId?: string,
   ): Promise<OperatorSearchResult[]> {
     const searchTerm = `%${(query ?? '').trim().toLowerCase()}%`;
 
@@ -333,33 +485,54 @@ export class OperatorService {
         { search: searchTerm },
       );
 
-    const fetchLimit = priorityBranchId ? Math.min(limit * 5, 50) : limit;
-    let entities: Operator[];
+    // Add sortBy-specific JOINs and GROUP BY
     if (sortBy === 'managed') {
       qb.leftJoin('operator.nets', 'net')
         .addSelect('COUNT(DISTINCT net.id)', 'managedCount')
         .addSelect('MAX(net.endedAt)', 'lastNetDate')
         .groupBy('operator.id')
-        .addGroupBy('user.id')
-        .orderBy('COUNT(DISTINCT net.id)', 'DESC')
-        .addOrderBy('MAX(net.endedAt)', 'DESC', 'NULLS LAST')
-        .addOrderBy('operator.callSign', 'ASC');
-      const result = await qb.limit(fetchLimit).getRawAndEntities();
-      entities = result.entities;
+        .addGroupBy('user.id');
     } else if (sortBy === 'attended') {
       qb.leftJoin('operator.attendees', 'attendee')
         .addSelect('COUNT(DISTINCT attendee.id)', 'attendedCount')
         .groupBy('operator.id')
-        .addGroupBy('user.id')
-        .orderBy('COUNT(DISTINCT attendee.id)', 'DESC')
-        .addOrderBy('operator.callSign', 'ASC');
-      const result = await qb.limit(fetchLimit).getRawAndEntities();
-      entities = result.entities;
-    } else {
-      qb.orderBy('operator.callSign', 'ASC');
-      entities = await qb.limit(fetchLimit).getMany();
+        .addGroupBy('user.id');
     }
 
+    // Apply relevance scoring or fall back to legacy sort
+    if (userId) {
+      const ctx = await this.getContextCached(userId);
+      this.buildRelevanceScore(qb, ctx);
+
+      // Primary: relevance, Secondary: sortBy metric, Tertiary: callSign
+      qb.orderBy('relevance_score', 'DESC');
+      if (sortBy === 'managed') {
+        qb.addOrderBy('COUNT(DISTINCT net.id)', 'DESC');
+        qb.addOrderBy('MAX(net.endedAt)', 'DESC', 'NULLS LAST');
+      } else if (sortBy === 'attended') {
+        qb.addOrderBy('COUNT(DISTINCT attendee.id)', 'DESC');
+      }
+      qb.addOrderBy('operator.callSign', 'ASC');
+    } else {
+      // Fallback: original sort without relevance
+      if (sortBy === 'managed') {
+        qb.orderBy('COUNT(DISTINCT net.id)', 'DESC')
+          .addOrderBy('MAX(net.endedAt)', 'DESC', 'NULLS LAST')
+          .addOrderBy('operator.callSign', 'ASC');
+      } else if (sortBy === 'attended') {
+        qb.orderBy('COUNT(DISTINCT attendee.id)', 'DESC').addOrderBy(
+          'operator.callSign',
+          'ASC',
+        );
+      } else {
+        qb.orderBy('operator.callSign', 'ASC');
+      }
+    }
+
+    const result = await qb.limit(limit).getRawAndEntities();
+    const entities = result.entities;
+
+    // Compute isBranchMember flag (kept for frontend display)
     let branchMemberUserIds: Set<string> = new Set();
     if (priorityBranchId) {
       const memberships = await this.membershipRepository.find({
@@ -372,20 +545,12 @@ export class OperatorService {
       branchMemberUserIds = new Set(memberships.map((m) => m.userId));
     }
 
-    const withFlag: OperatorSearchResult[] = entities.map((op) => ({
+    return entities.map((op) => ({
       ...op,
-      isBranchMember: op.user?.id ? branchMemberUserIds.has(op.user.id) : false,
+      isBranchMember: op.user?.id
+        ? branchMemberUserIds.has(op.user.id)
+        : false,
     }));
-
-    if (priorityBranchId) {
-      withFlag.sort((a, b) => {
-        if (a.isBranchMember !== b.isBranchMember)
-          return a.isBranchMember ? -1 : 1;
-        return (a.callSign || '').localeCompare(b.callSign || '');
-      });
-    }
-
-    return withFlag.slice(0, limit);
   }
 
   async delete(id: string): Promise<void> {

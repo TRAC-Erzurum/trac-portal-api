@@ -144,6 +144,7 @@ export class MembershipController {
     @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
     @Query('role') role?: string,
+    @Req() req?: RequestWithUser,
   ) {
     const page = pageNumber ? parseInt(pageNumber, 10) : undefined;
     const size = pageSize ? parseInt(pageSize, 10) : undefined;
@@ -153,6 +154,7 @@ export class MembershipController {
       size,
       search,
       role,
+      req?.user?.id,
     );
   }
 }
