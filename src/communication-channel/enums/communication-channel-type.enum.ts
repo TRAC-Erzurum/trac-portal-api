@@ -7,4 +7,13 @@ export enum CommunicationChannelType {
 
 export enum RepeaterMode {
   ANALOG = 'analog',
+  DIGITAL = 'digital',
+  MIXED = 'mixed',
+}
+
+export enum DmrNetwork {
+  BRANDMEISTER = 'brandmeister',
+  TGIF = 'tgif',
+  FREEDMR = 'freedmr',
+  OTHER = 'other',
 }

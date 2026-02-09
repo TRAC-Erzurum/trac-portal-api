@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BranchCommunicationChannel } from '../entities/branch-communication-channel.entity';
 import { CommunicationChannelTutorial } from '../entities/communication-channel-tutorial.entity';
+import { RepeaterTalkgroup } from '../entities/repeater-talkgroup.entity';
 import { CreateCommunicationChannelDto } from '../dto/create-communication-channel.dto';
 import { UpdateCommunicationChannelDto } from '../dto/update-communication-channel.dto';
 import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
@@ -20,6 +21,8 @@ export class CommunicationChannelService {
     private readonly communicationChannelRepository: Repository<BranchCommunicationChannel>,
     @InjectRepository(CommunicationChannelTutorial)
     private readonly tutorialRepository: Repository<CommunicationChannelTutorial>,
+    @InjectRepository(RepeaterTalkgroup)
+    private readonly talkgroupRepository: Repository<RepeaterTalkgroup>,
   ) {}
 
   async create(
@@ -67,13 +70,34 @@ export class CommunicationChannelService {
     communicationChannel.hfFrequencyRange = dto.hfFrequencyRange;
     communicationChannel.hfMode = dto.hfMode;
 
+    communicationChannel.dmrColorCode = dto.dmrColorCode;
+    communicationChannel.dmrNetwork = dto.dmrNetwork;
+    communicationChannel.dmrRepeaterId = dto.dmrRepeaterId;
+
     communicationChannel.createdBy = createdBy;
     communicationChannel.updatedBy = [];
 
     try {
-      return await this.communicationChannelRepository.save(
+      const saved = await this.communicationChannelRepository.save(
         communicationChannel,
       );
+
+      if (dto.talkgroups?.length) {
+        const talkgroups = dto.talkgroups.map((tg) => {
+          const entity = new RepeaterTalkgroup();
+          entity.communicationChannelId = saved.id;
+          entity.talkgroupId = tg.talkgroupId;
+          entity.talkgroupName = tg.talkgroupName;
+          entity.timeslot = tg.timeslot;
+          entity.isStatic = tg.isStatic ?? true;
+          entity.createdBy = createdBy;
+          entity.updatedBy = [];
+          return entity;
+        });
+        saved.talkgroups = await this.talkgroupRepository.save(talkgroups);
+      }
+
+      return saved;
     } catch (error) {
       console.error('Communication channel save error:', error);
       throw new InternalServerErrorException('error.internal');
@@ -93,6 +117,7 @@ export class CommunicationChannelService {
     const qb = this.communicationChannelRepository
       .createQueryBuilder('channel')
       .leftJoinAndSelect('channel.branch', 'branch')
+      .leftJoinAndSelect('channel.talkgroups', 'talkgroup')
       .orderBy('channel.name', 'ASC');
 
     if (options.branchId) {
@@ -152,6 +177,7 @@ export class CommunicationChannelService {
     const communicationChannel = await this.communicationChannelRepository
       .createQueryBuilder('channel')
       .leftJoinAndSelect('channel.branch', 'branch')
+      .leftJoinAndSelect('channel.talkgroups', 'talkgroup')
       .where('channel.id = :id', { id })
       .getOne();
 
@@ -235,15 +261,48 @@ export class CommunicationChannelService {
       communicationChannel.hfFrequencyRange = dto.hfFrequencyRange;
     if (dto.hfMode !== undefined) communicationChannel.hfMode = dto.hfMode;
 
+    if (dto.dmrColorCode !== undefined)
+      communicationChannel.dmrColorCode = dto.dmrColorCode;
+    if (dto.dmrNetwork !== undefined)
+      communicationChannel.dmrNetwork = dto.dmrNetwork;
+    if (dto.dmrRepeaterId !== undefined)
+      communicationChannel.dmrRepeaterId = dto.dmrRepeaterId;
+
     communicationChannel.updatedBy = [
       ...(communicationChannel.updatedBy || []),
       updatedBy,
     ];
 
     try {
-      return await this.communicationChannelRepository.save(
+      const saved = await this.communicationChannelRepository.save(
         communicationChannel,
       );
+
+      if (dto.talkgroups !== undefined) {
+        // Remove existing talkgroups and replace with new ones
+        await this.talkgroupRepository.delete({
+          communicationChannelId: id,
+        });
+
+        if (dto.talkgroups.length > 0) {
+          const talkgroups = dto.talkgroups.map((tg) => {
+            const entity = new RepeaterTalkgroup();
+            entity.communicationChannelId = id;
+            entity.talkgroupId = tg.talkgroupId;
+            entity.talkgroupName = tg.talkgroupName;
+            entity.timeslot = tg.timeslot;
+            entity.isStatic = tg.isStatic ?? true;
+            entity.createdBy = updatedBy;
+            entity.updatedBy = [];
+            return entity;
+          });
+          saved.talkgroups = await this.talkgroupRepository.save(talkgroups);
+        } else {
+          saved.talkgroups = [];
+        }
+      }
+
+      return saved;
     } catch (error) {
       console.error('Communication channel update error:', error);
       throw new InternalServerErrorException('error.internal');

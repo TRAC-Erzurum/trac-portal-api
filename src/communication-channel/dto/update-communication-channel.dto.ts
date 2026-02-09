@@ -4,10 +4,17 @@ import {
   IsOptional,
   IsNumber,
   IsBoolean,
+  IsArray,
+  ValidateNested,
   Min,
   Max,
 } from 'class-validator';
-import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
+import { Type } from 'class-transformer';
+import {
+  CommunicationChannelType,
+  DmrNetwork,
+} from '../enums/communication-channel-type.enum';
+import { TalkgroupDto } from './create-communication-channel.dto';
 
 export class UpdateCommunicationChannelDto {
   @IsEnum(CommunicationChannelType)
@@ -141,4 +148,25 @@ export class UpdateCommunicationChannelDto {
   @IsString()
   @IsOptional()
   hfMode?: string;
+
+  // DMR fields
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(15)
+  dmrColorCode?: number;
+
+  @IsEnum(DmrNetwork)
+  @IsOptional()
+  dmrNetwork?: DmrNetwork;
+
+  @IsNumber()
+  @IsOptional()
+  dmrRepeaterId?: number;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => TalkgroupDto)
+  talkgroups?: TalkgroupDto[];
 }
