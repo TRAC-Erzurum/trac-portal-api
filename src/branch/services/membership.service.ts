@@ -28,6 +28,7 @@ import {
   EntityType,
 } from '../../activity/enums/activity-type.enum';
 import { UserService } from '../../user/services/user.service';
+import { OperatorService } from '../../operator/services/operator.service';
 import { Operator } from '../../operator/entities/operator.entity';
 
 @Injectable()
@@ -46,6 +47,7 @@ export class MembershipService {
     private readonly eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
+    private readonly operatorService: OperatorService,
   ) {}
 
   async createMembership(
@@ -393,6 +395,7 @@ export class MembershipService {
     pageSize?: number,
     search?: string,
     role?: string,
+    userId?: string,
   ): Promise<{ data: UserBranchMembership[]; total: number }> {
     const queryBuilder = this.membershipRepository
       .createQueryBuilder('membership')
@@ -415,9 +418,19 @@ export class MembershipService {
       queryBuilder.andWhere('membership.role = :role', { role });
     }
 
-    queryBuilder.orderBy('membership.createdAt', 'ASC');
-
+    // Count BEFORE adding relevance scoring (addSelect breaks getCount)
     const total = await queryBuilder.getCount();
+
+    // Apply relevance scoring or fall back to createdAt
+    if (userId) {
+      const ctx = await this.operatorService.getContextCached(userId);
+      this.operatorService.buildRelevanceScore(queryBuilder, ctx);
+      queryBuilder
+        .orderBy('relevance_score', 'DESC')
+        .addOrderBy('operator.callSign', 'ASC');
+    } else {
+      queryBuilder.orderBy('membership.createdAt', 'ASC');
+    }
 
     if (pageNumber && pageSize) {
       queryBuilder.skip((pageNumber - 1) * pageSize).take(pageSize);

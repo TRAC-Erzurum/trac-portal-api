@@ -38,14 +38,17 @@ export class OperatorController {
 
   @Get()
   @Roles(Role.VOLUNTEER)
-  getOperators(@Query() query: OperatorQueryDto) {
-    return this.operatorService.findWithStats(query);
+  getOperators(
+    @Query() query: OperatorQueryDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.operatorService.findWithStats(query, req.user?.id);
   }
 
   @Get('user')
   @Roles(Role.VOLUNTEER)
-  getOperatorsWithUser(): Promise<Operator[]> {
-    return this.operatorService.findAllWithUser();
+  getOperatorsWithUser(@Req() req: RequestWithUser): Promise<Operator[]> {
+    return this.operatorService.findAllWithUser(req.user?.id);
   }
 
   @Get('search')
@@ -55,12 +58,14 @@ export class OperatorController {
     @Query('sortBy') sortBy?: 'managed' | 'attended' | 'default',
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
     @Query('priorityBranchId') priorityBranchId?: string,
+    @Req() req?: RequestWithUser,
   ): Promise<OperatorSearchResult[]> {
     return this.operatorService.search(
       query,
       sortBy || 'default',
       Math.min(limit, 50),
       priorityBranchId,
+      req?.user?.id,
     );
   }
 

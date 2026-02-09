@@ -9,11 +9,13 @@ import { Operator } from '../operator/entities/operator.entity';
 import { BranchAdminGuard } from './guards/branch-admin.guard';
 import { BranchMemberGuard } from './guards/branch-member.guard';
 import { UserModule } from '../user/user.module';
+import { OperatorModule } from '../operator/operator.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([...entities, User, Net, Operator]),
     forwardRef(() => UserModule),
+    OperatorModule,
   ],
   controllers: [...controllers],
   providers: [...services, BranchAdminGuard, BranchMemberGuard],
