@@ -63,10 +63,10 @@ export class AttendeeService {
 
     const attendee = new Attendee();
     attendee.callSign = callSign;
-    attendee.name = (dto.name ?? '').trim() || null;
-    attendee.country = (dto.country ?? '').trim() || null;
-    attendee.city = (dto.city ?? '').trim() || null;
-    attendee.district = (dto.district ?? '').trim() || null;
+    attendee.name = (dto.name ?? '').trim() || operator.fullName || null;
+    attendee.country = (dto.country ?? '').trim() || operator.country || null;
+    attendee.city = (dto.city ?? '').trim() || operator.city || null;
+    attendee.district = (dto.district ?? '').trim() || operator.district || null;
     attendee.readability = dto.readability;
     attendee.signalStrength = dto.signalStrength;
     attendee.operator = operator;
