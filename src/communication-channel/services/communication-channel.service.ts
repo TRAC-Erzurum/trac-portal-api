@@ -6,7 +6,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BranchCommunicationChannel } from '../entities/branch-communication-channel.entity';
-import { CommunicationChannelTutorial } from '../entities/communication-channel-tutorial.entity';
 import { RepeaterTalkgroup } from '../entities/repeater-talkgroup.entity';
 import { CreateCommunicationChannelDto } from '../dto/create-communication-channel.dto';
 import { UpdateCommunicationChannelDto } from '../dto/update-communication-channel.dto';
@@ -19,8 +18,6 @@ export class CommunicationChannelService {
   constructor(
     @InjectRepository(BranchCommunicationChannel)
     private readonly communicationChannelRepository: Repository<BranchCommunicationChannel>,
-    @InjectRepository(CommunicationChannelTutorial)
-    private readonly tutorialRepository: Repository<CommunicationChannelTutorial>,
     @InjectRepository(RepeaterTalkgroup)
     private readonly talkgroupRepository: Repository<RepeaterTalkgroup>,
   ) {}
@@ -65,7 +62,6 @@ export class CommunicationChannelService {
     communicationChannel.aprsDigipeaterType = dto.aprsDigipeaterType;
     communicationChannel.aprsPath = dto.aprsPath;
     communicationChannel.aprsServer = dto.aprsServer;
-    communicationChannel.digipeater = dto.digipeater;
 
     communicationChannel.hfFrequencyRange = dto.hfFrequencyRange;
     communicationChannel.hfMode = dto.hfMode;
@@ -254,8 +250,6 @@ export class CommunicationChannelService {
       communicationChannel.aprsPath = dto.aprsPath;
     if (dto.aprsServer !== undefined)
       communicationChannel.aprsServer = dto.aprsServer;
-    if (dto.digipeater !== undefined)
-      communicationChannel.digipeater = dto.digipeater;
 
     if (dto.hfFrequencyRange !== undefined)
       communicationChannel.hfFrequencyRange = dto.hfFrequencyRange;
@@ -388,35 +382,4 @@ export class CommunicationChannelService {
     }
   }
 
-  async getTutorial(
-    type: CommunicationChannelType,
-    locale: string = 'tr',
-  ): Promise<CommunicationChannelTutorial> {
-    const tutorial = await this.tutorialRepository.findOne({
-      where: { type, locale },
-    });
-
-    if (!tutorial) {
-      const fallback = await this.tutorialRepository.findOne({
-        where: { type, locale: 'en' },
-      });
-
-      if (!fallback) {
-        throw new NotFoundException('error.tutorialNotFound');
-      }
-
-      return fallback;
-    }
-
-    return tutorial;
-  }
-
-  async getAllTutorials(
-    locale: string = 'tr',
-  ): Promise<CommunicationChannelTutorial[]> {
-    return this.tutorialRepository.find({
-      where: { locale },
-      order: { type: 'ASC' },
-    });
-  }
 }

@@ -104,9 +104,6 @@ export class BranchCommunicationChannel extends BaseEntity {
   aprsServer: string;
 
   @Column({ nullable: true })
-  digipeater: string;
-
-  @Column({ nullable: true })
   hfFrequencyRange: string;
 
   @Column({ nullable: true })

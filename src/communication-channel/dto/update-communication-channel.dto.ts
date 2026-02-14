@@ -8,6 +8,7 @@ import {
   ValidateNested,
   Min,
   Max,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
@@ -31,6 +32,7 @@ export class UpdateCommunicationChannelDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   description?: string;
 
   @IsBoolean()
@@ -136,10 +138,6 @@ export class UpdateCommunicationChannelDto {
   @IsString()
   @IsOptional()
   aprsServer?: string;
-
-  @IsString()
-  @IsOptional()
-  digipeater?: string;
 
   @IsString()
   @IsOptional()
