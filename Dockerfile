@@ -6,6 +6,8 @@ RUN yarn install --frozen-lockfile
 
 COPY . .
 
+ARG VERSION=
+ENV APP_VERSION=${VERSION}
 ENV NODE_ENV=production
 RUN yarn build && \
     find dist -name "*.js.map" -type f -delete
@@ -16,6 +18,9 @@ RUN yarn install --production --frozen-lockfile --ignore-scripts && \
     find /app/node_modules -depth -type d \( -name "test" -o -name "tests" -o -name "__tests__" -o -name "doc" -o -name "docs" -o -name "example" -o -name "examples" \) -exec rm -rf {} + 2>/dev/null || true
 
 FROM node:20-alpine AS production
+
+ARG VERSION=
+ENV APP_VERSION=${VERSION}
 
 WORKDIR /app
 

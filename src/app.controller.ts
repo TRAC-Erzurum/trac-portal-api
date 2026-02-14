@@ -6,6 +6,9 @@ export class AppController {
   @Public()
   @Get('health')
   health() {
-    return { status: 'ok' };
+    return {
+      status: 'ok',
+      version: process.env.APP_VERSION || '-',
+    };
   }
 }
