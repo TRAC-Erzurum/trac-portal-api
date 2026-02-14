@@ -4,6 +4,7 @@ import { City } from '../entities/city.entity';
 import * as _ from 'lodash';
 import * as cities from '../repository/cities.json';
 import * as countries from '../repository/countries.json';
+import { toTitleCase } from '../../shared/utils/string.utils';
 
 @Injectable()
 export class QthService {
@@ -23,7 +24,7 @@ export class QthService {
         ...city,
         districts: _.map(city.districts, (district) => ({
           ...district,
-          name: _.startCase(district.name.toLowerCase()),
+          name: toTitleCase(district.name),
         })),
       }))
       .sortBy('name')

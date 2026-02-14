@@ -12,7 +12,8 @@ import { Net } from '../../net/entities/net.entity';
 import { Branch } from '../../branch/entities/branch.entity';
 import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
-import { chunk, startCase } from 'lodash';
+import { chunk } from 'lodash';
+import { toTitleCase } from '../../shared/utils/string.utils';
 import { OperatorQueryDto } from '../dto/operator-query.dto';
 
 export interface OperatorSearchResult extends Operator {
@@ -434,17 +435,17 @@ export class OperatorService {
         operator.prefix = (record.prefix ?? '').trim() || undefined;
         operator.suffix = (record.suffix ?? '').trim() || undefined;
         operator.country = (record.country ?? '').trim()
-          ? startCase((record.country ?? '').trim())
+          ? toTitleCase((record.country ?? '').trim())
           : undefined;
         operator.city = (record.city ?? '').trim()
-          ? startCase((record.city ?? '').trim())
+          ? toTitleCase((record.city ?? '').trim())
           : undefined;
         operator.district = (record.district ?? '').trim()
-          ? startCase((record.district ?? '').trim())
+          ? toTitleCase((record.district ?? '').trim())
           : undefined;
         operator.gridSquare = (record.gridSquare ?? '').trim() || undefined;
         operator.fullName = (record.fullName ?? '').trim()
-          ? startCase((record.fullName ?? '').trim())
+          ? toTitleCase((record.fullName ?? '').trim())
           : undefined;
         operator.createdBy = createdBy;
         operator.updatedBy = [];

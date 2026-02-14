@@ -81,19 +81,6 @@ export class CommunicationChannelController {
     return this.communicationChannelService.findAll(options);
   }
 
-  @Get('tutorials')
-  async getAllTutorials(@Query('locale') locale?: string) {
-    return this.communicationChannelService.getAllTutorials(locale || 'tr');
-  }
-
-  @Get('tutorials/:type')
-  async getTutorial(
-    @Param('type') type: CommunicationChannelType,
-    @Query('locale') locale?: string,
-  ) {
-    return this.communicationChannelService.getTutorial(type, locale || 'tr');
-  }
-
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.communicationChannelService.findOne(id);
