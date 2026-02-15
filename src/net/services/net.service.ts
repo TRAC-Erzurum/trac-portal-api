@@ -374,7 +374,7 @@ export class NetService {
   async findAll(
     query: {
       search?: string;
-      status?: 'all' | 'active' | 'pending' | 'completed';
+      status?: 'all' | 'active' | 'pending' | 'completed' | 'cancelled';
       dateFilter?: 'all' | 'week' | 'month' | '3months';
       branchId?: string;
       branchFilter?: 'selected' | 'my-branches' | 'all';
@@ -435,9 +435,11 @@ export class NetService {
       if (status === 'active') {
         qb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NULL');
       } else if (status === 'pending') {
-        qb.andWhere('net.startedAt IS NULL');
+        qb.andWhere('net.startedAt IS NULL AND net.endedAt IS NULL');
       } else if (status === 'completed') {
-        qb.andWhere('net.endedAt IS NOT NULL');
+        qb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NOT NULL');
+      } else if (status === 'cancelled') {
+        qb.andWhere('net.startedAt IS NULL AND net.endedAt IS NOT NULL');
       }
     }
 
@@ -459,8 +461,9 @@ export class NetService {
     qb.orderBy(
       `CASE 
         WHEN net.startedAt IS NOT NULL AND net.endedAt IS NULL THEN 0 
-        WHEN net.startedAt IS NULL THEN 1 
-        ELSE 2 
+        WHEN net.startedAt IS NULL AND net.endedAt IS NULL THEN 1 
+        WHEN net.startedAt IS NOT NULL AND net.endedAt IS NOT NULL THEN 2 
+        ELSE 3 
       END`,
       'ASC',
     );

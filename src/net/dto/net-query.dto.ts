@@ -7,8 +7,8 @@ export class NetQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsIn(['all', 'active', 'pending', 'completed'])
-  status?: 'all' | 'active' | 'pending' | 'completed' = 'all';
+  @IsIn(['all', 'active', 'pending', 'completed', 'cancelled'])
+  status?: 'all' | 'active' | 'pending' | 'completed' | 'cancelled' = 'all';
 
   @IsOptional()
   @IsIn(['all', 'week', 'month', '3months'])

@@ -295,7 +295,8 @@ export class DashboardService {
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('net.branch', 'branch')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
-      .where('net.startedAt IS NULL');
+      .where('net.startedAt IS NULL')
+      .andWhere('net.endedAt IS NULL');
 
     if (branchIds !== null) {
       qb.andWhere('net.branchId IN (:...branchIds)', { branchIds });
@@ -310,6 +311,48 @@ export class DashboardService {
       id: net.id,
       name: net.name,
       operatorCallSign: net.operator?.callSign || 'Unknown',
+      branch: net.branch
+        ? {
+            id: net.branch.id,
+            name: net.branch.name,
+            isHeadquarters: net.branch.isHeadquarters,
+          }
+        : undefined,
+      branchCallSign: net.branchCallSign
+        ? {
+            id: net.branchCallSign.id,
+            callSign: net.branchCallSign.callSign,
+          }
+        : undefined,
+    }));
+  }
+
+  async getRecentCancelledNets(limit: number = 3, userId?: string): Promise<PendingNet[]> {
+    const branchIds = userId ? await this.getBranchIdsForUser(userId) : null;
+    if (branchIds !== null && branchIds.length === 0) return [];
+
+    const qb = this.netRepository
+      .createQueryBuilder('net')
+      .leftJoinAndSelect('net.operator', 'operator')
+      .leftJoinAndSelect('net.branch', 'branch')
+      .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
+      .where('net.startedAt IS NULL')
+      .andWhere('net.endedAt IS NOT NULL');
+
+    if (branchIds !== null) {
+      qb.andWhere('net.branchId IN (:...branchIds)', { branchIds });
+    }
+
+    const nets = await qb
+      .orderBy('net.endedAt', 'DESC')
+      .limit(limit)
+      .getMany();
+
+    return nets.map((net) => ({
+      id: net.id,
+      name: net.name,
+      operatorCallSign: net.operator?.callSign || 'Unknown',
+      endedAt: net.endedAt instanceof Date ? net.endedAt.toISOString() : String(net.endedAt ?? ''),
       branch: net.branch
         ? {
             id: net.branch.id,

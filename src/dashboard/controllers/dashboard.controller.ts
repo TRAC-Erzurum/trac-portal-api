@@ -65,6 +65,14 @@ export class DashboardController {
     return this.dashboardService.getRecentCompletedNets(Math.min(limit, 10), user.id);
   }
 
+  @Get('nets/cancelled')
+  async getCancelledNets(
+    @CurrentUser() user: User,
+    @Query('limit', new DefaultValuePipe(3), ParseIntPipe) limit: number,
+  ): Promise<PendingNet[]> {
+    return this.dashboardService.getRecentCancelledNets(Math.min(limit, 10), user.id);
+  }
+
   @Get('nets/personal')
   async getPersonalNetStats(
     @CurrentUser() user: User,

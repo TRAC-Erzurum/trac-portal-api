@@ -411,7 +411,16 @@ export class BranchService {
       .addGroupBy('branchCallSign.id')
       .addGroupBy('communicationChannels.id')
       .addGroupBy('channelDetails.id')
-      .orderBy('net.createdAt', 'DESC')
+      .orderBy(
+        `CASE 
+          WHEN net.startedAt IS NOT NULL AND net.endedAt IS NULL THEN 0 
+          WHEN net.startedAt IS NULL AND net.endedAt IS NULL THEN 1 
+          WHEN net.startedAt IS NOT NULL AND net.endedAt IS NOT NULL THEN 2 
+          ELSE 3 
+        END`,
+        'ASC',
+      )
+      .addOrderBy('net.createdAt', 'DESC')
       .getRawAndEntities()
       .then((result) => {
         return result.entities.map((net, index) => ({
