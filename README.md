@@ -4,7 +4,7 @@ Backend: NestJS, TypeScript, PostgreSQL, TypeORM. Ana repo (trac-portal): [TRAC-
 
 ## Gereksinimler
 
-Node 18+, yarn. Yerel geliştirme için PostgreSQL (veya ana repodaki docker-compose ile yalnızca DB).
+Node 22+, yarn. Yerel geliştirme için PostgreSQL (veya ana repodaki docker-compose ile yalnızca DB).
 
 ## Kurulum
 
