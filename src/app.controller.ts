@@ -8,7 +8,8 @@ export class AppController {
   health() {
     return {
       status: 'ok',
-      version: process.env.APP_VERSION || '-',
+      ...(process.env.APP_VERSION && { version: process.env.APP_VERSION }),
+      ...(process.env.UI_VERSION && { uiVersion: process.env.UI_VERSION }),
     };
   }
 }
