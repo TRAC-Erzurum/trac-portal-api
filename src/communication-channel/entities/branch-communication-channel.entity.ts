@@ -22,8 +22,8 @@ export class BranchCommunicationChannel extends BaseEntity {
   @Column({ nullable: true })
   repeaterMode: string;
 
-  @Column({ nullable: false })
-  name: string;
+  @Column({ nullable: true })
+  brand: string;
 
   @Column({ nullable: true, type: 'text' })
   description: string;
