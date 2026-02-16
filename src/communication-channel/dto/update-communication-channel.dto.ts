@@ -28,7 +28,7 @@ export class UpdateCommunicationChannelDto {
 
   @IsString()
   @IsOptional()
-  name?: string;
+  brand?: string;
 
   @IsString()
   @IsOptional()

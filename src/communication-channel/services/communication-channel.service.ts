@@ -31,7 +31,7 @@ export class CommunicationChannelService {
     communicationChannel.branchId = dto.branchId;
     communicationChannel.type = dto.type;
     communicationChannel.repeaterMode = dto.repeaterMode;
-    communicationChannel.name = dto.name;
+    communicationChannel.brand = dto.brand;
     communicationChannel.description = dto.description;
     communicationChannel.isActive = dto.isActive ?? true;
 
@@ -114,7 +114,8 @@ export class CommunicationChannelService {
       .createQueryBuilder('channel')
       .leftJoinAndSelect('channel.branch', 'branch')
       .leftJoinAndSelect('channel.talkgroups', 'talkgroup')
-      .orderBy('channel.name', 'ASC');
+      .orderBy('channel.type', 'ASC')
+      .addOrderBy('channel.txFrequency', 'ASC');
 
     if (options.branchId) {
       qb.andWhere('channel.branchId = :branchId', {
@@ -133,7 +134,7 @@ export class CommunicationChannelService {
     if (options.search) {
       const searchTerm = `%${options.search.toLowerCase()}%`;
       qb.andWhere(
-        '(LOWER(channel.name) LIKE :search OR LOWER(channel.description) LIKE :search OR LOWER(channel.location) LIKE :search)',
+        '(LOWER(channel.description) LIKE :search OR LOWER(channel.location) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -194,7 +195,7 @@ export class CommunicationChannelService {
     if (dto.type !== undefined) communicationChannel.type = dto.type;
     if (dto.repeaterMode !== undefined)
       communicationChannel.repeaterMode = dto.repeaterMode;
-    if (dto.name !== undefined) communicationChannel.name = dto.name;
+    if (dto.brand !== undefined) communicationChannel.brand = dto.brand;
     if (dto.description !== undefined)
       communicationChannel.description = dto.description;
     if (dto.isActive !== undefined)

@@ -49,8 +49,8 @@ export class CreateCommunicationChannelDto {
   repeaterMode?: string;
 
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  @IsOptional()
+  brand?: string;
 
   @IsString()
   @IsOptional()
