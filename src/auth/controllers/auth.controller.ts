@@ -82,10 +82,24 @@ export class AuthController {
   @AllowWithoutCallsign()
   async checkAuth(@Req() req: RequestWithUser) {
     const user = await this.userService.findOne(req.user.id);
+    const operator = user.operator
+      ? {
+          id: user.operator.id,
+          callSign: user.operator.callSign,
+          prefix: user.operator.prefix ?? undefined,
+          suffix: user.operator.suffix ?? undefined,
+          fullName: user.operator.fullName ?? undefined,
+          country: user.operator.country ?? undefined,
+          city: user.operator.city ?? undefined,
+          district: user.operator.district ?? undefined,
+          gridSquare: user.operator.gridSquare ?? undefined,
+        }
+      : undefined;
     return {
       user: {
         ...req.user,
         currentBranchId: user.currentBranchId,
+        operator,
       },
     };
   }

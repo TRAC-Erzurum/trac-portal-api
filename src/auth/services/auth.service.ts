@@ -14,9 +14,6 @@ import { RegisterDto } from '../dto/register.dto';
 import { OperatorService } from '../../operator/services/operator.service';
 import { BranchService } from '../../branch/services/branch.service';
 import { MembershipService } from '../../branch/services/membership.service';
-import { BranchRole } from 'src/branch/enums/branch-role.enum';
-import { MembershipStatus } from 'src/branch/enums/membership-status.enum';
-import { Role } from '../enums/role.enum';
 import {
   PasswordResetRequest,
   PasswordResetStatus,
@@ -69,14 +66,8 @@ export class AuthService {
     );
 
     const hqBranch = await this.branchService.findHeadquarters();
-    if (hqBranch && createdUser.role !== Role.GUEST) {
-      await this.membershipService.createMembership(
-        createdUser.id,
-        hqBranch.id,
-        BranchRole.VOLUNTEER,
-        MembershipStatus.APPROVED,
-        email,
-      );
+    if (hqBranch) {
+      await this.membershipService.join(createdUser.id, hqBranch.id);
     }
 
     const role = await this.userService.getEffectiveRole(createdUser.id);
@@ -147,6 +138,9 @@ export class AuthService {
         country: (dto.country ?? '').trim() || undefined,
         district: (dto.district ?? '').trim() || undefined,
         fullName: (dto.fullName ?? '').trim() || undefined,
+        gridSquare: (dto.gridSquare ?? '').trim()
+          ? (dto.gridSquare ?? '').trim().toUpperCase()
+          : undefined,
       },
       dto.email,
     );
@@ -164,14 +158,8 @@ export class AuthService {
     );
 
     const hqBranch = await this.branchService.findHeadquarters();
-    if (hqBranch && user.role !== Role.GUEST) {
-      await this.membershipService.createMembership(
-        user.id,
-        hqBranch.id,
-        BranchRole.VOLUNTEER,
-        MembershipStatus.APPROVED,
-        dto.email,
-      );
+    if (hqBranch) {
+      await this.membershipService.join(user.id, hqBranch.id);
     }
 
     for (const branchId of uniqueBranchIds) {

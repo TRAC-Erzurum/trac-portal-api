@@ -46,5 +46,9 @@ export class RegisterDto {
 
   @IsString()
   @IsOptional()
+  gridSquare?: string;
+
+  @IsString()
+  @IsOptional()
   captchaToken?: string;
 }
