@@ -419,6 +419,19 @@ export class OperatorService {
     if (operatorData.country !== undefined) {
       updates.country = trimOrNull(operatorData.country);
     }
+    if (operatorData.gridSquare !== undefined) {
+      updates.gridSquare = trimOrNull(operatorData.gridSquare);
+    }
+    if (operatorData.prefix !== undefined) {
+      updates.prefix = trimOrNull(operatorData.prefix);
+    }
+    if (operatorData.suffix !== undefined) {
+      updates.suffix = trimOrNull(operatorData.suffix);
+    }
+    if (operatorData.dmrId !== undefined) {
+      const raw = operatorData.dmrId as number | string | null;
+      updates.dmrId = raw === null || raw === '' ? null : Number(raw);
+    }
     Object.assign(operator, updates);
     return this.operatorRepository.save(operator);
   }

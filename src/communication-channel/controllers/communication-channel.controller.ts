@@ -12,6 +12,7 @@ import {
 import { CommunicationChannelService } from '../services/communication-channel.service';
 import { CreateCommunicationChannelDto } from '../dto/create-communication-channel.dto';
 import { UpdateCommunicationChannelDto } from '../dto/update-communication-channel.dto';
+import { Public } from '../../auth/decorators/public.decorator';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
 import { RequestWithUser } from '../../shared/types/request.types';
@@ -36,12 +37,14 @@ export class CommunicationChannelController {
   }
 
   @Get()
+  @Public()
   async findAll(
     @Req() req: RequestWithUser,
     @Query('branchId') branchId?: string,
     @Query('type') type?: CommunicationChannelType,
     @Query('search') search?: string,
     @Query('includeInactive') includeInactive?: string,
+    @Query('hasLocation') hasLocation?: string,
     @Query('pageNumber') pageNumber?: string,
     @Query('pageSize') pageSize?: string,
   ) {
@@ -50,6 +53,8 @@ export class CommunicationChannelController {
       type?: CommunicationChannelType;
       search?: string;
       includeInactive?: boolean;
+      hasLocation?: boolean;
+      minimalBranch?: boolean;
       pageNumber?: number;
       pageSize?: number;
     } = {};
@@ -66,7 +71,7 @@ export class CommunicationChannelController {
       options.search = search;
     }
 
-    if (includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN) {
+    if (includeInactive === 'true' && req.user?.role === Role.SUPER_ADMIN) {
       options.includeInactive = true;
     }
 
@@ -78,12 +83,22 @@ export class CommunicationChannelController {
       options.pageSize = parseInt(pageSize, 10);
     }
 
+    if (hasLocation === 'true') {
+      options.hasLocation = true;
+    }
+
+    if (req.user == null) {
+      options.minimalBranch = true;
+    }
+
     return this.communicationChannelService.findAll(options);
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.communicationChannelService.findOne(id);
+  @Public()
+  async findOne(@Param('id') id: string, @Req() req: RequestWithUser) {
+    const minimalBranch = req.user == null;
+    return this.communicationChannelService.findOne(id, minimalBranch);
   }
 
   @Patch(':id')

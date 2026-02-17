@@ -20,7 +20,7 @@ export class CommunicationChannelService {
     private readonly communicationChannelRepository: Repository<BranchCommunicationChannel>,
     @InjectRepository(RepeaterTalkgroup)
     private readonly talkgroupRepository: Repository<RepeaterTalkgroup>,
-  ) {}
+  ) { }
 
   async create(
     dto: CreateCommunicationChannelDto,
@@ -106,16 +106,28 @@ export class CommunicationChannelService {
       type?: CommunicationChannelType;
       search?: string;
       includeInactive?: boolean;
+      hasLocation?: boolean;
+      minimalBranch?: boolean;
       pageNumber?: number;
       pageSize?: number;
     } = {},
   ): Promise<{ data: BranchCommunicationChannel[]; total: number }> {
+    const minimalBranch = options.minimalBranch === true;
     const qb = this.communicationChannelRepository
       .createQueryBuilder('channel')
-      .leftJoinAndSelect('channel.branch', 'branch')
-      .leftJoinAndSelect('channel.talkgroups', 'talkgroup')
       .orderBy('channel.type', 'ASC')
       .addOrderBy('channel.txFrequency', 'ASC');
+
+    if (minimalBranch) {
+      qb.leftJoin('channel.branch', 'branch').addSelect([
+        'branch.id',
+        'branch.name',
+        'branch.city',
+      ]);
+    } else {
+      qb.leftJoinAndSelect('channel.branch', 'branch');
+    }
+    qb.leftJoinAndSelect('channel.talkgroups', 'talkgroup');
 
     if (options.branchId) {
       qb.andWhere('channel.branchId = :branchId', {
@@ -139,6 +151,10 @@ export class CommunicationChannelService {
       );
     }
 
+    if (options.hasLocation) {
+      qb.andWhere('channel.latitude IS NOT NULL AND channel.longitude IS NOT NULL');
+    }
+
     const total = await qb.getCount();
 
     if (options.pageNumber && options.pageSize) {
@@ -147,7 +163,26 @@ export class CommunicationChannelService {
       );
     }
 
-    const data = await qb.getMany();
+    let data: BranchCommunicationChannel[];
+    if (minimalBranch) {
+      const { entities, raw } = await qb.getRawAndEntities();
+      data = entities.map((channel, i) => {
+        const row = raw[i];
+        if (row?.branch_id != null) {
+          type ChannelWithMinimalBranch = Omit<BranchCommunicationChannel, 'branch'> & {
+            branch: { id: string; name: string; city?: string };
+          };
+          (channel as ChannelWithMinimalBranch).branch = {
+            id: row.branch_id,
+            name: row.branch_name,
+            city: row.branch_city ?? undefined,
+          };
+        }
+        return channel;
+      });
+    } else {
+      data = await qb.getMany();
+    }
 
     return { data, total };
   }
@@ -170,18 +205,45 @@ export class CommunicationChannelService {
     });
   }
 
-  async findOne(id: string): Promise<BranchCommunicationChannel> {
-    const communicationChannel = await this.communicationChannelRepository
+  async findOne(
+    id: string,
+    minimalBranch?: boolean,
+  ): Promise<BranchCommunicationChannel> {
+    const qb = this.communicationChannelRepository
       .createQueryBuilder('channel')
-      .leftJoinAndSelect('channel.branch', 'branch')
       .leftJoinAndSelect('channel.talkgroups', 'talkgroup')
-      .where('channel.id = :id', { id })
-      .getOne();
+      .where('channel.id = :id', { id });
 
+    if (minimalBranch) {
+      qb.leftJoin('channel.branch', 'branch').addSelect([
+        'branch.id',
+        'branch.name',
+        'branch.city',
+      ]);
+      const { entities, raw } = await qb.getRawAndEntities();
+      const channel = entities[0];
+      if (!channel) {
+        throw new NotFoundException('error.communicationChannelNotFound');
+      }
+      const row = raw[0];
+      if (row?.branch_id != null) {
+        type ChannelWithMinimalBranch = Omit<BranchCommunicationChannel, 'branch'> & {
+          branch: { id: string; name: string; city?: string };
+        };
+        (channel as ChannelWithMinimalBranch).branch = {
+          id: row.branch_id,
+          name: row.branch_name,
+          city: row.branch_city ?? undefined,
+        };
+      }
+      return channel;
+    }
+
+    qb.leftJoinAndSelect('channel.branch', 'branch');
+    const communicationChannel = await qb.getOne();
     if (!communicationChannel) {
       throw new NotFoundException('error.communicationChannelNotFound');
     }
-
     return communicationChannel;
   }
 
