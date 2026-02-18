@@ -20,6 +20,7 @@ export interface ActiveNet {
   attendeeCount: number;
   startedAt: Date;
   durationMinutes: number;
+  certificateTemplateId?: string | null;
   branch?: {
     id: string;
     name: string;
@@ -35,6 +36,7 @@ export interface PendingNet {
   id: string;
   name: string;
   operatorCallSign: string;
+  certificateTemplateId?: string | null;
   branch?: {
     id: string;
     name: string;
@@ -270,6 +272,7 @@ export class DashboardService {
             (now.getTime() - new Date(net.startedAt).getTime()) / 60000,
           )
         : 0,
+      certificateTemplateId: net.certificateTemplateId ?? undefined,
       branch: net.branch
         ? {
             id: net.branch.id,
@@ -311,6 +314,7 @@ export class DashboardService {
       id: net.id,
       name: net.name,
       operatorCallSign: net.operator?.callSign || 'Unknown',
+      certificateTemplateId: net.certificateTemplateId ?? undefined,
       branch: net.branch
         ? {
             id: net.branch.id,
@@ -353,6 +357,7 @@ export class DashboardService {
       name: net.name,
       operatorCallSign: net.operator?.callSign || 'Unknown',
       endedAt: net.endedAt instanceof Date ? net.endedAt.toISOString() : String(net.endedAt ?? ''),
+      certificateTemplateId: net.certificateTemplateId ?? undefined,
       branch: net.branch
         ? {
             id: net.branch.id,
@@ -410,6 +415,7 @@ export class DashboardService {
         attendeeCount: (net as any).attendeeCount || 0,
         startedAt: net.startedAt,
         durationMinutes: duration,
+        certificateTemplateId: net.certificateTemplateId ?? undefined,
         branch: net.branch
           ? {
               id: net.branch.id,

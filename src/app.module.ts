@@ -21,6 +21,7 @@ import { QthModule } from './qth/qth.module';
 import { BranchModule } from './branch/branch.module';
 import { CommunicationChannelModule } from './communication-channel/communication-channel.module';
 import { NetSchedulerModule } from './net-scheduler/net-scheduler.module';
+import { CertificateTemplateModule } from './certificate-template/certificate-template.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { NetSchedulerModule } from './net-scheduler/net-scheduler.module';
     BranchModule,
     CommunicationChannelModule,
     NetSchedulerModule,
+    CertificateTemplateModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',

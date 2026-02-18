@@ -97,6 +97,12 @@ export class OperatorController {
     );
   }
 
+  @Get(':id/certificates')
+  @Roles(Role.VOLUNTEER)
+  getOperatorCertificates(@Param('id') id: string) {
+    return this.operatorService.getCertificates(id);
+  }
+
   @Post('import')
   @Roles(Role.ADMIN)
   @UseInterceptors(FileInterceptor('file'))

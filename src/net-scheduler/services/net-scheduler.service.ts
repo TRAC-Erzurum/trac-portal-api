@@ -15,6 +15,7 @@ import { UpdateNetSchedulerDto } from '../dto/update-net-scheduler.dto';
 import { NetService } from '../../net/services/net.service';
 import { BranchService } from '../../branch/services/branch.service';
 import { OperatorService } from '../../operator/services/operator.service';
+import { CertificateTemplateService } from '../../certificate-template/certificate-template.service';
 import { UserService } from '../../user/services/user.service';
 import { MembershipService } from '../../branch/services/membership.service';
 import { Role } from '../../auth/enums/role.enum';
@@ -62,6 +63,7 @@ export class NetSchedulerService {
     private readonly operatorService: OperatorService,
     private readonly userService: UserService,
     private readonly membershipService: MembershipService,
+    private readonly certificateTemplateService: CertificateTemplateService,
   ) {}
 
   /** Resolve name template with placeholders. dateStr: YYYY-MM-DD; locale e.g. 'tr' or 'en'. */
@@ -218,6 +220,7 @@ export class NetSchedulerService {
       scheduledAt: scheduledAt.toISOString(),
       estimatedDurationMinutes: scheduler.estimatedDurationMinutes ?? 30,
       schedulerId: scheduler.id,
+      certificateTemplateId: scheduler.certificateTemplateId ?? undefined,
     };
 
     const createdBy = scheduler.createdBy ?? 'system';
@@ -277,6 +280,13 @@ export class NetSchedulerService {
       );
     }
 
+    if (dto.certificateTemplateId) {
+      await this.certificateTemplateService.findOne(
+        dto.certificateTemplateId,
+        dto.branchId,
+      );
+    }
+
     const scheduler = this.schedulerRepository.create({
       name: dto.name,
       branchId: dto.branchId,
@@ -287,6 +297,7 @@ export class NetSchedulerService {
       endDate: dto.endDate?.slice(0, 10) ?? null,
       scheduledTime: (dto.scheduledTime ?? '20:00') + ':00',
       estimatedDurationMinutes: dto.estimatedDurationMinutes ?? 30,
+      certificateTemplateId: dto.certificateTemplateId ?? null,
       isActive: true,
       createdBy,
       updatedBy: [],
@@ -358,6 +369,17 @@ export class NetSchedulerService {
     if (dto.estimatedDurationMinutes != null)
       scheduler.estimatedDurationMinutes = dto.estimatedDurationMinutes;
     if (dto.isActive !== undefined) scheduler.isActive = dto.isActive;
+    if (dto.certificateTemplateId !== undefined) {
+      if (dto.certificateTemplateId) {
+        await this.certificateTemplateService.findOne(
+          dto.certificateTemplateId,
+          scheduler.branchId,
+        );
+        scheduler.certificateTemplateId = dto.certificateTemplateId;
+      } else {
+        scheduler.certificateTemplateId = null;
+      }
+    }
 
     scheduler.updatedBy = [...(scheduler.updatedBy || []), updatedBy];
 
@@ -395,7 +417,24 @@ export class NetSchedulerService {
     return scheduler;
   }
 
-  async findAll(branchId?: string, userId?: string): Promise<NetScheduler[]> {
+  async findAll(
+    opts: {
+      branchId?: string;
+      userId?: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<
+    | NetScheduler[]
+    | { data: NetScheduler[]; total: number; limit: number; offset: number }
+  > {
+    const { branchId, userId, search, limit, offset } = opts;
+    const usePagination =
+      limit !== undefined || offset !== undefined;
+    const limitNum = Math.min(limit ?? 50, 100);
+    const offsetNum = offset ?? 0;
+
     const qb = this.schedulerRepository
       .createQueryBuilder('s')
       .leftJoinAndSelect('s.branch', 'branch')
@@ -416,6 +455,14 @@ export class NetSchedulerService {
       }
     }
 
+    if (search?.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(s.name) LIKE :search OR LOWER(branch.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
     const list = await qb.getMany();
     const today = getTodayGMT3();
 
@@ -430,7 +477,7 @@ export class NetSchedulerService {
       rows.map((r) => r.schedulerId).filter(Boolean),
     );
 
-    return list.filter((s) => {
+    const filtered = list.filter((s) => {
       if (s.endDate != null && s.endDate < today) return false;
       if (
         s.recurrence === NetRecurrence.ONE_TIME &&
@@ -439,6 +486,13 @@ export class NetSchedulerService {
         return false;
       return true;
     });
+
+    if (usePagination) {
+      const total = filtered.length;
+      const data = filtered.slice(offsetNum, offsetNum + limitNum);
+      return { data, total, limit: limitNum, offset: offsetNum };
+    }
+    return filtered;
   }
 
   async delete(id: string): Promise<void> {

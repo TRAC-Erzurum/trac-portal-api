@@ -10,6 +10,7 @@ import { NetModule } from '../net/net.module';
 import { BranchModule } from '../branch/branch.module';
 import { OperatorModule } from '../operator/operator.module';
 import { UserModule } from '../user/user.module';
+import { CertificateTemplateModule } from '../certificate-template/certificate-template.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UserModule } from '../user/user.module';
     BranchModule,
     OperatorModule,
     UserModule,
+    CertificateTemplateModule,
   ],
   controllers: [NetSchedulerController],
   providers: [NetSchedulerService, NetSchedulerCronService],

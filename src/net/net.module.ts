@@ -7,6 +7,7 @@ import { entities } from './entities';
 import { ManageNetGuard } from './guards/manage-net.guard';
 import { UserModule } from '../user/user.module';
 import { BranchModule } from '../branch/branch.module';
+import { CertificateTemplateModule } from '../certificate-template/certificate-template.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { BranchModule } from '../branch/branch.module';
     OperatorModule,
     UserModule,
     forwardRef(() => BranchModule),
+    CertificateTemplateModule,
   ],
   controllers: controllers,
   providers: [...services, ManageNetGuard],

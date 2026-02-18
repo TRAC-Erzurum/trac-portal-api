@@ -35,8 +35,22 @@ export class NetSchedulerController {
 
   @Get()
   @Roles(Role.MEMBER)
-  findAll(@Query('branchId') branchId: string | undefined, @Req() req: RequestWithUser) {
-    return this.netSchedulerService.findAll(branchId, req.user.id);
+  findAll(
+    @Query('branchId') branchId: string | undefined,
+    @Query('search') search: string | undefined,
+    @Query('limit') limitStr: string | undefined,
+    @Query('offset') offsetStr: string | undefined,
+    @Req() req: RequestWithUser,
+  ) {
+    const limit = limitStr != null ? parseInt(limitStr, 10) : undefined;
+    const offset = offsetStr != null ? parseInt(offsetStr, 10) : undefined;
+    return this.netSchedulerService.findAll({
+      branchId,
+      userId: req.user.id,
+      search: search?.trim() || undefined,
+      limit: Number.isFinite(limit) ? limit : undefined,
+      offset: Number.isFinite(offset) ? offset : undefined,
+    });
   }
 
   @Get(':id')
