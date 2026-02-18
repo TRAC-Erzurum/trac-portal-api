@@ -1,6 +1,7 @@
 import { Module, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
@@ -19,6 +20,7 @@ import { join } from 'path';
 import { QthModule } from './qth/qth.module';
 import { BranchModule } from './branch/branch.module';
 import { CommunicationChannelModule } from './communication-channel/communication-channel.module';
+import { NetSchedulerModule } from './net-scheduler/net-scheduler.module';
 
 @Module({
   imports: [
@@ -27,6 +29,7 @@ import { CommunicationChannelModule } from './communication-channel/communicatio
       isGlobal: true,
     }),
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
@@ -46,6 +49,7 @@ import { CommunicationChannelModule } from './communication-channel/communicatio
     QthModule,
     BranchModule,
     CommunicationChannelModule,
+    NetSchedulerModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',

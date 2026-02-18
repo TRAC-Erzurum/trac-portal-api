@@ -6,6 +6,7 @@ import { controllers } from './controllers';
 import { User } from '../user/entities/user.entity';
 import { Net } from '../net/entities/net.entity';
 import { Operator } from '../operator/entities/operator.entity';
+import { NetScheduler } from '../net-scheduler/entities/net-scheduler.entity';
 import { BranchAdminGuard } from './guards/branch-admin.guard';
 import { BranchMemberGuard } from './guards/branch-member.guard';
 import { UserModule } from '../user/user.module';
@@ -13,7 +14,7 @@ import { OperatorModule } from '../operator/operator.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([...entities, User, Net, Operator]),
+    TypeOrmModule.forFeature([...entities, User, Net, Operator, NetScheduler]),
     forwardRef(() => UserModule),
     OperatorModule,
   ],

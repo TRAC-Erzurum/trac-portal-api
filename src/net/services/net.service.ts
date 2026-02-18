@@ -119,6 +119,15 @@ export class NetService {
     net.isActive = true;
     net.createdBy = createdBy;
     net.updatedBy = [];
+    if (createNetDto.scheduledAt != null) {
+      net.scheduledAt = new Date(createNetDto.scheduledAt);
+    }
+    if (createNetDto.estimatedDurationMinutes != null) {
+      net.estimatedDurationMinutes = createNetDto.estimatedDurationMinutes;
+    }
+    if (createNetDto.schedulerId != null) {
+      net.schedulerId = createNetDto.schedulerId;
+    }
 
     try {
       const saved = await this.netRepository.save(net);
@@ -143,13 +152,17 @@ export class NetService {
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
         new ActivityEvent(
-          ActivityType.NET_CREATED,
+          createNetDto.schedulerId
+            ? ActivityType.NET_CREATED_FROM_SCHEDULER
+            : ActivityType.NET_CREATED,
           EntityType.NET,
           saved.id,
           null,
           actorCallSign,
           null,
-          { netName: saved.name },
+          createNetDto.schedulerId
+            ? { netName: saved.name, schedulerId: createNetDto.schedulerId }
+            : { netName: saved.name },
         ),
       );
 
@@ -159,6 +172,100 @@ export class NetService {
         throw new ConflictException('error.alreadyExists');
       }
       console.error('Net save error:', error);
+      throw new InternalServerErrorException('error.internal');
+    }
+  }
+
+  /**
+   * Internal: create a net from a scheduler (cron or scheduler create/update).
+   * Skips user/branch membership check. Caller must pass valid scheduler-backed DTO.
+   */
+  async createFromScheduler(
+    createNetDto: CreateNetDto,
+    createdBy: string,
+    actorCallSign: string,
+  ) {
+    const operator = await this.operatorService.findOne(createNetDto.operatorId);
+    if (!operator) {
+      throw new NotFoundException('Operator not found');
+    }
+    const branch = await this.branchService.findOne(createNetDto.branchId);
+    if (!branch.isActive) {
+      throw new BadRequestException('error.branchInactive');
+    }
+    if (
+      !createNetDto.communicationChannels ||
+      createNetDto.communicationChannels.length === 0
+    ) {
+      throw new BadRequestException(
+        'error.atLeastOneCommunicationChannelRequired',
+      );
+    }
+    const hasChannel = createNetDto.communicationChannels.some(
+      (c) => c.communicationChannelId,
+    );
+    const hasSimplex = createNetDto.communicationChannels.some(
+      (c) => c.isSimplexAdHoc && c.simplexFrequency,
+    );
+    if (!hasChannel && !hasSimplex) {
+      throw new BadRequestException(
+        'error.atLeastOneCommunicationChannelRequired',
+      );
+    }
+
+    const net = new Net();
+    net.name = createNetDto.name;
+    net.operator = operator;
+    net.branchId = createNetDto.branchId;
+    net.branchCallSignId = createNetDto.branchCallSignId || null;
+    net.isActive = true;
+    net.createdBy = createdBy;
+    net.updatedBy = [];
+    if (createNetDto.scheduledAt != null) {
+      net.scheduledAt = new Date(createNetDto.scheduledAt);
+    }
+    if (createNetDto.estimatedDurationMinutes != null) {
+      net.estimatedDurationMinutes = createNetDto.estimatedDurationMinutes;
+    }
+    if (createNetDto.schedulerId != null) {
+      net.schedulerId = createNetDto.schedulerId;
+    }
+
+    try {
+      const saved = await this.netRepository.save(net);
+      const channelRecords = createNetDto.communicationChannels.map((ch) => {
+        const nc = new NetCommunicationChannel();
+        nc.net = saved;
+        nc.communicationChannelId = ch.communicationChannelId ?? null;
+        nc.isSimplexAdHoc = ch.isSimplexAdHoc ?? false;
+        nc.simplexFrequency = ch.simplexFrequency ?? null;
+        nc.createdBy = createdBy;
+        nc.updatedBy = [];
+        return nc;
+      });
+      await this.netCommunicationChannelRepository.save(channelRecords);
+
+      this.eventEmitter.emit(
+        ACTIVITY_EVENT,
+        new ActivityEvent(
+          ActivityType.NET_CREATED_FROM_SCHEDULER,
+          EntityType.NET,
+          saved.id,
+          null,
+          actorCallSign,
+          null,
+          {
+            netName: saved.name,
+            schedulerId: createNetDto.schedulerId ?? undefined,
+          },
+        ),
+      );
+
+      return this.findOne(saved.id);
+    } catch (error) {
+      if (error.code === '23505') {
+        throw new ConflictException('error.alreadyExists');
+      }
       throw new InternalServerErrorException('error.internal');
     }
   }
@@ -259,6 +366,14 @@ export class NetService {
     if (updateNetDto.branchCallSignId !== undefined) {
       net.branchCallSignId = updateNetDto.branchCallSignId;
     }
+    if (updateNetDto.scheduledAt !== undefined) {
+      net.scheduledAt = updateNetDto.scheduledAt
+        ? new Date(updateNetDto.scheduledAt)
+        : null;
+    }
+    if (updateNetDto.estimatedDurationMinutes !== undefined) {
+      net.estimatedDurationMinutes = updateNetDto.estimatedDurationMinutes;
+    }
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
 
     const saved = await this.netRepository.save(net);
@@ -320,7 +435,15 @@ export class NetService {
 
   async endNet(id: string, updatedBy: string, actorCallSign: string) {
     const net = await this.findOne(id);
-    net.endedAt = new Date();
+    const now = new Date();
+    if (net.startedAt) {
+      const segmentMinutes = Math.round(
+        (now.getTime() - new Date(net.startedAt).getTime()) / 60000,
+      );
+      net.totalDurationMinutes =
+        (net.totalDurationMinutes ?? 0) + segmentMinutes;
+    }
+    net.endedAt = now;
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
     const saved = await this.netRepository.save(net);
 
@@ -467,7 +590,7 @@ export class NetService {
       END`,
       'ASC',
     );
-    qb.addOrderBy('net.createdAt', 'DESC');
+    qb.addOrderBy('COALESCE(net.scheduledAt, net.createdAt)', 'DESC');
 
     const countQb = qb.clone();
     const total = await countQb.getCount();
@@ -494,6 +617,43 @@ export class NetService {
     }
 
     return netsData;
+  }
+
+  async nameExists(name: string): Promise<boolean> {
+    const count = await this.netRepository.count({ where: { name } });
+    return count > 0;
+  }
+
+  /** Cancel pending nets for a given date (GMT+3). dateStr: YYYY-MM-DD. Used by cron. */
+  async cancelPendingNetsForDate(dateStr: string): Promise<number> {
+    const startOfDay = new Date(`${dateStr}T00:00:00+03:00`);
+    const endOfDay = new Date(`${dateStr}T23:59:59.999+03:00`);
+    const result = await this.netRepository
+      .createQueryBuilder()
+      .update(Net)
+      .set({ endedAt: endOfDay })
+      .where('startedAt IS NULL')
+      .andWhere('endedAt IS NULL')
+      .andWhere('scheduledAt >= :startOfDay', { startOfDay })
+      .andWhere('scheduledAt <= :endOfDay', { endOfDay })
+      .execute();
+    return result.affected ?? 0;
+  }
+
+  /** Returns true if a net exists for this scheduler on the given date (GMT+3). dateStr: YYYY-MM-DD. */
+  async existsBySchedulerIdAndDate(
+    schedulerId: string,
+    dateStr: string,
+  ): Promise<boolean> {
+    const startOfDay = new Date(`${dateStr}T00:00:00+03:00`);
+    const endOfDay = new Date(`${dateStr}T23:59:59.999+03:00`);
+    const count = await this.netRepository
+      .createQueryBuilder('net')
+      .where('net.schedulerId = :schedulerId', { schedulerId })
+      .andWhere('net.scheduledAt >= :startOfDay', { startOfDay })
+      .andWhere('net.scheduledAt <= :endOfDay', { endOfDay })
+      .getCount();
+    return count > 0;
   }
 
   async restartNet(id: string, updatedBy: string) {

@@ -30,6 +30,7 @@ import {
 import { UserService } from '../../user/services/user.service';
 import { OperatorService } from '../../operator/services/operator.service';
 import { Operator } from '../../operator/entities/operator.entity';
+import { NetScheduler } from '../../net-scheduler/entities/net-scheduler.entity';
 
 @Injectable()
 export class MembershipService {
@@ -44,6 +45,8 @@ export class MembershipService {
     private readonly netRepository: Repository<Net>,
     @InjectRepository(Operator)
     private readonly operatorRepository: Repository<Operator>,
+    @InjectRepository(NetScheduler)
+    private readonly netSchedulerRepository: Repository<NetScheduler>,
     private readonly eventEmitter: EventEmitter2,
     @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
@@ -364,6 +367,18 @@ export class MembershipService {
 
     if (!membership) {
       throw new NotFoundException('error.membershipNotFound');
+    }
+
+    if (membership.user?.operator) {
+      const usedInScheduler = await this.netSchedulerRepository.count({
+        where: {
+          operatorId: membership.user.operator.id,
+          branchId,
+        },
+      });
+      if (usedInScheduler > 0) {
+        throw new BadRequestException('error.operatorUsedInScheduler');
+      }
     }
 
     const targetCallSign = membership.user?.operator?.callSign ?? null;
