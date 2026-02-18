@@ -17,6 +17,18 @@ export class Net extends BaseEntity {
   @Column({ nullable: true })
   endedAt?: Date;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  scheduledAt?: Date | null;
+
+  @Column({ type: 'int', nullable: true, default: 30 })
+  estimatedDurationMinutes?: number | null;
+
+  @Column({ type: 'int', default: 0 })
+  totalDurationMinutes: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  schedulerId?: string | null;
+
   @Column({ nullable: false })
   branchId: string;
 

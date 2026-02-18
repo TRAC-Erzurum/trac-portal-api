@@ -5,7 +5,6 @@ import {
   Get,
   Param,
   Patch,
-  Post,
   Put,
   Query,
   Req,
@@ -14,7 +13,6 @@ import { NetService } from '../services/net.service';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
 import { ManageNet } from '../decorators/manage-net.decorator';
-import { CreateNetDto } from '../dto/create-net.dto';
 import { UpdateNetDto } from '../dto/update-net.dto';
 import { StartNetDto } from '../dto/start-net.dto';
 import { NetQueryDto } from '../dto/net-query.dto';
@@ -23,17 +21,6 @@ import { RequestWithUser } from '../../shared/types/request.types';
 @Controller('net')
 export class NetController {
   constructor(private readonly netService: NetService) {}
-
-  @Post()
-  @Roles(Role.MEMBER)
-  create(@Body() createNetDto: CreateNetDto, @Req() req: RequestWithUser) {
-    return this.netService.create(
-      createNetDto,
-      req.user.email,
-      req.user.callSign,
-      req.user.id,
-    );
-  }
 
   @Put(':id')
   @Roles(Role.MEMBER)

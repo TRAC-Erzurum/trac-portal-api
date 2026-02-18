@@ -11,6 +11,7 @@ import { Attendee } from '../../net/entities/attendee.entity';
 import { Net } from '../../net/entities/net.entity';
 import { Branch } from '../../branch/entities/branch.entity';
 import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
+import { NetScheduler } from '../../net-scheduler/entities/net-scheduler.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 import { chunk } from 'lodash';
 import { toTitleCase } from '../../shared/utils/string.utils';
@@ -62,6 +63,8 @@ export class OperatorService {
     private readonly branchRepository: Repository<Branch>,
     @InjectRepository(UserBranchMembership)
     private readonly membershipRepository: Repository<UserBranchMembership>,
+    @InjectRepository(NetScheduler)
+    private readonly netSchedulerRepository: Repository<NetScheduler>,
   ) {}
 
   // ── Relevance helpers ──────────────────────────────────────────────
@@ -574,6 +577,13 @@ export class OperatorService {
     });
     if (!operator) {
       throw new NotFoundException(`${id} ile eşleşen bir kayıt bulunamadı`);
+    }
+
+    const usedInScheduler = await this.netSchedulerRepository.count({
+      where: { operatorId: id },
+    });
+    if (usedInScheduler > 0) {
+      throw new BadRequestException('error.operatorUsedInScheduler');
     }
 
     if (operator.user) {

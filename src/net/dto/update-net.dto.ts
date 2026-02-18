@@ -1,10 +1,13 @@
 import {
   IsDate,
+  IsInt,
   IsOptional,
   IsString,
   IsNotEmpty,
   IsUUID,
   IsArray,
+  Max,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -36,4 +39,15 @@ export class UpdateNetDto {
   @IsDate()
   @IsOptional()
   endedAt?: Date;
+
+  /** ISO timestamp; display-only indicator for when the net was scheduled. */
+  @IsOptional()
+  @IsString()
+  scheduledAt?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(480)
+  estimatedDurationMinutes?: number | null;
 }

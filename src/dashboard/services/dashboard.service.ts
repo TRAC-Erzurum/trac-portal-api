@@ -393,13 +393,15 @@ export class DashboardService {
 
     return nets.map((net) => {
       const duration =
-        net.startedAt && net.endedAt
-          ? Math.floor(
-              (new Date(net.endedAt).getTime() -
-                new Date(net.startedAt).getTime()) /
-                60000,
-            )
-          : 0;
+        net.totalDurationMinutes != null && net.totalDurationMinutes > 0
+          ? net.totalDurationMinutes
+          : net.startedAt && net.endedAt
+            ? Math.floor(
+                (new Date(net.endedAt).getTime() -
+                  new Date(net.startedAt).getTime()) /
+                  60000,
+              )
+            : 0;
 
       return {
         id: net.id,
@@ -1519,7 +1521,7 @@ export class DashboardService {
   ): Promise<NetComparePreviousResponse | null> {
     const current = await this.netRepository.findOne({
       where: { id: netId },
-      select: ['id', 'branchId', 'startedAt', 'endedAt'],
+      select: ['id', 'branchId', 'startedAt', 'endedAt', 'totalDurationMinutes'],
     });
     if (
       !current?.branchId ||
@@ -1553,14 +1555,22 @@ export class DashboardService {
       }),
     ]);
 
-    const currentDurationMs =
-      new Date(current.endedAt).getTime() -
-      new Date(current.startedAt).getTime();
-    const previousDurationMs =
-      new Date(previous.endedAt).getTime() -
-      new Date(previous.startedAt).getTime();
-    const currentDurationMinutes = Math.floor(currentDurationMs / 60000);
-    const previousDurationMinutes = Math.floor(previousDurationMs / 60000);
+    const currentDurationMinutes =
+      current.totalDurationMinutes != null && current.totalDurationMinutes > 0
+        ? current.totalDurationMinutes
+        : Math.floor(
+            (new Date(current.endedAt).getTime() -
+              new Date(current.startedAt).getTime()) /
+              60000,
+          );
+    const previousDurationMinutes =
+      previous.totalDurationMinutes != null && previous.totalDurationMinutes > 0
+        ? previous.totalDurationMinutes
+        : Math.floor(
+            (new Date(previous.endedAt).getTime() -
+              new Date(previous.startedAt).getTime()) /
+              60000,
+          );
 
     return {
       previousAttendeeCount: previousCount,
