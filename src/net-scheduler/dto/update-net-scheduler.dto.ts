@@ -59,4 +59,8 @@ export class UpdateNetSchedulerDto {
 
   @IsOptional()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  certificateTemplateId?: string | null;
 }

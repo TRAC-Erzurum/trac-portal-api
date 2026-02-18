@@ -22,7 +22,7 @@ import { BranchAdminGuard } from '../guards/branch-admin.guard';
 
 @Controller('branches')
 export class BranchController {
-  constructor(private readonly branchService: BranchService) {}
+  constructor(private readonly branchService: BranchService) { }
 
   @Post()
   @Roles(Role.SUPER_ADMIN)
@@ -125,7 +125,20 @@ export class BranchController {
   }
 
   @Get(':id/nets')
-  async getBranchNets(@Param('id') id: string) {
-    return this.branchService.getBranchNets(id);
+  async getBranchNets(
+    @Param('id') id: string,
+    @Query('search') search: string | undefined,
+    @Query('status') status: string | undefined,
+    @Query('limit') limitStr: string | undefined,
+    @Query('offset') offsetStr: string | undefined,
+  ) {
+    const limit = limitStr != null ? parseInt(limitStr, 10) : undefined;
+    const offset = offsetStr != null ? parseInt(offsetStr, 10) : undefined;
+    return this.branchService.getBranchNets(id, {
+      search: search?.trim() || undefined,
+      status: status === 'active' || status === 'pending' || status === 'completed' || status === 'cancelled' ? status : undefined,
+      limit: Number.isFinite(limit) ? Math.min(limit, 100) : undefined,
+      offset: Number.isFinite(offset) ? offset : undefined,
+    });
   }
 }

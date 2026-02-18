@@ -47,4 +47,8 @@ export class CreateNetDto {
   @IsOptional()
   @IsUUID()
   schedulerId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  certificateTemplateId?: string | null;
 }

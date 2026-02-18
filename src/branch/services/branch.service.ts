@@ -387,12 +387,28 @@ export class BranchService {
     });
   }
 
-  async getBranchNets(branchId: string): Promise<any[]> {
+  async getBranchNets(
+    branchId: string,
+    opts: {
+      search?: string;
+      status?: 'active' | 'pending' | 'completed' | 'cancelled';
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<
+    | any[]
+    | { data: any[]; total: number; limit: number; offset: number }
+  > {
+    const { search, status, limit, offset } = opts;
+    const usePagination = limit !== undefined || offset !== undefined;
+    const limitNum = Math.min(limit ?? 50, 100);
+    const offsetNum = offset ?? 0;
+
     // Import Net repository dynamically to avoid circular dependency
     const { Net } = await import('../../net/entities/net.entity');
     const netRepository = this.branchRepository.manager.getRepository(Net);
 
-    return netRepository
+    const qb = netRepository
       .createQueryBuilder('net')
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('operator.user', 'user')
@@ -420,13 +436,66 @@ export class BranchService {
         END`,
         'ASC',
       )
-      .addOrderBy('net.createdAt', 'DESC')
-      .getRawAndEntities()
-      .then((result) => {
-        return result.entities.map((net, index) => ({
-          ...net,
-          attendeeCount: Number(result.raw[index]?.attendeeCount || 0),
-        }));
-      });
+      .addOrderBy('net.createdAt', 'DESC');
+
+    if (search?.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(net.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+
+    if (status) {
+      if (status === 'active') {
+        qb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NULL');
+      } else if (status === 'pending') {
+        qb.andWhere('net.startedAt IS NULL AND net.endedAt IS NULL');
+      } else if (status === 'completed') {
+        qb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NOT NULL');
+      } else if (status === 'cancelled') {
+        qb.andWhere('net.startedAt IS NULL AND net.endedAt IS NOT NULL');
+      }
+    }
+
+    // Count without groupBy (TypeORM getCount() doesn't work correctly with groupBy)
+    const countQb = netRepository
+      .createQueryBuilder('net')
+      .leftJoin('net.operator', 'operator')
+      .where('net.branchId = :branchId', { branchId });
+    if (search?.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      countQb.andWhere(
+        '(LOWER(net.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
+        { search: searchTerm },
+      );
+    }
+    if (status) {
+      if (status === 'active') {
+        countQb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NULL');
+      } else if (status === 'pending') {
+        countQb.andWhere('net.startedAt IS NULL AND net.endedAt IS NULL');
+      } else if (status === 'completed') {
+        countQb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NOT NULL');
+      } else if (status === 'cancelled') {
+        countQb.andWhere('net.startedAt IS NULL AND net.endedAt IS NOT NULL');
+      }
+    }
+    const total = await countQb.getCount();
+
+    if (usePagination) {
+      qb.limit(limitNum).offset(offsetNum);
+    }
+
+    const result = await qb.getRawAndEntities();
+    const data = result.entities.map((net, index) => ({
+      ...net,
+      attendeeCount: Number(result.raw[index]?.attendeeCount || 0),
+    }));
+
+    if (usePagination) {
+      return { data, total, limit: limitNum, offset: offsetNum };
+    }
+    return data;
   }
 }

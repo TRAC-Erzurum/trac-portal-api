@@ -27,6 +27,7 @@ import { BranchService } from '../../branch/services/branch.service';
 import { MembershipService } from '../../branch/services/membership.service';
 import { UserService } from '../../user/services/user.service';
 import { Role } from '../../auth/enums/role.enum';
+import { CertificateTemplateService } from '../../certificate-template/certificate-template.service';
 
 @Injectable()
 export class NetService {
@@ -42,6 +43,7 @@ export class NetService {
     private readonly branchService: BranchService,
     private readonly userService: UserService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly certificateTemplateService: CertificateTemplateService,
   ) {}
 
   async create(
@@ -127,6 +129,17 @@ export class NetService {
     }
     if (createNetDto.schedulerId != null) {
       net.schedulerId = createNetDto.schedulerId;
+    }
+    if (createNetDto.certificateTemplateId !== undefined) {
+      if (createNetDto.certificateTemplateId) {
+        await this.certificateTemplateService.findOne(
+          createNetDto.certificateTemplateId,
+          createNetDto.branchId,
+        );
+        net.certificateTemplateId = createNetDto.certificateTemplateId;
+      } else {
+        net.certificateTemplateId = null;
+      }
     }
 
     try {
@@ -229,6 +242,17 @@ export class NetService {
     }
     if (createNetDto.schedulerId != null) {
       net.schedulerId = createNetDto.schedulerId;
+    }
+    if (createNetDto.certificateTemplateId !== undefined) {
+      if (createNetDto.certificateTemplateId) {
+        await this.certificateTemplateService.findOne(
+          createNetDto.certificateTemplateId,
+          createNetDto.branchId,
+        );
+        net.certificateTemplateId = createNetDto.certificateTemplateId;
+      } else {
+        net.certificateTemplateId = null;
+      }
     }
 
     try {
@@ -374,6 +398,17 @@ export class NetService {
     if (updateNetDto.estimatedDurationMinutes !== undefined) {
       net.estimatedDurationMinutes = updateNetDto.estimatedDurationMinutes;
     }
+    if (updateNetDto.certificateTemplateId !== undefined) {
+      if (updateNetDto.certificateTemplateId) {
+        await this.certificateTemplateService.findOne(
+          updateNetDto.certificateTemplateId,
+          net.branchId,
+        );
+        net.certificateTemplateId = updateNetDto.certificateTemplateId;
+      } else {
+        net.certificateTemplateId = null;
+      }
+    }
     net.updatedBy = [...(net.updatedBy || []), updatedBy];
 
     const saved = await this.netRepository.save(net);
@@ -470,6 +505,7 @@ export class NetService {
       .leftJoinAndSelect('operator.user', 'user')
       .leftJoinAndSelect('net.branch', 'branch')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
+      .leftJoinAndSelect('net.certificateTemplate', 'certificateTemplate')
       .leftJoinAndSelect('net.communicationChannels', 'communicationChannels')
       .leftJoinAndSelect(
         'communicationChannels.communicationChannel',

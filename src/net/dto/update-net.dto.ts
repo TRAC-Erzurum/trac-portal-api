@@ -50,4 +50,8 @@ export class UpdateNetDto {
   @Min(1)
   @Max(480)
   estimatedDurationMinutes?: number | null;
+
+  @IsOptional()
+  @IsUUID()
+  certificateTemplateId?: string | null;
 }

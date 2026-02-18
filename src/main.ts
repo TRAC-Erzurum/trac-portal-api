@@ -32,6 +32,10 @@ async function bootstrap() {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
+  const certTemplatesDir = path.join(process.cwd(), 'uploads', 'certificate-templates');
+  if (!fs.existsSync(certTemplatesDir)) {
+    fs.mkdirSync(certTemplatesDir, { recursive: true });
+  }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);

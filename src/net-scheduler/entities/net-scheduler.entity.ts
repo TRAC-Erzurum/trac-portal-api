@@ -41,6 +41,9 @@ export class NetScheduler extends BaseEntity {
   @Column({ type: 'int', default: 30 })
   estimatedDurationMinutes: number;
 
+  @Column({ type: 'uuid', nullable: true })
+  certificateTemplateId: string | null;
+
   @Column({ default: true })
   isActive: boolean;
 

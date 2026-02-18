@@ -71,4 +71,8 @@ export class CreateNetSchedulerDto {
   @Min(1)
   @Max(480)
   estimatedDurationMinutes?: number;
+
+  @IsOptional()
+  @IsUUID()
+  certificateTemplateId?: string | null;
 }

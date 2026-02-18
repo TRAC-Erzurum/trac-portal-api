@@ -715,6 +715,44 @@ export class OperatorService {
     return Array.from(uniqueNets.values()).slice(offset, offset + limit);
   }
 
+  async getCertificates(operatorId: string): Promise<
+    {
+      netId: string;
+      netName: string;
+      netDate: string;
+      branchName: string;
+      certificateTemplateId: string;
+      attendeeId: string;
+    }[]
+  > {
+    const rows = await this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .innerJoin('attendee.net', 'net')
+      .innerJoin('net.branch', 'branch')
+      .where('attendee.operatorId = :operatorId', { operatorId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .andWhere('net.certificateTemplateId IS NOT NULL')
+      .select([
+        'attendee.id AS "attendeeId"',
+        'net.id AS "netId"',
+        'net.name AS "netName"',
+        'net.endedAt AS "netDate"',
+        'branch.name AS "branchName"',
+        'net.certificateTemplateId AS "certificateTemplateId"',
+      ])
+      .orderBy('net.endedAt', 'DESC')
+      .getRawMany();
+
+    return rows.map((r) => ({
+      attendeeId: r.attendeeId,
+      netId: r.netId,
+      netName: r.netName ?? '',
+      netDate: r.netDate ? new Date(r.netDate).toISOString() : '',
+      branchName: r.branchName ?? '',
+      certificateTemplateId: r.certificateTemplateId ?? '',
+    }));
+  }
+
   private async calculateStreak(operatorId: string): Promise<number> {
     const attendances = await this.attendeeRepository
       .createQueryBuilder('attendee')
