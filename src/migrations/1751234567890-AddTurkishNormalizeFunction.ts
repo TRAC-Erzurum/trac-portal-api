@@ -10,28 +10,11 @@ export class AddTurkishNormalizeFunction1751234567890 implements MigrationInterf
       RETURNS TEXT AS $$
       BEGIN
         RETURN LOWER(
-          REPLACE(
-            REPLACE(
-              REPLACE(
-                REPLACE(
-                  REPLACE(
-                    REPLACE(
-                      REPLACE(
-                        REPLACE(
-                          REPLACE(
-                            REPLACE(text, 'Ş', 's'),
-                          'ş', 's'),
-                        'Ç', 'c'),
-                      'ç', 'c'),
-                    'Ğ', 'g'),
-                  'ğ', 'g'),
-                'Ü', 'u'),
-              'ü', 'u'),
-            'Ö', 'o'),
-          'ö', 'o'),
-        'İ', 'i'),
-      'ı', 'i'),
-      'I', 'i'
+          translate(
+            text,
+            'ŞşÇçĞğÜüÖöİıI',
+            'ssccgguuooiii'
+          )
         );
       END;
       $$ LANGUAGE plpgsql IMMUTABLE STRICT;
