@@ -34,6 +34,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorResponse,
     };
 
+    // Don't log authentication/authorization errors (4xx status codes related to auth)
     if (status >= 500) {
       this.logger.error(
         `HTTP Exception: ${status} - ${request.method} ${request.url}`,
@@ -44,7 +45,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
           body: request.body,
         },
       );
-    } else {
+    } else if (status !== 401 && status !== 403) {
+      // Only log non-auth 4xx errors
       this.logger.debug(
         `HTTP ${status} - ${request.method} ${request.url}`,
         logData,

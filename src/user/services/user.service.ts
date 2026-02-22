@@ -14,6 +14,7 @@ import { Role, GlobalRole } from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
 import { OperatorService } from '../../operator/services/operator.service';
 import { UpdateUserDto } from '../dto/update-user.dto';
+import { normalizeTurkishText } from '../../shared/utils/turkish-search.util';
 import * as crypto from 'crypto';
 import { SetPasswordDto } from '../dto/set-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
@@ -206,10 +207,11 @@ export class UserService {
   }
 
   async validate(identifier: string, password: string): Promise<User> {
+    const normalizedIdentifier = normalizeTurkishText(identifier);
     const user = await this.userRepository.findOne({
       where: [
-        { email: ILike(identifier) },
-        { operator: { callSign: ILike(identifier) } },
+        { email: ILike(normalizedIdentifier) },
+        { operator: { callSign: ILike(normalizedIdentifier) } },
       ],
     });
 
@@ -229,7 +231,6 @@ export class UserService {
       .digest('hex');
 
     if (hashedPassword !== user.password) {
-      Logger.error(`Invalid password for identifier: ${identifier}`);
       throw new UnauthorizedException('error.invalidCredentials');
     }
 

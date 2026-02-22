@@ -132,6 +132,7 @@ export class MembershipController {
       branchId,
       req.user.id,
       req.user.callSign || '',
+      req.user.role,
     );
     return { success: true };
   }

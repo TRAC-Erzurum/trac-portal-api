@@ -28,6 +28,7 @@ import { MembershipService } from '../../branch/services/membership.service';
 import { UserService } from '../../user/services/user.service';
 import { Role } from '../../auth/enums/role.enum';
 import { CertificateTemplateService } from '../../certificate-template/certificate-template.service';
+import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
 
 @Injectable()
 export class NetService {
@@ -569,7 +570,7 @@ export class NetService {
       .addGroupBy('branchCallSign.id');
 
     if (search) {
-      const searchTerm = `%${search.toLowerCase()}%`;
+      const searchTerm = normalizeTurkishSearchTerm(search);
       qb.andWhere(
         '(LOWER(net.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
         { search: searchTerm },

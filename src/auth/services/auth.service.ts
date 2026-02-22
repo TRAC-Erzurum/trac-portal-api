@@ -193,12 +193,13 @@ export class AuthService {
       this.logger.warn(
         `Password reset requested for unknown call sign: ${normalizedCallSign}`,
       );
+      return;
     }
 
     const request = this.passwordResetRequestRepository.create({
       callSign: normalizedCallSign,
-      operator: operator || null,
-      operatorId: operator?.id || null,
+      operator,
+      operatorId: operator.id,
       status: PasswordResetStatus.PENDING,
     });
 

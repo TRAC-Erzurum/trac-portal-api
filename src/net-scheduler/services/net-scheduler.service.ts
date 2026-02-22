@@ -21,6 +21,7 @@ import { MembershipService } from '../../branch/services/membership.service';
 import { Role } from '../../auth/enums/role.enum';
 import { CreateNetDto } from '../../net/dto/create-net.dto';
 import { NetCommunicationChannelDto } from '../../net/dto/net-communication-channel.dto';
+import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
 
 /** Today in GMT+3 (Europe/Istanbul) as YYYY-MM-DD. Use for "today" in create/update/list/upcoming. */
 function getTodayGMT3(): string {
@@ -456,7 +457,7 @@ export class NetSchedulerService {
     }
 
     if (search?.trim()) {
-      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      const searchTerm = normalizeTurkishSearchTerm(search);
       qb.andWhere(
         '(LOWER(s.name) LIKE :search OR LOWER(branch.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
         { search: searchTerm },

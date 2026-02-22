@@ -15,6 +15,7 @@ import { NetScheduler } from '../../net-scheduler/entities/net-scheduler.entity'
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 import { chunk } from 'lodash';
 import { toTitleCase } from '../../shared/utils/string.utils';
+import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
 import { OperatorQueryDto } from '../dto/operator-query.dto';
 
 export interface OperatorSearchResult extends Operator {
@@ -230,7 +231,7 @@ export class OperatorService {
       .addGroupBy('user.id');
 
     if (query.search) {
-      const searchTerm = `%${(query.search || '').trim().toLowerCase()}%`;
+      const searchTerm = normalizeTurkishSearchTerm(query.search);
       baseQueryBuilder.andWhere(
         '(LOWER(operator.callSign) LIKE :search OR ' +
           'LOWER(operator.fullName) LIKE :search OR ' +
@@ -257,7 +258,7 @@ export class OperatorService {
       .leftJoin('operator.user', 'user');
 
     if (query.search) {
-      const searchTerm = `%${(query.search || '').trim().toLowerCase()}%`;
+      const searchTerm = normalizeTurkishSearchTerm(query.search);
       countQuery.andWhere(
         '(LOWER(operator.callSign) LIKE :search OR ' +
           'LOWER(operator.fullName) LIKE :search OR ' +
@@ -488,7 +489,7 @@ export class OperatorService {
     priorityBranchId?: string,
     userId?: string,
   ): Promise<OperatorSearchResult[]> {
-    const searchTerm = `%${(query ?? '').trim().toLowerCase()}%`;
+    const searchTerm = normalizeTurkishSearchTerm(query);
 
     const qb = this.operatorRepository
       .createQueryBuilder('operator')

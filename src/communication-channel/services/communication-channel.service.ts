@@ -12,6 +12,7 @@ import { UpdateCommunicationChannelDto } from '../dto/update-communication-chann
 import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
 import { NetCommunicationChannel } from '../../net/entities/net-communication-channel.entity';
 import { Net } from '../../net/entities/net.entity';
+import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
 
 @Injectable()
 export class CommunicationChannelService {
@@ -144,7 +145,7 @@ export class CommunicationChannelService {
     }
 
     if (options.search) {
-      const searchTerm = `%${options.search.toLowerCase()}%`;
+      const searchTerm = normalizeTurkishSearchTerm(options.search);
       qb.andWhere(
         '(LOWER(channel.description) LIKE :search OR LOWER(channel.location) LIKE :search)',
         { search: searchTerm },
