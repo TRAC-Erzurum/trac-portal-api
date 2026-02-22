@@ -18,6 +18,7 @@ import { DeleteBranchDto } from '../dto/delete-branch.dto';
 import { Role } from '../../auth/enums/role.enum';
 import { BranchRole } from '../enums/branch-role.enum';
 import { MembershipStatus } from '../enums/membership-status.enum';
+import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
 
 @Injectable()
 export class BranchService {
@@ -131,7 +132,7 @@ export class BranchService {
     }
 
     if (options.search) {
-      const searchTerm = `%${options.search.toLowerCase()}%`;
+      const searchTerm = normalizeTurkishSearchTerm(options.search);
       qb.andWhere(
         '(LOWER(branch.name) LIKE :search OR EXISTS (SELECT 1 FROM branch_call_signs bcs WHERE bcs."branchId" = branch.id AND LOWER(bcs."callSign") LIKE :search))',
         { search: searchTerm },
@@ -439,7 +440,7 @@ export class BranchService {
       .addOrderBy('net.createdAt', 'DESC');
 
     if (search?.trim()) {
-      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      const searchTerm = normalizeTurkishSearchTerm(search);
       qb.andWhere(
         '(LOWER(net.name) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
         { search: searchTerm },

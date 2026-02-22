@@ -165,7 +165,10 @@ export class MembershipService {
       throw new NotFoundException('error.branchNotFound');
     }
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['operator'],
+    });
     if (!user) {
       throw new NotFoundException('error.userNotFound');
     }
@@ -174,12 +177,33 @@ export class MembershipService {
     membership.userId = userId;
     membership.branchId = branchId;
     membership.role = BranchRole.MEMBER;
-    membership.status = MembershipStatus.PENDING;
+    // SUPER_ADMIN users are automatically approved when joining a branch
+    membership.status = user.globalRole === GlobalRole.SUPER_ADMIN 
+      ? MembershipStatus.APPROVED 
+      : MembershipStatus.PENDING;
     membership.createdBy = userId;
     membership.updatedBy = [];
 
     try {
       const saved = await this.membershipRepository.save(membership);
+      
+      // Emit activity event for SUPER_ADMIN auto-approval
+      if (user.globalRole === GlobalRole.SUPER_ADMIN) {
+        const targetCallSign = user.operator?.callSign ?? null;
+        this.eventEmitter.emit(
+          ACTIVITY_EVENT,
+          new ActivityEvent(
+            ActivityType.MEMBERSHIP_APPROVED,
+            EntityType.MEMBERSHIP,
+            saved.id,
+            userId,
+            targetCallSign,
+            targetCallSign,
+            { branchId: branch.id, branchName: branch.name },
+          ),
+        );
+      }
+      
       return saved;
     } catch (error) {
       if (error.code === '23505') {
@@ -329,6 +353,7 @@ export class MembershipService {
     branchId: string,
     removedBy: string,
     actorCallSign: string,
+    actorRole: Role,
   ): Promise<void> {
     const branch = await this.branchRepository.findOne({
       where: { id: branchId },
@@ -346,7 +371,8 @@ export class MembershipService {
       throw new NotFoundException('error.userNotFound');
     }
 
-    if (user.globalRole === GlobalRole.SUPER_ADMIN) {
+    // Only SUPER_ADMIN can remove another SUPER_ADMIN
+    if (user.globalRole === GlobalRole.SUPER_ADMIN && actorRole !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('error.cannotRemoveSuperAdmin');
     }
 
