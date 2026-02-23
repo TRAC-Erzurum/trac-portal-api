@@ -25,9 +25,16 @@ export interface ReportShareData {
     branchCallSign?: { callSign: string } | null;
     communicationChannels?: Array<{
       id: string;
-      communicationChannel?: { id: string; name?: string; type?: string };
       isSimplexAdHoc?: boolean;
       simplexFrequency?: string;
+      communicationChannel?: {
+        id: string
+        type: string
+        txFrequency?: number | null
+        rxFrequency?: number | null
+        echolinkNode?: string | null
+        echolinkName?: string | null
+      };
     }>;
   };
   attendees: Array<{
@@ -120,15 +127,18 @@ export class ReportShareService {
       communicationChannels: (net as any).communicationChannels?.map(
         (ch: any) => ({
           id: ch.id,
+          isSimplexAdHoc: ch.isSimplexAdHoc,
+          simplexFrequency: ch.simplexFrequency,
           communicationChannel: ch.communicationChannel
             ? {
                 id: ch.communicationChannel.id,
-                name: ch.communicationChannel.name,
                 type: ch.communicationChannel.type,
+                txFrequency: ch.communicationChannel.txFrequency,
+                rxFrequency: ch.communicationChannel.rxFrequency,
+                echolinkNode: ch.communicationChannel.echolinkNode,
+                echolinkName: ch.communicationChannel.echolinkName,
               }
             : undefined,
-          isSimplexAdHoc: ch.isSimplexAdHoc,
-          simplexFrequency: ch.simplexFrequency,
         }),
       ),
     };
