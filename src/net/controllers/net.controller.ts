@@ -1,18 +1,24 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Param,
   Patch,
+  Post,
   Put,
   Query,
   Req,
   Res,
+  Sse,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import type { Observable } from 'rxjs';
 import { NetService } from '../services/net.service';
 import { CertificateService } from '../services/certificate.service';
+import { ReportShareService } from '../services/report-share.service';
+import { Public } from '../../auth/decorators/public.decorator';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
 import { ManageNet } from '../decorators/manage-net.decorator';
@@ -26,6 +32,7 @@ export class NetController {
   constructor(
     private readonly netService: NetService,
     private readonly certificateService: CertificateService,
+    private readonly reportShareService: ReportShareService,
   ) {}
 
   @Put(':id')
@@ -52,6 +59,26 @@ export class NetController {
   @Get()
   findAll(@Query() query: NetQueryDto, @Req() req: RequestWithUser) {
     return this.netService.findAll(query, req.user.id);
+  }
+
+  @Sse('report/share/sse')
+  @Roles(Role.MEMBER)
+  reportShareConsumedStream(): Observable<{ data: { token: string } }> {
+    return this.reportShareService.getConsumedTokenStream();
+  }
+
+  @Get('report/share/:token')
+  @Public()
+  async getReportShare(@Param('token') token: string) {
+    return this.reportShareService.getReportDataAndConsume(token);
+  }
+
+  @Post(':id/report/share')
+  @Roles(Role.MEMBER)
+  async createReportShare(@Param('id') id: string): Promise<{ token: string }> {
+    await this.netService.findOne(id);
+    const token = await this.reportShareService.createToken(id);
+    return { token };
   }
 
   @Get(':id/certificate/preview')

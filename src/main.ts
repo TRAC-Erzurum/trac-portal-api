@@ -36,6 +36,10 @@ async function bootstrap() {
   if (!fs.existsSync(certTemplatesDir)) {
     fs.mkdirSync(certTemplatesDir, { recursive: true });
   }
+  const reportShareDir = path.join(process.cwd(), 'uploads', 'report-share');
+  if (!fs.existsSync(reportShareDir)) {
+    fs.mkdirSync(reportShareDir, { recursive: true });
+  }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
@@ -92,15 +96,16 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  await app.listen(configService.get<number>('PORT') || 8000);
+  const port = configService.get<number>('PORT') || 8000;
+  await app.listen(port, '0.0.0.0');
 }
 
 bootstrap()
   .then(() => {
+    const port = process.env.PORT || 8000;
+    const host = process.env.DOMAIN ?? '0.0.0.0';
     console.log(
-      `Server running on http://${process.env.DOMAIN ?? 'localhost'}:${process.env.PORT || 8000}`,
-      `\nEnvironment: ${process.env.NODE_ENV || 'development'}`,
-      `\nDatabase: postgres://${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`,
+      `Server running on http://${host}:${port}\nEnvironment: ${process.env.NODE_ENV || 'development'}\nDatabase: postgres://${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`,
     );
   })
   .catch((err) => {
