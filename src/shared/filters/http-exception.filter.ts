@@ -45,7 +45,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
           body: request.body,
         },
       );
-    } else if (status !== 401 && status !== 403) {
+    } else if (status !== 401 && status !== 403 && status !== 404) {
       // Only log non-auth 4xx errors
       this.logger.debug(
         `HTTP ${status} - ${request.method} ${request.url}`,
