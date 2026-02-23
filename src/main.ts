@@ -97,7 +97,9 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   const port = configService.get<number>('PORT') || 8000;
-  await app.listen(port, '0.0.0.0');
+  const hostname = process.env.NODE_ENV === 'development' ? '0.0.0.0' : undefined;
+
+  await app.listen(port, hostname);
 }
 
 bootstrap()
