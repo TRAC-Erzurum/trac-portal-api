@@ -46,59 +46,24 @@ export class AddTurkishNormalizeFunction1751234567890 implements MigrationInterf
 
     // For User table
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_user_fullname_turkish 
+      CREATE INDEX IF NOT EXISTS idx_user_fullname_turkish
       ON users (normalize_turkish(CAST("fullName" AS TEXT)));
     `);
 
-    // For Branch table
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_branch_name_turkish 
-      ON branches (normalize_turkish(CAST(name AS TEXT)));
-    `);
-
-    // For BranchCallSign table
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_branch_callsign_turkish 
-      ON branch_call_signs (normalize_turkish(CAST("callSign" AS TEXT)));
-    `);
-
-    // For Net table
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_net_name_turkish 
-      ON nets (normalize_turkish(CAST(name AS TEXT)));
-    `);
-
-    // For CommunicationChannel table
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_channel_description_turkish 
-      ON branch_communication_channels (normalize_turkish(CAST(description AS TEXT)));
-    `);
-
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_channel_location_turkish 
-      ON branch_communication_channels (normalize_turkish(CAST(location AS TEXT)));
-    `);
-
-    // For NetScheduler table
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_netscheduler_name_turkish 
-      ON net_schedulers (normalize_turkish(CAST(name AS TEXT)));
-    `);
+    // Note: Indexes for other tables (branches, branch_call_signs, nets,
+    // branch_communication_channels, net_schedulers) are created in a later
+    // migration (1780000000001) because those tables don't exist yet at this point.
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Drop indexes
+    // Drop indexes for tables that existed at the time of this migration
     await queryRunner.query(`DROP INDEX IF EXISTS idx_operator_callsign_turkish;`);
     await queryRunner.query(`DROP INDEX IF EXISTS idx_operator_fullname_turkish;`);
     await queryRunner.query(`DROP INDEX IF EXISTS idx_operator_city_turkish;`);
     await queryRunner.query(`DROP INDEX IF EXISTS idx_operator_district_turkish;`);
     await queryRunner.query(`DROP INDEX IF EXISTS idx_user_fullname_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_branch_name_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_branch_callsign_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_net_name_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_channel_description_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_channel_location_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_netscheduler_name_turkish;`);
+
+    // Note: Indexes for other tables are dropped in migration 1780000000001
 
     // Drop function
     await queryRunner.query(`DROP FUNCTION IF EXISTS normalize_turkish(TEXT);`);
