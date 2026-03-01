@@ -471,6 +471,9 @@ export class NetService {
 
   async endNet(id: string, updatedBy: string, actorCallSign: string) {
     const net = await this.findOne(id);
+    if (net.endedAt) {
+      return net;
+    }
     const now = new Date();
     if (net.startedAt) {
       const segmentMinutes = Math.round(
@@ -691,13 +694,6 @@ export class NetService {
       .andWhere('net.scheduledAt <= :endOfDay', { endOfDay })
       .getCount();
     return count > 0;
-  }
-
-  async restartNet(id: string, updatedBy: string) {
-    const net = await this.findOne(id);
-    net.endedAt = null;
-    net.updatedBy = [...(net.updatedBy || []), updatedBy];
-    return this.netRepository.save(net);
   }
 
   async changeOperator(
