@@ -41,6 +41,7 @@ export interface ReportShareData {
     id: string;
     callSign: string;
     name?: string | null;
+    country?: string | null;
     city?: string | null;
     district?: string | null;
     readability?: number | null;
@@ -147,6 +148,7 @@ export class ReportShareService {
       id: a.id,
       callSign: a.callSign,
       name: a.name ?? null,
+      country: a.country ?? null,
       city: a.city ?? null,
       district: a.district ?? null,
       readability: a.readability ?? null,

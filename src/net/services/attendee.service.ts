@@ -40,6 +40,10 @@ export class AttendeeService {
   ) {
     const net = await this.netService.findOne(netId);
 
+    if (!net.startedAt) {
+      throw new BadRequestException('error.netNotStarted');
+    }
+
     const callSign = (dto.callSign ?? '').trim();
     const exists = await this.attendeeRepository.findOne({
       where: { callSign, net: { id: netId } },

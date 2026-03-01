@@ -179,13 +179,6 @@ export class NetController {
     return this.netService.endNet(id, req.user.email, req.user.callSign);
   }
 
-  @Patch(':id/restart')
-  @Roles(Role.ADMIN)
-  @ManageNet()
-  restartNet(@Param('id') id: string, @Req() req: RequestWithUser) {
-    return this.netService.restartNet(id, req.user.email);
-  }
-
   @Patch(':id/operator')
   @Roles(Role.ADMIN)
   @ManageNet()
