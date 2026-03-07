@@ -20,6 +20,24 @@ export class QthController {
   }
 
   @Public()
+  @Get('search')
+  async search(
+    @Query('q') query: string,
+    @Query('limit') limitStr?: string,
+  ): Promise<
+    Array<{
+      lat: number;
+      lng: number;
+      displayName: string;
+      type: string;
+    }>
+  > {
+    if (!query?.trim()) return [];
+    const limit = Math.min(Math.max(Number(limitStr) || 5, 1), 10);
+    return this.qthService.searchPlace(query.trim(), limit);
+  }
+
+  @Public()
   @Get('countries')
   async getCountries(): Promise<Country[]> {
     return this.qthService.getCountries();
