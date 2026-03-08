@@ -107,7 +107,8 @@ export class AuthController {
   @Get('logout')
   @AllowWithoutCallsign()
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('auth_token');
+    const { maxAge, ...clearOptions } = this.getCookieOptions();
+    res.clearCookie('auth_token', clearOptions);
   }
 
   @Public()

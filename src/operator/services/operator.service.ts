@@ -593,6 +593,15 @@ export class OperatorService {
       );
     }
 
+    const managedNets = await this.netRepository.count({
+      where: { operator: { id } },
+    });
+    if (managedNets > 0) {
+      throw new BadRequestException(
+        `${operator.callSign} en az bir çevrim yönettiği için silinemez`,
+      );
+    }
+
     if (operator.attendees.length > 0) {
       throw new BadRequestException(
         `${operator.callSign} en az bir çevrime katıldığı için silinemez`,
