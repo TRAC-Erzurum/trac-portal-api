@@ -23,6 +23,8 @@ import {
   ActivityType,
   EntityType,
 } from '../../activity/enums/activity-type.enum';
+import { NetRecurrence } from '../../net-scheduler/enums/net-recurrence.enum';
+import { NetScheduler } from '../../net-scheduler/entities/net-scheduler.entity';
 import { BranchService } from '../../branch/services/branch.service';
 import { MembershipService } from '../../branch/services/membership.service';
 import { UserService } from '../../user/services/user.service';
@@ -40,6 +42,8 @@ export class NetService {
     private readonly membershipService: MembershipService,
     @InjectRepository(NetCommunicationChannel)
     private readonly netCommunicationChannelRepository: Repository<NetCommunicationChannel>,
+    @InjectRepository(NetScheduler)
+    private readonly netSchedulerRepository: Repository<NetScheduler>,
     private readonly operatorService: OperatorService,
     private readonly branchService: BranchService,
     private readonly userService: UserService,
@@ -498,6 +502,20 @@ export class NetService {
         { netName: net.name, attendeeCount: net.attendeeCount },
       ),
     );
+
+    // If this net was created from a one-time scheduler, delete the scheduler now that the net is completed.
+    if (saved.schedulerId) {
+      try {
+        const scheduler = await this.netSchedulerRepository.findOne({
+          where: { id: saved.schedulerId },
+        });
+        if (scheduler && scheduler.recurrence === NetRecurrence.ONE_TIME) {
+          await this.netSchedulerRepository.delete(scheduler.id);
+        }
+      } catch (err) {
+        console.error('Error deleting one-time scheduler after net end:', err);
+      }
+    }
 
     return saved;
   }
