@@ -8,7 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial, ILike } from 'typeorm';
+import { Repository, DeepPartial, ILike, In } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Role, GlobalRole } from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
@@ -95,11 +95,67 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
-  async findOne(id: string): Promise<User> {
-    return this.userRepository.findOneOrFail({
+  async findOne(id: string, requester?: AuthUser): Promise<User> {
+    const user = await this.userRepository.findOneOrFail({
       where: { id },
       relations: { operator: true },
     });
+
+    if (requester && !(await this.canAccessSensitiveData(requester, id))) {
+      delete user.addresses;
+      delete user.phoneNumbers;
+      delete user.emergencyContacts;
+      delete user.profession;
+      delete user.birthDate;
+      delete user.idNumber;
+    }
+
+    return user;
+  }
+
+  async canAccessSensitiveData(
+    requester: AuthUser,
+    targetUserId: string,
+  ): Promise<boolean> {
+    if (
+      requester.role === Role.SUPER_ADMIN ||
+      requester.globalRole === GlobalRole.SUPER_ADMIN ||
+      requester.id === targetUserId
+    ) {
+      return true;
+    }
+
+    // Check if requester is an admin in a branch where the target user is a member
+    const requesterAdminMemberships = await this.membershipRepository.find({
+      where: [
+        {
+          userId: requester.id,
+          role: BranchRole.ADMIN,
+          status: MembershipStatus.APPROVED,
+        },
+        {
+          userId: requester.id,
+          role: BranchRole.PRESIDENT,
+          status: MembershipStatus.APPROVED,
+        },
+      ],
+    });
+
+    if (requesterAdminMemberships.length === 0) {
+      return false;
+    }
+
+    const branchIds = requesterAdminMemberships.map((m) => m.branchId);
+
+    const isMemberInSameBranch = await this.membershipRepository.findOne({
+      where: {
+        userId: targetUserId,
+        branchId: In(branchIds),
+        status: MembershipStatus.APPROVED,
+      },
+    });
+
+    return !!isMemberInSameBranch;
   }
 
   async getEffectiveRole(userId: string): Promise<Role> {
@@ -197,6 +253,38 @@ export class UserService {
 
     if (dto.fullName) {
       fieldsToUpdate.fullName = dto.fullName;
+    }
+
+    if (dto.addresses !== undefined) {
+      fieldsToUpdate.addresses = dto.addresses;
+    }
+
+    if (dto.phoneNumbers !== undefined) {
+      fieldsToUpdate.phoneNumbers = dto.phoneNumbers;
+    }
+
+    if (dto.emergencyContacts !== undefined) {
+      fieldsToUpdate.emergencyContacts = dto.emergencyContacts;
+    }
+
+    if (dto.profession !== undefined) {
+      fieldsToUpdate.profession = dto.profession;
+    }
+
+    if (dto.birthDate !== undefined) {
+      fieldsToUpdate.birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
+    }
+
+    if (dto.idNumber !== undefined) {
+      fieldsToUpdate.idNumber = dto.idNumber;
+    }
+
+    if (dto.expertiseAreas !== undefined) {
+      fieldsToUpdate.expertiseAreas = dto.expertiseAreas;
+    }
+
+    if (dto.trainings !== undefined) {
+      fieldsToUpdate.trainings = dto.trainings;
     }
 
     user.updatedBy = [...(user.updatedBy || []), updatedBy];

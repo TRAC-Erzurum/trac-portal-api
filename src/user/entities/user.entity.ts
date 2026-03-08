@@ -48,6 +48,30 @@ export class User extends BaseEntity {
   @Column({ nullable: true, type: 'uuid' })
   currentBranchId: string | null;
 
+  @Column({ type: 'jsonb', nullable: true })
+  addresses: { type: string; address: string; qth: string }[] | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  phoneNumbers: string[] | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  emergencyContacts: { name: string; callSign?: string; phone: string }[] | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  expertiseAreas: string[] | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  trainings: { title: string; institution?: string; year?: number }[] | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  profession: string | null;
+
+  @Column({ nullable: true, type: 'date' })
+  birthDate: Date | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  idNumber: string | null;
+
   @OneToOne(() => Operator, (operator) => operator.user)
   operator: Operator;
 }

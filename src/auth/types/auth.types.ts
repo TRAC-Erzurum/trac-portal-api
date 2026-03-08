@@ -1,4 +1,4 @@
-import { Role } from '../enums/role.enum';
+import { Role, GlobalRole } from '../enums/role.enum';
 
 export interface GoogleProfile {
   id: string;
@@ -14,6 +14,7 @@ export interface AuthUser {
   id: string;
   email: string;
   role: Role;
+  globalRole?: GlobalRole;
   callSign?: string;
   provider: string;
   providerId?: string | null;
