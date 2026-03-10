@@ -1,4 +1,4 @@
-﻿import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddUserDetailedFields1772956643707 implements MigrationInterface {
   name = 'AddUserDetailedFields1772956643707';
@@ -21,3 +21,4 @@ export class AddUserDetailedFields1772956643707 implements MigrationInterface {
     await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "addresses"`);
   }
 }
+

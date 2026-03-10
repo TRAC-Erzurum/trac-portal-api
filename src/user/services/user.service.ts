@@ -33,12 +33,12 @@ export class UserService {
     private readonly membershipRepository: Repository<UserBranchMembership>,
     private readonly operatorService: OperatorService,
     private readonly branchService: BranchService,
-  ) {}
+  ) { }
 
   async findByEmail(email: string): Promise<User> {
     return this.userRepository.findOne({
       where: { email },
-      relations: { operator: true, branchMemberships: true },
+      relations: { operator: true },
     });
   }
 
