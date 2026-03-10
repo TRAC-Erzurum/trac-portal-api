@@ -38,7 +38,7 @@ export class UserService {
   async findByEmail(email: string): Promise<User> {
     return this.userRepository.findOne({
       where: { email },
-      relations: { operator: true },
+      relations: { operator: true, branchMemberships: true },
     });
   }
 
@@ -98,7 +98,7 @@ export class UserService {
   async findOne(id: string, requester?: AuthUser): Promise<User> {
     const user = await this.userRepository.findOneOrFail({
       where: { id },
-      relations: { operator: true },
+      relations: { operator: true, branchMemberships: true },
     });
 
     if (requester && !(await this.canAccessSensitiveData(requester, id))) {
@@ -156,6 +156,10 @@ export class UserService {
     });
 
     return !!isMemberInSameBranch;
+  }
+
+  async findOperatorByUserId(userId: string): Promise<Operator | null> {
+    return this.operatorService.findByUserId(userId);
   }
 
   async getEffectiveRole(userId: string): Promise<Role> {

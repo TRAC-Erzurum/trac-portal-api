@@ -123,6 +123,12 @@ export class OperatorService {
     return data;
   }
 
+  async findByUserId(userId: string): Promise<Operator | null> {
+    return this.operatorRepository.findOne({
+      where: { user: { id: userId } },
+    });
+  }
+
   /**
    * Attaches relevance scoring to a query builder as `relevance_score`.
    * Callers should ORDER BY 'relevance_score' DESC after calling this.

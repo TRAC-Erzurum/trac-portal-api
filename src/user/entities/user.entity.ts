@@ -1,8 +1,9 @@
-import { Entity, Column, OneToOne } from 'typeorm';
+import { Entity, Column, OneToOne, OneToMany } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Role, GlobalRole } from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
 import { BaseEntity } from '../../shared/entities/base.entity';
+import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
 
 @Entity('users')
 export class User extends BaseEntity {
@@ -74,4 +75,7 @@ export class User extends BaseEntity {
 
   @OneToOne(() => Operator, (operator) => operator.user)
   operator: Operator;
+
+  @OneToMany(() => UserBranchMembership, (m) => m.user)
+  branchMemberships: UserBranchMembership[];
 }

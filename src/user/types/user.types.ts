@@ -7,4 +7,6 @@ export interface ICurrentUser {
   globalRole: GlobalRole;
   provider: string;
   currentBranchId?: string;
+  operatorId?: string;
+  callSign?: string;
 }
