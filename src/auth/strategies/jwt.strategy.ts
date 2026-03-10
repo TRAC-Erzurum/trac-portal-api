@@ -30,14 +30,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
     const user = await this.userService.findOne(payload.sub);
     const role = await this.userService.getEffectiveRole(payload.sub);
-    const operator = await this.userService.findOperatorByUserId(payload.sub);
+    
     return {
       id: payload.sub,
       email: payload.email,
       role,
       globalRole: user.globalRole,
-      callSign: operator?.callSign,
-      operatorId: operator?.id,
+      callSign: user.operator?.callSign,
+      operatorId: user.operator?.id,
       picture: user.picture,
       provider: user.provider,
       fullName: user.fullName,
