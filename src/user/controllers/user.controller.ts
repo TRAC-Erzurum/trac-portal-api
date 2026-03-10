@@ -45,7 +45,7 @@ export class UserController {
   @Get('profile')
   @AllowWithoutCallsign()
   async profile(@CurrentUser() user: ICurrentUser) {
-    return this.userService.findOne(user.id);
+    return this.userService.findOne(user.id, user);
   }
 
   @Post('operator')
@@ -105,8 +105,8 @@ export class UserController {
 
   @Get(':id')
   @Roles(Role.VOLUNTEER)
-  async getUser(@Param('id') id: string) {
-    return this.userService.findOne(id);
+  async getUser(@Param('id') id: string, @CurrentUser() user: ICurrentUser) {
+    return this.userService.findOne(id, user);
   }
 
   @Post('upload')
