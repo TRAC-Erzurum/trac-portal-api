@@ -22,6 +22,7 @@ import { BranchModule } from './branch/branch.module';
 import { CommunicationChannelModule } from './communication-channel/communication-channel.module';
 import { NetSchedulerModule } from './net-scheduler/net-scheduler.module';
 import { CertificateTemplateModule } from './certificate-template/certificate-template.module';
+import { InventoryModule } from './inventory/inventory.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { CertificateTemplateModule } from './certificate-template/certificate-te
     CommunicationChannelModule,
     NetSchedulerModule,
     CertificateTemplateModule,
+    InventoryModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',
