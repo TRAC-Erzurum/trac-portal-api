@@ -40,6 +40,14 @@ async function bootstrap() {
   if (!fs.existsSync(reportShareDir)) {
     fs.mkdirSync(reportShareDir, { recursive: true });
   }
+  const equipmentDir = path.join(process.cwd(), 'uploads', 'equipment');
+  if (!fs.existsSync(equipmentDir)) {
+    fs.mkdirSync(equipmentDir, { recursive: true });
+  }
+  const equipmentCategoriesDir = path.join(process.cwd(), 'uploads', 'equipment-categories');
+  if (!fs.existsSync(equipmentCategoriesDir)) {
+    fs.mkdirSync(equipmentCategoriesDir, { recursive: true });
+  }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
