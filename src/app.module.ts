@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { UserModule } from './user/user.module';
 import databaseConfig from './shared/config/database.config';
+import r2Config from './shared/config/r2.config';
+import { StorageModule } from './shared/storage';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { NetModule } from './net/net.module';
@@ -15,8 +17,6 @@ import { OperatorModule } from './operator/operator.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ActivityModule } from './activity/activity.module';
 import { AppController } from './app.controller';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
 import { QthModule } from './qth/qth.module';
 import { BranchModule } from './branch/branch.module';
 import { CommunicationChannelModule } from './communication-channel/communication-channel.module';
@@ -27,7 +27,7 @@ import { InventoryModule } from './inventory/inventory.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      load: [databaseConfig],
+      load: [databaseConfig, r2Config],
       isGlobal: true,
     }),
     EventEmitterModule.forRoot(),
@@ -54,14 +54,7 @@ import { InventoryModule } from './inventory/inventory.module';
     NetSchedulerModule,
     CertificateTemplateModule,
     InventoryModule,
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'),
-      serveRoot: '/uploads',
-      serveStaticOptions: {
-        index: false,
-        fallthrough: true,
-      },
-    }),
+    StorageModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

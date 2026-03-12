@@ -14,9 +14,11 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname } from 'path';
 import { Roles } from '../../auth/decorators/roles.decorator';
+import { FileStorageService } from '../../shared/storage';
+import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
 import { Role } from '../../auth/enums/role.enum';
 import { EquipmentService } from '../services/equipment.service';
 import {
@@ -30,7 +32,10 @@ import { OwnerType } from '../enums/owner-type.enum';
 @Controller('equipment')
 @Roles(Role.VOLUNTEER)
 export class EquipmentController {
-  constructor(private readonly equipmentService: EquipmentService) {}
+  constructor(
+    private readonly equipmentService: EquipmentService,
+    private readonly fileStorage: FileStorageService,
+  ) {}
 
   @Get('operator/:operatorId')
   findByOperator(
@@ -90,13 +95,7 @@ export class EquipmentController {
   @Post(':id/photos')
   @UseInterceptors(
     FilesInterceptor('photos', 5, {
-      storage: diskStorage({
-        destination: './uploads/equipment',
-        filename: (_req, file, cb) => {
-          const uniqueName = crypto.randomUUID();
-          cb(null, `${uniqueName}${extname(file.originalname)}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (_req, file, cb) => {
         if (!file.originalname.match(/\.(jpg|jpeg|png|webp)$/i)) {
           return cb(
@@ -106,7 +105,7 @@ export class EquipmentController {
         }
         cb(null, true);
       },
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: MAX_UPLOAD_BYTES },
     }),
   )
   async uploadPhotos(
@@ -118,7 +117,13 @@ export class EquipmentController {
       throw new BadRequestException('error.noFileUploaded');
     }
     await this.verifyOwnership(id, req);
-    const filePaths = files.map((f) => `uploads/equipment/${f.filename}`);
+    const filePaths: string[] = [];
+    for (const f of files) {
+      const filename = `${crypto.randomUUID()}${extname(f.originalname)}`;
+      const logicalPath = `uploads/equipment/${filename}`;
+      await this.fileStorage.putBytes(logicalPath, f.buffer, f.mimetype);
+      filePaths.push(logicalPath);
+    }
     return this.equipmentService.uploadPhotos(id, filePaths);
   }
 

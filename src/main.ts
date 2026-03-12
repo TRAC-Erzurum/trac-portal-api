@@ -8,8 +8,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { HttpExceptionFilter } from './shared/filters/http-exception.filter';
+import { MulterExceptionFilter } from './shared/filters/multer-exception.filter';
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { FileStorageService } from './shared/storage';
 
 function checkEnvVars() {
   const requiredVars = [
@@ -52,10 +54,6 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
 
-  app.useStaticAssets(path.join(process.cwd(), 'uploads'), {
-    prefix: '/uploads/',
-  });
-
   const domain = configService.get<string>('DOMAIN');
   const isProduction = configService.get<string>('NODE_ENV') === 'production';
 
@@ -94,6 +92,24 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  const fileStorage = app.get(FileStorageService);
+  app.use('/uploads', async (req, res, next) => {
+    if (req.method !== 'GET') return next();
+    const subPath = req.path || '/';
+    const logicalPath = `uploads${subPath}`;
+    try {
+      const result = await fileStorage.getWithContentType(logicalPath);
+      if (!result) return res.status(404).end();
+      res.setHeader(
+        'Content-Type',
+        result.contentType ?? 'application/octet-stream',
+      );
+      res.send(result.body);
+    } catch {
+      res.status(404).end();
+    }
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       transformOptions: { enableImplicitConversion: true },
@@ -101,7 +117,7 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(), new MulterExceptionFilter());
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   const port = configService.get<number>('PORT') || 8000;

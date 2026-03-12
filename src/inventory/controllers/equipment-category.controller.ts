@@ -12,9 +12,11 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname } from 'path';
 import { Roles } from '../../auth/decorators/roles.decorator';
+import { FileStorageService } from '../../shared/storage';
+import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
 import { Role } from '../../auth/enums/role.enum';
 import { EquipmentCategoryService } from '../services/equipment-category.service';
 import {
@@ -29,6 +31,7 @@ import {
 export class EquipmentCategoryController {
   constructor(
     private readonly categoryService: EquipmentCategoryService,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
   @Get()
@@ -70,13 +73,7 @@ export class EquipmentCategoryController {
   @Roles(Role.SUPER_ADMIN)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads/equipment-categories',
-        filename: (_req, file, cb) => {
-          const uniqueName = crypto.randomUUID();
-          cb(null, `${uniqueName}${extname(file.originalname)}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (_req, file, cb) => {
         if (!file.originalname.match(/\.(jpg|jpeg|png|webp)$/i)) {
           return cb(
@@ -86,7 +83,7 @@ export class EquipmentCategoryController {
         }
         cb(null, true);
       },
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: MAX_UPLOAD_BYTES },
     }),
   )
   async uploadPhoto(
@@ -96,7 +93,10 @@ export class EquipmentCategoryController {
     if (!file) {
       throw new BadRequestException('error.noFileUploaded');
     }
-    return this.categoryService.uploadPhoto(id, `uploads/equipment-categories/${file.filename}`);
+    const filename = `${crypto.randomUUID()}${extname(file.originalname)}`;
+    const logicalPath = `uploads/equipment-categories/${filename}`;
+    await this.fileStorage.putBytes(logicalPath, file.buffer, file.mimetype);
+    return this.categoryService.uploadPhoto(id, logicalPath);
   }
 
   @Post(':id/properties')

@@ -5,9 +5,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
 import { Readable } from 'stream';
+import { FileStorageService } from '../../shared/storage';
 import type { Response } from 'express';
 import archiver from 'archiver';
 import { PDFDocument, rgb, RGB, StandardFonts } from 'pdf-lib';
@@ -28,6 +27,7 @@ export class CertificateService {
     private readonly attendeeRepository: Repository<Attendee>,
     private readonly userService: UserService,
     private readonly membershipService: MembershipService,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
   /** Returns template imagePath, elements, and placeholders for a single attendee (for UI preview). */
@@ -264,10 +264,7 @@ export class CertificateService {
     imageBytes?: Buffer,
   ): Promise<Buffer> {
     const bytes =
-      imageBytes ??
-      (await readFile(
-        join(process.cwd(), template.imagePath.replace(/^\//, '')),
-      ));
+      imageBytes ?? (await this.fileStorage.getBytes(template.imagePath));
     const pdfDoc = await PDFDocument.create();
     const isPng =
       template.imagePath.toLowerCase().endsWith('.png') ||
@@ -356,11 +353,9 @@ export class CertificateService {
       relations: ['operator'],
       order: { createdAt: 'ASC' },
     });
-    const imagePath = join(
-      process.cwd(),
-      net.certificateTemplate.imagePath.replace(/^\//, ''),
+    const templateImageBytes = await this.fileStorage.getBytes(
+      net.certificateTemplate.imagePath,
     );
-    const templateImageBytes = await readFile(imagePath);
     for (let i = 0; i < attendees.length; i++) {
       const attendee = attendees[i];
       const placeholders = this.buildPlaceholders(
