@@ -5,8 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { unlink } from 'fs/promises';
+import { join } from 'path';
 import { EquipmentCategory } from '../entities/equipment-category.entity';
 import { CategoryPropertyDefinition } from '../entities/category-property-definition.entity';
 import { Equipment } from '../entities/equipment.entity';
@@ -14,6 +15,7 @@ import {
   CreateEquipmentCategoryDto,
   UpdateEquipmentCategoryDto,
   CreateCategoryPropertyDto,
+  CreateUpdateCategoryPropertyDto,
   UpdateCategoryPropertyDto,
 } from '../dto';
 
@@ -26,6 +28,7 @@ export class EquipmentCategoryService {
     private readonly propertyDefinitionRepository: Repository<CategoryPropertyDefinition>,
     @InjectRepository(Equipment)
     private readonly equipmentRepository: Repository<Equipment>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findAll(): Promise<EquipmentCategory[]> {
@@ -109,13 +112,6 @@ export class EquipmentCategoryService {
     return properties;
   }
 
-  async isLeafCategory(categoryId: string): Promise<boolean> {
-    const childCount = await this.categoryRepository.count({
-      where: { parentId: categoryId },
-    });
-    return childCount === 0;
-  }
-
   async create(
     dto: CreateEquipmentCategoryDto,
     email: string,
@@ -129,20 +125,63 @@ export class EquipmentCategoryService {
       }
     }
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
-      const category = this.categoryRepository.create({
+      const category = queryRunner.manager.create(EquipmentCategory, {
         name: dto.name,
         parentId: dto.parentId ?? null,
+        sortOrder: dto.sortOrder ?? 0,
         createdBy: email,
         updatedBy: [],
       });
-      return await this.categoryRepository.save(category);
+      const saved = await queryRunner.manager.save(EquipmentCategory, category);
+
+      const definitions = dto.propertyDefinitions ?? [];
+      for (let i = 0; i < definitions.length; i++) {
+        const pd = definitions[i];
+        const prop = queryRunner.manager.create(CategoryPropertyDefinition, {
+          categoryId: saved.id,
+          name: pd.name,
+          type: pd.type,
+          isRequired: pd.isRequired ?? false,
+          sortOrder: pd.sortOrder ?? i,
+          enumValues: pd.enumValues ?? null,
+          numberArrayMaxLength: pd.numberArrayMaxLength ?? null,
+          minValue: pd.minValue ?? null,
+          maxValue: pd.maxValue ?? null,
+          createdBy: email,
+          updatedBy: [],
+        });
+        await queryRunner.manager.save(CategoryPropertyDefinition, prop);
+      }
+
+      await queryRunner.commitTransaction();
+      return this.findOne(saved.id);
     } catch (err: any) {
+      await queryRunner.rollbackTransaction();
       if (err.code === '23505') {
         throw new ConflictException('error.categoryNameExists');
       }
       throw err;
+    } finally {
+      await queryRunner.release();
     }
+  }
+
+  private async getDescendantIds(categoryId: string): Promise<string[]> {
+    const children = await this.categoryRepository.find({
+      where: { parentId: categoryId },
+      select: ['id'],
+    });
+    const ids: string[] = [];
+    for (const c of children) {
+      ids.push(c.id);
+      ids.push(...(await this.getDescendantIds(c.id)));
+    }
+    return ids;
   }
 
   async update(
@@ -150,21 +189,102 @@ export class EquipmentCategoryService {
     dto: UpdateEquipmentCategoryDto,
     email: string,
   ): Promise<EquipmentCategory> {
-    const category = await this.findOne(id);
+    const category = await this.categoryRepository.findOne({ where: { id } });
+    if (!category) {
+      throw new NotFoundException('error.categoryNotFound');
+    }
 
     if (dto.name !== undefined) category.name = dto.name;
     if (dto.sortOrder !== undefined) category.sortOrder = dto.sortOrder;
 
+    if (dto.parentId !== undefined) {
+      const newParentId =
+        dto.parentId === '' || dto.parentId === null ? null : dto.parentId;
+      if (newParentId === id) {
+        throw new BadRequestException('error.categoryParentSelf');
+      }
+      if (newParentId) {
+        const descendantIds = await this.getDescendantIds(id);
+        if (descendantIds.includes(newParentId)) {
+          throw new BadRequestException('error.categoryParentDescendant');
+        }
+        const parent = await this.categoryRepository.findOne({
+          where: { id: newParentId },
+        });
+        if (!parent) {
+          throw new NotFoundException('error.parentCategoryNotFound');
+        }
+      }
+      category.parentId = newParentId;
+    }
+
     category.updatedBy = [...(category.updatedBy || []), email];
 
     try {
-      return await this.categoryRepository.save(category);
+      await this.categoryRepository.save(category);
     } catch (err: any) {
       if (err.code === '23505') {
         throw new ConflictException('error.categoryNameExists');
       }
       throw err;
     }
+
+    if (dto.propertyDefinitions !== undefined) {
+      const payloadIds = new Set(
+        dto.propertyDefinitions.map((p) => p.id).filter((x): x is string => !!x),
+      );
+      const namesLower = dto.propertyDefinitions.map((p) => p.name.toLowerCase());
+      const duplicateName = namesLower.some(
+        (n, i) => namesLower.indexOf(n) !== i,
+      );
+      if (duplicateName) {
+        throw new ConflictException('error.propertyNameExists');
+      }
+
+      const existing = await this.propertyDefinitionRepository.find({
+        where: { categoryId: id },
+      });
+
+      const toRemove = existing.filter((p) => !payloadIds.has(p.id));
+      if (toRemove.length > 0) {
+        await this.propertyDefinitionRepository.remove(toRemove);
+      }
+
+      for (const item of dto.propertyDefinitions) {
+        if (item.id) {
+          const prop = existing.find((p) => p.id === item.id);
+          if (prop) {
+            await this.propertyDefinitionRepository.update(prop.id, {
+              name: item.name,
+              type: item.type,
+              isRequired: item.isRequired ?? false,
+              sortOrder: item.sortOrder ?? 0,
+              enumValues: item.enumValues ?? null,
+              numberArrayMaxLength: item.numberArrayMaxLength ?? null,
+              minValue: item.minValue ?? null,
+              maxValue: item.maxValue ?? null,
+              updatedBy: [...(prop.updatedBy || []), email],
+            });
+          }
+        } else {
+          await this.propertyDefinitionRepository.insert({
+            categoryId: id,
+            name: item.name,
+            type: item.type,
+            isRequired: item.isRequired ?? false,
+            sortOrder: item.sortOrder ?? 0,
+            enumValues: item.enumValues ?? null,
+            numberArrayMaxLength: item.numberArrayMaxLength ?? null,
+            minValue: item.minValue ?? null,
+            maxValue: item.maxValue ?? null,
+            createdBy: email,
+            updatedBy: [],
+          });
+        }
+      }
+    }
+
+    return this.findOne(id);
   }
 
   async delete(id: string): Promise<void> {
@@ -191,7 +311,7 @@ export class EquipmentCategoryService {
 
     if (category.photoPath) {
       try {
-        await unlink(category.photoPath);
+        await unlink(join(process.cwd(), category.photoPath));
       } catch {
         // file may already be gone
       }
@@ -213,7 +333,7 @@ export class EquipmentCategoryService {
 
     if (category.photoPath) {
       try {
-        await unlink(category.photoPath);
+        await unlink(join(process.cwd(), category.photoPath));
       } catch {
         // file may already be gone
       }

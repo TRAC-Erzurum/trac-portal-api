@@ -150,23 +150,6 @@ export interface PersonalTrendResponse {
   lastMonthManaged: number;
 }
 
-export type ActivitySummaryPeriod = 'all' | '7d' | '30d';
-
-export interface ActivitySummaryPeriodSnapshot {
-  completedNets: number;
-  totalCheckIns: number;
-  uniqueParticipants: number;
-}
-
-export interface ActivitySummaryResponse {
-  period: ActivitySummaryPeriod;
-  completedNets: number;
-  totalCheckIns: number;
-  uniqueParticipants: number;
-  /** Same metrics for the previous same-length period (e.g. 7d ago → 14d ago). Omitted for period 'all'. */
-  previousPeriod?: ActivitySummaryPeriodSnapshot;
-}
-
 export interface BusiestTimeResponse {
   byDay: { dayOfWeek: number; count: number }[];
   byHour: { hour: number; count: number }[];
@@ -1180,99 +1163,6 @@ export class DashboardService {
       thisMonthManaged,
       lastMonthManaged,
     };
-  }
-
-  async getActivitySummary(
-    period: ActivitySummaryPeriod = '7d',
-  ): Promise<ActivitySummaryResponse> {
-    const now = new Date();
-    let since: Date;
-    let periodEnd: Date = now;
-    let prevSince: Date | null = null;
-    let prevEnd: Date | null = null;
-
-    if (period === '7d') {
-      since = new Date(now);
-      since.setDate(since.getDate() - 7);
-      since.setHours(0, 0, 0, 0);
-      prevEnd = new Date(since.getTime());
-      prevSince = new Date(prevEnd);
-      prevSince.setDate(prevSince.getDate() - 7);
-      prevSince.setHours(0, 0, 0, 0);
-    } else if (period === '30d') {
-      since = new Date(now);
-      since.setDate(since.getDate() - 30);
-      since.setHours(0, 0, 0, 0);
-      prevEnd = new Date(since.getTime());
-      prevSince = new Date(prevEnd);
-      prevSince.setDate(prevSince.getDate() - 30);
-      prevSince.setHours(0, 0, 0, 0);
-    } else {
-      since = new Date(0); // all time
-    }
-
-    const activityQb = this.activityRepository
-      .createQueryBuilder('activity')
-      .select('activity.type', 'type')
-      .addSelect('COUNT(activity.id)', 'count')
-      .groupBy('activity.type');
-
-    if (period !== 'all') {
-      activityQb.where('activity.createdAt >= :since', { since });
-      activityQb.andWhere('activity.createdAt <= :periodEnd', { periodEnd });
-    }
-
-    const raw = await activityQb.getRawMany();
-    const map = new Map(raw.map((r) => [String(r.type), parseInt(String(r.count), 10)]));
-    const completedNets = map.get('net.ended') ?? 0;
-    const totalCheckIns = map.get('attendee.added') ?? 0;
-
-    const uniqueParticipants = await this.getUniqueParticipantsInPeriod(since, periodEnd);
-
-    const result: ActivitySummaryResponse = {
-      period,
-      completedNets,
-      totalCheckIns,
-      uniqueParticipants,
-    };
-
-    if (prevSince && prevEnd && period !== 'all') {
-      const prevActivityQb = this.activityRepository
-        .createQueryBuilder('activity')
-        .select('activity.type', 'type')
-        .addSelect('COUNT(activity.id)', 'count')
-        .groupBy('activity.type')
-        .where('activity.createdAt >= :prevSince', { prevSince })
-        .andWhere('activity.createdAt < :prevEnd', { prevEnd });
-
-      const prevRaw = await prevActivityQb.getRawMany();
-      const prevMap = new Map(prevRaw.map((r) => [String(r.type), parseInt(String(r.count), 10)]));
-      const prevUnique = await this.getUniqueParticipantsInPeriod(prevSince, prevEnd);
-
-      result.previousPeriod = {
-        completedNets: prevMap.get('net.ended') ?? 0,
-        totalCheckIns: prevMap.get('attendee.added') ?? 0,
-        uniqueParticipants: prevUnique,
-      };
-    }
-
-    return result;
-  }
-
-  private async getUniqueParticipantsInPeriod(
-    since: Date,
-    periodEnd: Date,
-  ): Promise<number> {
-    const qb = this.attendeeRepository
-      .createQueryBuilder('attendee')
-      .innerJoin('attendee.net', 'net')
-      .select('COUNT(DISTINCT attendee.callSign)', 'count')
-      .where('net.endedAt IS NOT NULL')
-      .andWhere('net.endedAt >= :since', { since })
-      .andWhere('net.endedAt <= :periodEnd', { periodEnd });
-
-    const raw = await qb.getRawOne<{ count: string }>();
-    return raw?.count != null ? parseInt(String(raw.count), 10) : 0;
   }
 
   async getBusiestTime(): Promise<BusiestTimeResponse> {

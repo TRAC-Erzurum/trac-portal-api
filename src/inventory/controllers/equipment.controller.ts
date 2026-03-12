@@ -118,7 +118,7 @@ export class EquipmentController {
       throw new BadRequestException('error.noFileUploaded');
     }
     await this.verifyOwnership(id, req);
-    const filePaths = files.map((f) => f.path);
+    const filePaths = files.map((f) => `uploads/equipment/${f.filename}`);
     return this.equipmentService.uploadPhotos(id, filePaths);
   }
 

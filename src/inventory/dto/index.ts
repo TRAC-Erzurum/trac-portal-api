@@ -1,6 +1,7 @@
 export { CreateEquipmentCategoryDto } from './create-equipment-category.dto';
 export { UpdateEquipmentCategoryDto } from './update-equipment-category.dto';
 export { CreateCategoryPropertyDto } from './create-category-property.dto';
+export { CreateUpdateCategoryPropertyDto } from './create-update-category-property.dto';
 export { UpdateCategoryPropertyDto } from './update-category-property.dto';
 export { CreateEquipmentStatusDto } from './create-equipment-status.dto';
 export { UpdateEquipmentStatusDto } from './update-equipment-status.dto';
