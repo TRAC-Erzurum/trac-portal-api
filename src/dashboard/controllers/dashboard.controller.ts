@@ -23,8 +23,6 @@ import {
   ParticipationPeriod,
   ParticipationStatsResponse,
   PersonalTrendResponse,
-  ActivitySummaryPeriod,
-  ActivitySummaryResponse,
   BusiestTimeResponse,
   GeographyStatsResponse,
   MonthlyTrendEntry,
@@ -150,16 +148,6 @@ export class DashboardController {
     @Query('branchId') branchId?: string,
   ): Promise<PersonalTrendResponse> {
     return this.dashboardService.getPersonalTrend(user.id, branchId);
-  }
-
-  @Get('stats/activity-summary')
-  @Public()
-  async getActivitySummary(
-    @Query('period', new DefaultValuePipe('7d')) period: ActivitySummaryPeriod,
-  ): Promise<ActivitySummaryResponse> {
-    const valid: ActivitySummaryPeriod[] = ['all', '7d', '30d'];
-    const p = valid.includes(period) ? period : '7d';
-    return this.dashboardService.getActivitySummary(p);
   }
 
   @Get('stats/busiest-time')

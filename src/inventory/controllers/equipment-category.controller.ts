@@ -96,7 +96,7 @@ export class EquipmentCategoryController {
     if (!file) {
       throw new BadRequestException('error.noFileUploaded');
     }
-    return this.categoryService.uploadPhoto(id, file.path);
+    return this.categoryService.uploadPhoto(id, `uploads/equipment-categories/${file.filename}`);
   }
 
   @Post(':id/properties')

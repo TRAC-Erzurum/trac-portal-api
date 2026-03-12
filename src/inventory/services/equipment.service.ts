@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { unlink } from 'fs/promises';
+import { join } from 'path';
 import { Equipment } from '../entities/equipment.entity';
 import { EquipmentCategory } from '../entities/equipment-category.entity';
 import { EquipmentPhoto } from '../entities/equipment-photo.entity';
@@ -176,11 +177,6 @@ export class EquipmentService {
     dto: CreateEquipmentDto,
     email: string,
   ): Promise<Equipment> {
-    const isLeaf = await this.categoryService.isLeafCategory(dto.categoryId);
-    if (!isLeaf) {
-      throw new BadRequestException('error.categoryNotLeaf');
-    }
-
     await this.categoryService.findOne(dto.categoryId);
     await this.statusService.findOne(dto.statusId);
 
@@ -207,6 +203,7 @@ export class EquipmentService {
         label: dto.label,
         note: dto.note,
         isVisible: dto.isVisible ?? true,
+        quantity: dto.quantity ?? 1,
         createdBy: email,
         updatedBy: [],
       });
@@ -253,6 +250,7 @@ export class EquipmentService {
     if (dto.label !== undefined) equipment.label = dto.label;
     if (dto.note !== undefined) equipment.note = dto.note;
     if (dto.isVisible !== undefined) equipment.isVisible = dto.isVisible;
+    if (dto.quantity !== undefined) equipment.quantity = dto.quantity;
 
     equipment.updatedBy = [...(equipment.updatedBy || []), email];
 
@@ -309,7 +307,7 @@ export class EquipmentService {
 
     for (const photo of equipment.photos) {
       try {
-        await unlink(photo.filePath);
+        await unlink(join(process.cwd(), photo.filePath));
       } catch {
         // file may already be gone
       }
@@ -362,7 +360,7 @@ export class EquipmentService {
     }
 
     try {
-      await unlink(photo.filePath);
+      await unlink(join(process.cwd(), photo.filePath));
     } catch {
       // file may already be gone
     }

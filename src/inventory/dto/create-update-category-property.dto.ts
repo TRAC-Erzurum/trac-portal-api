@@ -1,16 +1,22 @@
 import {
   IsString,
   IsNotEmpty,
+  IsOptional,
+  IsUUID,
   IsEnum,
   IsBoolean,
-  IsOptional,
   IsNumber,
   IsArray,
   Min,
 } from 'class-validator';
 import { PropertyType } from '../enums/property-type.enum';
 
-export class CreateCategoryPropertyDto {
+/** Category update sync list item: no id = create, with id = update existing. */
+export class CreateUpdateCategoryPropertyDto {
+  @IsUUID()
+  @IsOptional()
+  id?: string;
+
   @IsString()
   @IsNotEmpty()
   name: string;

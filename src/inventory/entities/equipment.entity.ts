@@ -48,14 +48,17 @@ export class Equipment extends BaseEntity {
   @JoinColumn({ name: 'branchId' })
   branch: Branch | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   label: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'varchar', length: 1000, nullable: true })
   note: string;
 
   @Column({ default: true })
   isVisible: boolean;
+
+  @Column({ type: 'int', default: 1 })
+  quantity: number;
 
   @OneToMany(() => EquipmentPhoto, (photo) => photo.equipment, {
     cascade: true,
