@@ -6,9 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
-import { unlink } from 'fs/promises';
-import { join } from 'path';
 import { Equipment } from '../entities/equipment.entity';
+import { FileStorageService } from '../../shared/storage';
 import { EquipmentCategory } from '../entities/equipment-category.entity';
 import { EquipmentPhoto } from '../entities/equipment-photo.entity';
 import { EquipmentPropertyValue } from '../entities/equipment-property-value.entity';
@@ -43,6 +42,7 @@ export class EquipmentService {
     private readonly categoryService: EquipmentCategoryService,
     private readonly statusService: EquipmentStatusService,
     private readonly dataSource: DataSource,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -306,11 +306,7 @@ export class EquipmentService {
     }
 
     for (const photo of equipment.photos) {
-      try {
-        await unlink(join(process.cwd(), photo.filePath));
-      } catch {
-        // file may already be gone
-      }
+      await this.fileStorage.delete(photo.filePath);
     }
 
     await this.equipmentRepository.remove(equipment);
@@ -359,12 +355,7 @@ export class EquipmentService {
       throw new NotFoundException('error.photoNotFound');
     }
 
-    try {
-      await unlink(join(process.cwd(), photo.filePath));
-    } catch {
-      // file may already be gone
-    }
-
+    await this.fileStorage.delete(photo.filePath);
     await this.photoRepository.remove(photo);
   }
 
@@ -493,6 +484,24 @@ export class EquipmentService {
             await this.dataSource
               .getRepository(CategoryPropertyDefinition)
               .save(prop);
+          }
+          break;
+
+        case PropertyType.MULTI_SELECT:
+          if (!Array.isArray(val.value)) {
+            throw new BadRequestException('error.invalidMultiSelectValue');
+          }
+          if (prop.isRequired && val.value.length === 0) {
+            throw new BadRequestException('error.requiredPropertyEmpty');
+          }
+          if (val.value.some((v: any) => typeof v !== 'string')) {
+            throw new BadRequestException('error.invalidMultiSelectValue');
+          }
+          if (prop.enumValues) {
+            const invalid = val.value.filter((v: string) => !prop.enumValues!.includes(v));
+            if (invalid.length > 0) {
+              throw new BadRequestException('error.invalidMultiSelectValue');
+            }
           }
           break;
 

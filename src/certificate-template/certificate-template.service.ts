@@ -12,6 +12,7 @@ import { CreateCertificateTemplateDto } from './dto/create-certificate-template.
 import { UpdateCertificateTemplateDto } from './dto/update-certificate-template.dto';
 import { BranchService } from '../branch/services/branch.service';
 import { Net } from '../net/entities/net.entity';
+import { FileStorageService } from '../shared/storage';
 
 @Injectable()
 export class CertificateTemplateService {
@@ -21,6 +22,7 @@ export class CertificateTemplateService {
     @InjectRepository(Net)
     private readonly netRepository: Repository<Net>,
     private readonly branchService: BranchService,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
   async findByBranchId(branchId: string): Promise<CertificateTemplate[]> {
@@ -102,6 +104,10 @@ export class CertificateTemplateService {
         { certificateTemplateId: id },
         { certificateTemplateId: null },
       );
+    }
+    if (template.imagePath) {
+      const logicalPath = template.imagePath.replace(/^\//, '');
+      await this.fileStorage.delete(logicalPath);
     }
     await this.templateRepository.remove(template);
     return { deleted: true, netsUpdated: netsUsing.length };

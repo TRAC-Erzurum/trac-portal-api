@@ -14,11 +14,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname } from 'path';
-import { unlink } from 'fs/promises';
 import * as crypto from 'crypto';
 import { CertificateTemplateService } from './certificate-template.service';
+import { FileStorageService } from '../shared/storage';
+import { MAX_UPLOAD_BYTES } from '../shared/constants/upload.constants';
 import { CreateCertificateTemplateDto } from './dto/create-certificate-template.dto';
 import { UpdateCertificateTemplateDto } from './dto/update-certificate-template.dto';
 import { BranchAdminGuard } from '../branch/guards/branch-admin.guard';
@@ -26,12 +27,11 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/enums/role.enum';
 import { RequestWithUser } from '../shared/types/request.types';
 
-const CERT_TEMPLATE_UPLOAD_DIR = './uploads/certificate-templates';
-
 @Controller('branches/:branchId/certificate-templates')
 export class CertificateTemplateController {
   constructor(
     private readonly certificateTemplateService: CertificateTemplateService,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
   @Get()
@@ -52,13 +52,7 @@ export class CertificateTemplateController {
   @Roles(Role.GUEST)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: CERT_TEMPLATE_UPLOAD_DIR,
-        filename: (_req, file, callback) => {
-          const uniqueName = crypto.randomUUID();
-          callback(null, `${uniqueName}${extname(file.originalname)}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (_req, file, callback) => {
         const ext = extname(file.originalname).toLowerCase();
         const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -70,7 +64,7 @@ export class CertificateTemplateController {
         }
         callback(null, true);
       },
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: MAX_UPLOAD_BYTES },
     }),
   )
   async uploadImage(
@@ -83,14 +77,16 @@ export class CertificateTemplateController {
     const allowedMimes = [
       'image/jpeg',
       'image/png',
-      'image/x-png', // some systems send this for PNG
+      'image/x-png',
       'image/webp',
     ];
     if (!allowedMimes.includes(file.mimetype)) {
-      await unlink(file.path).catch(() => {});
       throw new BadRequestException('error.invalidFileType');
     }
-    return { imagePath: `/uploads/certificate-templates/${file.filename}` };
+    const filename = `${crypto.randomUUID()}${extname(file.originalname)}`;
+    const logicalPath = `uploads/certificate-templates/${filename}`;
+    await this.fileStorage.putBytes(logicalPath, file.buffer, file.mimetype);
+    return { imagePath: `/uploads/certificate-templates/${filename}` };
   }
 
   @Post()

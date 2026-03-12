@@ -24,14 +24,14 @@ import { SetPasswordDto } from '../dto/set-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { AdminResetPasswordDto } from '../dto/admin-reset-password.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { extname } from 'path';
-import { unlink } from 'fs/promises';
-import { Express } from 'express';
 import { RequestWithUser } from '../../shared/types/request.types';
 import { UpdateCurrentBranchDto } from '../dto/update-current-branch.dto';
 import { AuthService } from '../../auth/services/auth.service';
 import { ConfigService } from '@nestjs/config';
+import { FileStorageService } from '../../shared/storage';
+import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
 
 @Controller('user')
 @Roles(Role.GUEST)
@@ -40,6 +40,7 @@ export class UserController {
     private readonly userService: UserService,
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
   @Get('profile')
@@ -112,39 +113,17 @@ export class UserController {
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (_req, file, callback) => {
-          console.log('Processing file:', {
-            originalname: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            fieldname: file.fieldname,
-            buffer: !!file.buffer,
-          });
-          const uniqueName = crypto.randomUUID();
-          callback(null, `${uniqueName}${extname(file.originalname)}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (_req, file, callback) => {
-        console.log('Filtering file:', {
-          originalname: file.originalname,
-          mimetype: file.mimetype,
-          fieldname: file.fieldname,
-        });
         if (!file.originalname.match(/\.(jpg|jpeg|png|webp)$/i)) {
-          console.log('File rejected: invalid extension');
           return callback(
             new BadRequestException('Only image files are allowed!'),
             false,
           );
         }
-        console.log('File accepted');
         callback(null, true);
       },
-      limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB
-      },
+      limits: { fileSize: MAX_UPLOAD_BYTES },
     }),
   )
   async uploadProfilePicture(
@@ -153,32 +132,20 @@ export class UserController {
     @Req() req: RequestWithUser,
   ) {
     if (!file) {
-      console.log('No file received');
       throw new BadRequestException('No file uploaded');
     }
-
-    try {
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
-        console.log('Invalid mimetype:', file.mimetype);
-        await unlink(file.path);
-        throw new BadRequestException('Invalid file type');
-      }
-
-      await this.userService.updateUser(
-        user.id,
-        { picture: `/uploads/${file.filename}` },
-        req.user.email,
-      );
-
-      console.log('File successfully processed, returning URL');
-      return { url: `/uploads/${file.filename}` };
-    } catch (error) {
-      console.error('Error processing upload:', error);
-      if (file.path) {
-        await unlink(file.path).catch(() => {});
-      }
-      throw new BadRequestException('Error processing file');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type');
     }
+    const filename = `${crypto.randomUUID()}${extname(file.originalname)}`;
+    const logicalPath = `uploads/${filename}`;
+    await this.fileStorage.putBytes(logicalPath, file.buffer, file.mimetype);
+    await this.userService.updateUser(
+      user.id,
+      { picture: `/uploads/${filename}` },
+      req.user.email,
+    );
+    return { url: `/uploads/${filename}` };
   }
 
   @Delete('picture')
@@ -187,18 +154,15 @@ export class UserController {
     @Req() req: RequestWithUser,
   ) {
     const currentUser = await this.userService.findOne(user.id);
-
     if (currentUser.picture && currentUser.picture.startsWith('/uploads/')) {
-      const filePath = `.${currentUser.picture}`;
-      await unlink(filePath).catch(() => {});
+      const logicalPath = currentUser.picture.replace(/^\//, '');
+      await this.fileStorage.delete(logicalPath);
     }
-
     await this.userService.updateUser(
       user.id,
       { picture: null },
       req.user.email,
     );
-
     return { message: 'Picture deleted' };
   }
 

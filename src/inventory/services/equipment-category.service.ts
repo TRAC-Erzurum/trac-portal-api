@@ -6,9 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, IsNull, Repository } from 'typeorm';
-import { unlink } from 'fs/promises';
-import { join } from 'path';
 import { EquipmentCategory } from '../entities/equipment-category.entity';
+import { FileStorageService } from '../../shared/storage';
 import { CategoryPropertyDefinition } from '../entities/category-property-definition.entity';
 import { Equipment } from '../entities/equipment.entity';
 import {
@@ -29,6 +28,7 @@ export class EquipmentCategoryService {
     @InjectRepository(Equipment)
     private readonly equipmentRepository: Repository<Equipment>,
     private readonly dataSource: DataSource,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
   async findAll(): Promise<EquipmentCategory[]> {
@@ -310,11 +310,7 @@ export class EquipmentCategoryService {
     }
 
     if (category.photoPath) {
-      try {
-        await unlink(join(process.cwd(), category.photoPath));
-      } catch {
-        // file may already be gone
-      }
+      await this.fileStorage.delete(category.photoPath);
     }
 
     await this.categoryRepository.remove(category);
@@ -332,11 +328,7 @@ export class EquipmentCategoryService {
     }
 
     if (category.photoPath) {
-      try {
-        await unlink(join(process.cwd(), category.photoPath));
-      } catch {
-        // file may already be gone
-      }
+      await this.fileStorage.delete(category.photoPath);
     }
 
     category.photoPath = filePath;
