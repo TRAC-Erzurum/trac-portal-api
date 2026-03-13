@@ -21,6 +21,10 @@ import {
   ActivityType,
   EntityType,
 } from '../../activity/enums/activity-type.enum';
+import {
+  isValidCallSignFormat,
+  extractPlainCallSign,
+} from '../../shared/utils/call-sign.util';
 
 @Injectable()
 export class AttendeeService {
@@ -45,6 +49,10 @@ export class AttendeeService {
     }
 
     const callSign = (dto.callSign ?? '').trim();
+    if (!isValidCallSignFormat(callSign, { allowSlashes: true })) {
+      throw new BadRequestException('error.callSignInvalid');
+    }
+
     const exists = await this.attendeeRepository.findOne({
       where: { callSign, net: { id: netId } },
     });
@@ -99,58 +107,24 @@ export class AttendeeService {
   private async getOrCreateOperator(dto: AttendeeDto, createdBy: string) {
     let operator: Operator;
     if (!dto.operatorId) {
-      let callSign: string;
-      let prefix: string | undefined;
-      let suffix: string | undefined;
-      let country: string | undefined;
-      let city: string | undefined;
-      let district: string | undefined;
-
-      const rawParts = (dto.callSign ?? '').trim().split('/');
-      const callSignParts = rawParts.map((p) => (p ?? '').trim());
-
-      if (callSignParts.length === 1) {
-        callSign = callSignParts[0];
-      } else if (callSignParts.length === 2) {
-        if (callSignParts[1]?.length === 1) {
-          callSign = callSignParts[0];
-          suffix = callSignParts[1];
-        } else {
-          prefix = callSignParts[0];
-          callSign = callSignParts[1];
-        }
-      } else if (callSignParts.length === 3) {
-        callSign = callSignParts[0];
-        prefix = callSignParts[1];
-        suffix = callSignParts[2];
-      } else {
-        throw new BadRequestException('Invalid call sign');
-      }
-
-      if (dto.country) {
-        country = dto.country;
-      }
-
-      if (dto.city) {
-        city = dto.city;
-      }
-
-      if (dto.district) {
-        district = dto.district;
-      }
-
-      operator = await this.operatorService.create(
-        {
-          callSign,
-          prefix,
-          suffix,
-          fullName: dto.name,
-          country,
-          city,
-          district,
-        },
-        createdBy,
+      const plainCallSign = extractPlainCallSign(dto.callSign ?? '');
+      const existingOperator = await this.operatorService.findByCallSign(
+        plainCallSign,
       );
+      if (existingOperator) {
+        operator = existingOperator;
+      } else {
+        operator = await this.operatorService.create(
+          {
+            callSign: plainCallSign,
+            fullName: dto.name,
+            country: (dto.country ?? '').trim() || undefined,
+            city: (dto.city ?? '').trim() || undefined,
+            district: (dto.district ?? '').trim() || undefined,
+          },
+          createdBy,
+        );
+      }
     } else {
       operator = await this.operatorService.findOne(dto.operatorId);
     }

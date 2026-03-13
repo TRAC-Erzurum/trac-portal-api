@@ -15,6 +15,7 @@ import { Operator } from '../../operator/entities/operator.entity';
 import { OperatorService } from '../../operator/services/operator.service';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { normalizeTurkishText } from '../../shared/utils/turkish-search.util';
+import { extractPlainCallSign } from '../../shared/utils/call-sign.util';
 import * as crypto from 'crypto';
 import { SetPasswordDto } from '../dto/set-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
@@ -300,12 +301,23 @@ export class UserService {
 
   async validate(identifier: string, password: string): Promise<User> {
     const normalizedIdentifier = normalizeTurkishText(identifier);
-    const user = await this.userRepository.findOne({
+    let user = await this.userRepository.findOne({
       where: [
         { email: ILike(normalizedIdentifier) },
         { operator: { callSign: ILike(normalizedIdentifier) } },
       ],
+      relations: { operator: true },
     });
+
+    if (!user && normalizedIdentifier.includes('/')) {
+      const plainCallSign = extractPlainCallSign(normalizedIdentifier);
+      if (plainCallSign) {
+        user = await this.userRepository.findOne({
+          where: { operator: { callSign: ILike(plainCallSign) } },
+          relations: { operator: true },
+        });
+      }
+    }
 
     if (!user) {
       Logger.error(`User not found for identifier: ${identifier}`);

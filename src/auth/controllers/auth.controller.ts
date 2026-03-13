@@ -16,11 +16,16 @@ import { CaptchaService, CAPTCHA_SERVICE } from '../services/captcha.interface';
 import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { Role } from '../enums/role.enum';
-import { AuthUser } from '../types/auth.types';
+import {
+  AuthUser,
+  PendingSsoRegistration,
+} from '../types/auth.types';
 import { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AllowWithoutCallsign } from '../decorators/allow-without-callsign.decorator';
 import { RegisterDto } from '../dto/register.dto';
+import { CompleteSsoRegistrationDto } from '../dto/complete-sso-registration.dto';
+import { NotFoundException } from '@nestjs/common';
 import { LoginDto } from '../dto/login.dto';
 import { ApprovePasswordResetDto } from '../dto/approve-password-reset.dto';
 import { PasswordResetRequestDto } from '../dto/password-reset-request.dto';
@@ -29,7 +34,7 @@ import { BranchService } from '../../branch/services/branch.service';
 import { UserService } from '../../user/services/user.service';
 
 interface RequestWithUser extends Request {
-  user: AuthUser;
+  user: AuthUser | PendingSsoRegistration;
 }
 
 @Controller('auth')
@@ -73,7 +78,21 @@ export class AuthController {
     @Req() req: RequestWithUser,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    const { access_token } = this.authService.login(req.user);
+    const payload = req.user;
+
+    if ('pendingSso' in payload && payload.pendingSso) {
+      const pending = payload as PendingSsoRegistration;
+      (req as Request & { session: { pendingSso?: unknown } }).session.pendingSso = {
+        email: pending.email,
+        fullName: pending.fullName,
+        picture: pending.picture,
+        providerId: pending.providerId,
+      };
+      res.redirect('/register/complete-sso');
+      return;
+    }
+
+    const { access_token } = this.authService.login(payload as AuthUser);
     res.cookie('auth_token', access_token, this.getCookieOptions());
     res.redirect('/');
   }
@@ -81,7 +100,8 @@ export class AuthController {
   @Get('check')
   @AllowWithoutCallsign()
   async checkAuth(@Req() req: RequestWithUser) {
-    const user = await this.userService.findOne(req.user.id);
+    const authUser = req.user as AuthUser;
+    const user = await this.userService.findOne(authUser.id);
     const operator = user.operator
       ? {
           id: user.operator.id,
@@ -97,7 +117,7 @@ export class AuthController {
       : undefined;
     return {
       user: {
-        ...req.user,
+        ...authUser,
         currentBranchId: user.currentBranchId,
         operator,
       },
@@ -109,6 +129,58 @@ export class AuthController {
   logout(@Res({ passthrough: true }) res: Response) {
     const { maxAge, ...clearOptions } = this.getCookieOptions();
     res.clearCookie('auth_token', clearOptions);
+  }
+
+  @Public()
+  @Get('pending-sso')
+  async getPendingSsoRegistration(
+    @Req() req: Request & { session: { pendingSso?: Record<string, unknown> } },
+  ): Promise<{
+    email: string;
+    fullName: string;
+    picture: string | null;
+  }> {
+    const data = req.session?.pendingSso;
+    if (!data || typeof data !== 'object' || !data.email) {
+      throw new NotFoundException('error.notFound');
+    }
+    return {
+      email: String(data.email),
+      fullName: data.fullName ? String(data.fullName) : String(data.email),
+      picture: data.picture != null ? String(data.picture) : null,
+    };
+  }
+
+  @Public()
+  @Post('complete-sso-registration')
+  async completeSsoRegistration(
+    @Body() dto: CompleteSsoRegistrationDto,
+    @Req() req: Request & { session: { pendingSso?: Record<string, unknown> } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const data = req.session?.pendingSso;
+    if (!data || typeof data !== 'object' || !data.email) {
+      throw new NotFoundException('error.notFound');
+    }
+
+    const pending: PendingSsoRegistration = {
+      pendingSso: true,
+      email: String(data.email),
+      fullName: data.fullName ? String(data.fullName) : String(data.email),
+      picture: data.picture != null ? String(data.picture) : null,
+      providerId: data.providerId ? String(data.providerId) : '',
+    };
+
+    const authUser = await this.authService.completeSsoRegistration(
+      pending,
+      dto,
+    );
+
+    delete req.session.pendingSso;
+
+    const { access_token } = this.authService.login(authUser);
+    res.cookie('auth_token', access_token, this.getCookieOptions());
+    return { user: authUser };
   }
 
   @Public()
@@ -169,8 +241,9 @@ export class AuthController {
   @Get('admin/pending-requests/count')
   @Roles(Role.ADMIN)
   async getAdminPendingRequestsCount(@Req() req: RequestWithUser) {
+    const userId = (req.user as AuthUser).id;
     const [membershipCount, passwordResetCount] = await Promise.all([
-      this.membershipService.getPendingRequestsCountForAdmin(req.user.id),
+      this.membershipService.getPendingRequestsCountForAdmin(userId),
       this.authService.getPendingPasswordResetRequestsCount(),
     ]);
     return { total: membershipCount + passwordResetCount };
@@ -179,8 +252,9 @@ export class AuthController {
   @Get('admin/pending-requests')
   @Roles(Role.ADMIN)
   async getAdminPendingRequests(@Req() req: RequestWithUser) {
+    const userId = (req.user as AuthUser).id;
     const [membershipRequests, passwordResetRequests] = await Promise.all([
-      this.membershipService.getPendingRequestsForAdmin(req.user.id),
+      this.membershipService.getPendingRequestsForAdmin(userId),
       this.authService.getPendingPasswordResetRequests(),
     ]);
     return {
@@ -210,9 +284,10 @@ export class AuthController {
     @Body() dto: ApprovePasswordResetDto,
     @Req() req: RequestWithUser,
   ) {
+    const userId = (req.user as AuthUser).id;
     await this.authService.approvePasswordResetRequest(
       id,
-      req.user.id,
+      userId,
       dto.newPassword,
     );
   }
@@ -223,7 +298,8 @@ export class AuthController {
     @Param('id') id: string,
     @Req() req: RequestWithUser,
   ) {
-    await this.authService.rejectPasswordResetRequest(id, req.user.id);
+    const userId = (req.user as AuthUser).id;
+    await this.authService.rejectPasswordResetRequest(id, userId);
     return { message: 'Request rejected' };
   }
 }

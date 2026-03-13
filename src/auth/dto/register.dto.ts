@@ -7,6 +7,7 @@ import {
   IsArray,
   IsUUID,
   ArrayMinSize,
+  IsBoolean,
 } from 'class-validator';
 
 export class RegisterDto {
@@ -17,6 +18,10 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   callSign: string;
+
+  @IsBoolean()
+  @IsNotEmpty()
+  privacyAccepted: boolean;
 
   @IsString()
   @IsNotEmpty()

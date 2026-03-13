@@ -73,6 +73,9 @@ export class User extends BaseEntity {
   @Column({ nullable: true, type: 'varchar' })
   idNumber: string | null;
 
+  @Column({ type: 'timestamp', nullable: true })
+  privacyAcceptedAt: Date | null;
+
   @OneToOne(() => Operator, (operator) => operator.user)
   operator: Operator;
 

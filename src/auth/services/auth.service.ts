@@ -7,10 +7,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { AuthUser, JwtPayload } from '../types/auth.types';
+import {
+  AuthUser,
+  JwtPayload,
+  PendingSsoRegistration,
+} from '../types/auth.types';
 import { UserService } from 'src/user/services/user.service';
 import { GoogleProfile } from '../types/auth.types';
 import { RegisterDto } from '../dto/register.dto';
+import { CompleteSsoRegistrationDto } from '../dto/complete-sso-registration.dto';
 import { OperatorService } from '../../operator/services/operator.service';
 import { BranchService } from '../../branch/services/branch.service';
 import { MembershipService } from '../../branch/services/membership.service';
@@ -19,6 +24,11 @@ import {
   PasswordResetStatus,
 } from '../entities/password-reset-request.entity';
 import * as crypto from 'crypto';
+import {
+  extractPlainCallSign,
+  isValidCallSignFormat,
+  normalizePlainCallSign,
+} from '../../shared/utils/call-sign.util';
 
 @Injectable()
 export class AuthService {
@@ -34,7 +44,9 @@ export class AuthService {
     private readonly passwordResetRequestRepository: Repository<PasswordResetRequest>,
   ) {}
 
-  async validateOAuthUser(profile: GoogleProfile): Promise<AuthUser> {
+  async validateOAuthUser(
+    profile: GoogleProfile,
+  ): Promise<AuthUser | PendingSsoRegistration> {
     const email = profile.emails[0].value;
 
     const existingUser = await this.userService.findByEmail(email);
@@ -52,34 +64,17 @@ export class AuthService {
       };
     }
 
-    const createdUser = await this.userService.create(
-      {
-        email,
-        fullName: [profile.name.givenName, profile.name.familyName]
-          .filter(Boolean)
-          .join(' '),
-        picture: profile.photos[0]?.value || null,
-        providerId: profile.id,
-        provider: 'google',
-      },
-      email,
-    );
-
-    const hqBranch = await this.branchService.findHeadquarters();
-    if (hqBranch) {
-      await this.membershipService.join(createdUser.id, hqBranch.id);
-    }
-
-    const role = await this.userService.getEffectiveRole(createdUser.id);
+    // Do not create user until they complete registration (operator + privacy)
+    const fullName = [profile.name.givenName, profile.name.familyName]
+      .filter(Boolean)
+      .join(' ');
+    const picture = profile.photos[0]?.value || null;
     return {
-      id: createdUser.id,
-      email: createdUser.email,
-      role,
-      callSign: createdUser.operator?.callSign,
-      provider: createdUser.provider,
-      providerId: createdUser.providerId,
-      fullName: createdUser.fullName,
-      picture: createdUser.picture,
+      pendingSso: true,
+      email,
+      fullName: fullName || email,
+      picture,
+      providerId: profile.id,
     };
   }
 
@@ -97,6 +92,66 @@ export class AuthService {
       callSign: user.operator?.callSign,
       provider: user.provider,
       isTemporaryPassword: user.isTemporaryPassword,
+    };
+  }
+
+  async completeSsoRegistration(
+    pending: PendingSsoRegistration,
+    dto: CompleteSsoRegistrationDto,
+  ): Promise<AuthUser> {
+    if (dto.privacyAccepted !== true) {
+      throw new BadRequestException('error.privacyAcceptRequired');
+    }
+
+    const callSignRaw = (dto.callSign ?? '').trim();
+    if (!isValidCallSignFormat(callSignRaw, { allowSlashes: false })) {
+      throw new BadRequestException('error.callSignPlainOnly');
+    }
+
+    const operator = await this.operatorService.create(
+      {
+        callSign: normalizePlainCallSign(callSignRaw),
+        city: (dto.city ?? '').trim() || undefined,
+        country: (dto.country ?? '').trim() || undefined,
+        district: (dto.district ?? '').trim() || undefined,
+        fullName: (dto.fullName ?? '').trim() || undefined,
+        gridSquare: (dto.gridSquare ?? '').trim()
+          ? (dto.gridSquare ?? '').trim().toUpperCase()
+          : undefined,
+      },
+      pending.email,
+    );
+
+    const user = await this.userService.create(
+      {
+        email: pending.email,
+        fullName: pending.fullName,
+        picture: pending.picture,
+        providerId: pending.providerId,
+        provider: 'google',
+        operator,
+        privacyAcceptedAt: new Date(),
+      },
+      pending.email,
+    );
+
+    await this.operatorService.linkToUser(operator.id, user.id);
+
+    const hqBranch = await this.branchService.findHeadquarters();
+    if (hqBranch) {
+      await this.membershipService.join(user.id, hqBranch.id);
+    }
+
+    const role = await this.userService.getEffectiveRole(user.id);
+    return {
+      id: user.id,
+      email: user.email,
+      role,
+      callSign: user.operator?.callSign,
+      provider: user.provider,
+      providerId: user.providerId,
+      fullName: user.fullName,
+      picture: user.picture,
     };
   }
 
@@ -131,9 +186,18 @@ export class AuthService {
       }
     }
 
+    if (dto.privacyAccepted !== true) {
+      throw new BadRequestException('error.privacyAcceptRequired');
+    }
+
+    const callSignRaw = (dto.callSign ?? '').trim();
+    if (!isValidCallSignFormat(callSignRaw, { allowSlashes: false })) {
+      throw new BadRequestException('error.callSignPlainOnly');
+    }
+
     const operator = await this.operatorService.create(
       {
-        callSign: (dto.callSign ?? '').trim(),
+        callSign: normalizePlainCallSign(callSignRaw),
         city: (dto.city ?? '').trim() || undefined,
         country: (dto.country ?? '').trim() || undefined,
         district: (dto.district ?? '').trim() || undefined,
@@ -153,6 +217,7 @@ export class AuthService {
         fullName: dto.fullName,
         provider: 'local',
         operator: operator,
+        privacyAcceptedAt: new Date(),
       },
       dto.email,
     );
@@ -170,34 +235,37 @@ export class AuthService {
   }
 
   async createPasswordResetRequest(callSign: string): Promise<void> {
-    const normalizedCallSign = callSign.toUpperCase();
+    const plainCallSign = extractPlainCallSign((callSign ?? '').trim());
+    if (!plainCallSign) {
+      return;
+    }
 
     const existingPending = await this.passwordResetRequestRepository.findOne({
       where: {
-        callSign: normalizedCallSign,
+        callSign: plainCallSign,
         status: PasswordResetStatus.PENDING,
       },
     });
 
     if (existingPending) {
       this.logger.log(
-        `Password reset request already pending for ${normalizedCallSign}`,
+        `Password reset request already pending for ${plainCallSign}`,
       );
       return;
     }
 
     const operator =
-      await this.operatorService.findByCallSign(normalizedCallSign);
+      await this.operatorService.findByCallSign(plainCallSign);
 
     if (!operator) {
       this.logger.warn(
-        `Password reset requested for unknown call sign: ${normalizedCallSign}`,
+        `Password reset requested for unknown call sign: ${plainCallSign}`,
       );
       return;
     }
 
     const request = this.passwordResetRequestRepository.create({
-      callSign: normalizedCallSign,
+      callSign: plainCallSign,
       operator,
       operatorId: operator.id,
       status: PasswordResetStatus.PENDING,

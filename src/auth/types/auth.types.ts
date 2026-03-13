@@ -10,6 +10,15 @@ export interface GoogleProfile {
   photos: Array<{ value: string }>;
 }
 
+/** Passport validate callback receives this when SSO user is not in DB; no JWT, redirect to complete registration. */
+export interface PendingSsoRegistration {
+  pendingSso: true;
+  email: string;
+  fullName: string;
+  picture: string | null;
+  providerId: string;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
