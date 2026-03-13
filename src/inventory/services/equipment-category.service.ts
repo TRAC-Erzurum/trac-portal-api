@@ -184,6 +184,12 @@ export class EquipmentCategoryService {
     return ids;
   }
 
+  /** Returns the given category id and all its descendant ids (for filtering equipment by category tree). */
+  async getCategoryAndDescendantIds(categoryId: string): Promise<string[]> {
+    const descendantIds = await this.getDescendantIds(categoryId);
+    return [categoryId, ...descendantIds];
+  }
+
   async update(
     id: string,
     dto: UpdateEquipmentCategoryDto,
