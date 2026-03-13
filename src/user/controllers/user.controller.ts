@@ -137,6 +137,11 @@ export class UserController {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
       throw new BadRequestException('Invalid file type');
     }
+    const currentUser = await this.userService.findOne(user.id, user);
+    if (currentUser.picture && currentUser.picture.startsWith('/uploads/')) {
+      const oldLogicalPath = currentUser.picture.replace(/^\//, '');
+      await this.fileStorage.delete(oldLogicalPath);
+    }
     const filename = `${crypto.randomUUID()}${extname(file.originalname)}`;
     const logicalPath = `uploads/${filename}`;
     await this.fileStorage.putBytes(logicalPath, file.buffer, file.mimetype);

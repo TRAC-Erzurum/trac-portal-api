@@ -68,11 +68,11 @@ export class QthController {
   async getElevation(
     @Query('lat') latStr: string,
     @Query('lng') lngStr: string,
-  ): Promise<{ elevation: number | null }> {
+  ): Promise<{ elevation: number }> {
     const lat = Number(latStr);
     const lng = Number(lngStr);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      return { elevation: null };
+      return { elevation: 0 };
     }
     const elevation = await this.qthService.getElevation(lat, lng);
     return { elevation };

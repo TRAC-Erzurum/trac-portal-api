@@ -197,6 +197,13 @@ export class EquipmentCategoryService {
     if (dto.name !== undefined) category.name = dto.name;
     if (dto.sortOrder !== undefined) category.sortOrder = dto.sortOrder;
 
+    if (dto.photoPath === null) {
+      if (category.photoPath) {
+        await this.fileStorage.delete(category.photoPath);
+      }
+      category.photoPath = null;
+    }
+
     if (dto.parentId !== undefined) {
       const newParentId =
         dto.parentId === '' || dto.parentId === null ? null : dto.parentId;

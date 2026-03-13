@@ -71,7 +71,13 @@ export class CertificateTemplateService {
   ): Promise<CertificateTemplate> {
     const template = await this.findOne(id, branchId);
     if (dto.name !== undefined) template.name = dto.name;
-    if (dto.imagePath !== undefined) template.imagePath = dto.imagePath;
+    if (dto.imagePath !== undefined) {
+      if (template.imagePath && template.imagePath !== dto.imagePath) {
+        const oldLogicalPath = template.imagePath.replace(/^\//, '');
+        await this.fileStorage.delete(oldLogicalPath);
+      }
+      template.imagePath = dto.imagePath;
+    }
     if (dto.elements !== undefined)
       template.elements = dto.elements as CertificateTemplateElement[];
     template.updatedBy = [...(template.updatedBy || []), updatedBy];
