@@ -4,6 +4,7 @@ import { Operator } from './entities/operator.entity';
 import { Attendee } from '../net/entities/attendee.entity';
 import { Net } from '../net/entities/net.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { BranchCallSign } from '../branch/entities/branch-call-sign.entity';
 import { UserBranchMembership } from '../branch/entities/user-branch-membership.entity';
 import { NetScheduler } from '../net-scheduler/entities/net-scheduler.entity';
 import { services } from './services';
@@ -17,6 +18,7 @@ import { controllers } from './controllers';
       Attendee,
       Net,
       Branch,
+      BranchCallSign,
       UserBranchMembership,
       NetScheduler,
     ]),

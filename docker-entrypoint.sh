@@ -47,10 +47,10 @@ fi
 BACKUP_SIZE=$(du -h $BACKUP_FILE | cut -f1)
 echo "✅ Backup completed successfully: $BACKUP_FILE (${BACKUP_SIZE})"
 
-# Clean up old backups (keep only last 10)
-echo "🧹 Cleaning up old backups (keeping last 10)..."
-DELETED_COUNT=$(ls -t backup/db_backup_*.sql 2>/dev/null | tail -n +11 | wc -l)
-ls -t backup/db_backup_*.sql 2>/dev/null | tail -n +11 | xargs -r rm -f
+# Clean up old backups (keep only last 2)
+echo "🧹 Cleaning up old backups (keeping last 2)..."
+DELETED_COUNT=$(ls -t backup/db_backup_*.sql 2>/dev/null | tail -n +3 | wc -l)
+ls -t backup/db_backup_*.sql 2>/dev/null | tail -n +3 | xargs -r rm -f
 
 if [ $DELETED_COUNT -gt 0 ]; then
     echo "🗑️  Deleted $DELETED_COUNT old backup(s)"

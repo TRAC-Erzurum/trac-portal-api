@@ -32,7 +32,8 @@ export class QthService {
 
   /**
    * Resolve city, optional district and optional country to approximate coordinates.
-   * Uses Nominatim search; results are cached. Works for any location worldwide.
+   * Tries Photon first (often more reliable / different network), then Nominatim.
+   * Results are cached. Works for any location worldwide.
    */
   async getGeocode(
     city: string,
@@ -48,36 +49,144 @@ export class QthService {
     const cached = geocodeCache.get(cacheKey);
     if (cached !== undefined) return cached;
 
-    const parts = [districtTrim, cityTrim].filter(Boolean);
-    if (countryTrim) parts.push(countryTrim);
-    const query = parts.join(', ');
-    const url = `${NOMINATIM_SEARCH_URL}?q=${encodeURIComponent(query)}&format=json&limit=1`;
-    const res = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        'Accept-Language': 'tr,en',
-        'User-Agent': 'TRAC-Portal/1.0',
-      },
+    const isTurkey =
+      !countryTrim ||
+      /^(türkiye|turkey|tur|türk)$/i.test(countryTrim);
+
+    // 1) İl + ilçe varsa Nominatim structured (city, county, country) — ilçe konumuna daha iyi uyar
+    if (cityTrim && districtTrim) {
+      const countryForApi = countryTrim || (isTurkey ? 'Türkiye' : '');
+      const structured = await this.geocodeViaNominatimStructured(
+        cityTrim,
+        districtTrim,
+        countryForApi,
+      );
+      if (structured) {
+        geocodeCache.set(cacheKey, structured);
+        return structured;
+      }
+    }
+
+    // 2) Serbest metin: ilçe önde (district, city, country) — geocoder ilçe noktasına yönlensin
+    const districtFirst =
+      districtTrim && cityTrim
+        ? `${districtTrim}, ${cityTrim}${countryTrim ? ', ' + countryTrim : ''}`
+        : [cityTrim, districtTrim].filter(Boolean).concat(countryTrim ? [countryTrim] : []).join(', ');
+
+    const photonResult = await this.geocodeViaPhoton(districtFirst);
+    if (photonResult) {
+      geocodeCache.set(cacheKey, photonResult);
+      return photonResult;
+    }
+
+    // 3) Nominatim serbest metin (ilçe önde)
+    const viewboxParam = isTurkey
+      ? `&viewbox=${TURKEY_VIEWBOX}&bounded=0`
+      : '';
+    const url = `${NOMINATIM_SEARCH_URL}?q=${encodeURIComponent(districtFirst)}&format=json&limit=1${viewboxParam}`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'Accept-Language': 'tr,en',
+          'User-Agent': 'TRAC-Portal/1.0',
+        },
+      });
+      if (!res.ok) {
+        geocodeCache.set(cacheKey, null);
+        return null;
+      }
+      const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+      const first = data?.[0];
+      if (!first?.lat || !first?.lon) {
+        geocodeCache.set(cacheKey, null);
+        return null;
+      }
+      const lat = Number(first.lat);
+      const lon = Number(first.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        geocodeCache.set(cacheKey, null);
+        return null;
+      }
+      const result = { lat, lng: lon };
+      geocodeCache.set(cacheKey, result);
+      return result;
+    } catch {
+      geocodeCache.set(cacheKey, null);
+      return null;
+    }
+  }
+
+  /**
+   * Nominatim structured search: city, county (ilçe), country ayrı parametre.
+   * Serbest metine göre ilçe/şehir eşleşmesi daha tutarlı olabilir.
+   */
+  private async geocodeViaNominatimStructured(
+    city: string,
+    county: string,
+    country: string,
+  ): Promise<{ lat: number; lng: number } | null> {
+    const params = new URLSearchParams({
+      city: city.trim(),
+      county: county.trim(),
+      format: 'json',
+      limit: '1',
     });
-    if (!res.ok) {
-      geocodeCache.set(cacheKey, null);
+    if (country) params.set('country', country.trim());
+    const url = `${NOMINATIM_SEARCH_URL}?${params.toString()}`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'Accept-Language': 'tr,en',
+          'User-Agent': 'TRAC-Portal/1.0',
+        },
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+      const first = data?.[0];
+      if (!first?.lat || !first?.lon) return null;
+      const lat = Number(first.lat);
+      const lon = Number(first.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return { lat, lng: lon };
+    } catch {
       return null;
     }
-    const data = (await res.json()) as Array<{ lat: string; lon: string }>;
-    const first = data?.[0];
-    if (!first?.lat || !first?.lon) {
-      geocodeCache.set(cacheKey, null);
+  }
+
+  /** Single-result geocode via Photon (used by getGeocode). */
+  private async geocodeViaPhoton(
+    query: string,
+  ): Promise<{ lat: number; lng: number } | null> {
+    const params = new URLSearchParams({
+      q: query,
+      limit: '1',
+      lang: 'tr',
+      lat: '39.9',
+      lon: '32.85',
+    });
+    const url = `${PHOTON_SEARCH_URL}?${params.toString()}`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'TRAC-Portal/1.0',
+        },
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as {
+        features?: Array<{ geometry?: { coordinates?: [number, number] } }>;
+      };
+      const first = data.features?.[0];
+      const coords = first?.geometry?.coordinates;
+      if (!coords || coords.length !== 2) return null;
+      const [lng, lat] = coords;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { lat, lng };
+    } catch {
       return null;
     }
-    const lat = Number(first.lat);
-    const lon = Number(first.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      geocodeCache.set(cacheKey, null);
-      return null;
-    }
-    const result = { lat, lng: lon };
-    geocodeCache.set(cacheKey, result);
-    return result;
   }
 
   /**

@@ -7,15 +7,22 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
 import { Operator } from '../entities/operator.entity';
+import { User } from '../../user/entities/user.entity';
 import { Attendee } from '../../net/entities/attendee.entity';
 import { Net } from '../../net/entities/net.entity';
 import { Branch } from '../../branch/entities/branch.entity';
+import { BranchCallSign } from '../../branch/entities/branch-call-sign.entity';
 import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
 import { NetScheduler } from '../../net-scheduler/entities/net-scheduler.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 import { chunk } from 'lodash';
 import { toTitleCase } from '../../shared/utils/string.utils';
 import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
+import {
+  extractPlainCallSign,
+  isValidCallSignFormat,
+  normalizePlainCallSign,
+} from '../../shared/utils/call-sign.util';
 import { OperatorQueryDto } from '../dto/operator-query.dto';
 
 export interface OperatorSearchResult extends Operator {
@@ -62,6 +69,8 @@ export class OperatorService {
     private readonly netRepository: Repository<Net>,
     @InjectRepository(Branch)
     private readonly branchRepository: Repository<Branch>,
+    @InjectRepository(BranchCallSign)
+    private readonly branchCallSignRepository: Repository<BranchCallSign>,
     @InjectRepository(UserBranchMembership)
     private readonly membershipRepository: Repository<UserBranchMembership>,
     @InjectRepository(NetScheduler)
@@ -367,7 +376,17 @@ export class OperatorService {
     operatorData: DeepPartial<Operator>,
     createdBy: string,
   ): Promise<Operator> {
-    const callSign = (operatorData.callSign ?? '').trim();
+    const raw = (operatorData.callSign ?? '').trim();
+    if (!isValidCallSignFormat(raw, { allowSlashes: false })) {
+      throw new BadRequestException('error.callSignPlainOnly');
+    }
+    const callSign = normalizePlainCallSign(raw);
+    const usedByBranch = await this.branchCallSignRepository.count({
+      where: { callSign },
+    });
+    if (usedByBranch > 0) {
+      throw new ForbiddenException('error.callSignUsedByBranch');
+    }
     const existingOperator = await this.operatorRepository.findOne({
       where: { callSign },
       relations: { user: true },
@@ -399,6 +418,12 @@ export class OperatorService {
     return this.operatorRepository.save(existingOperator);
   }
 
+  async linkToUser(operatorId: string, userId: string): Promise<void> {
+    await this.operatorRepository.update(operatorId, {
+      user: { id: userId } as User,
+    });
+  }
+
   async update(
     id: string,
     operatorData: DeepPartial<Operator>,
@@ -415,7 +440,18 @@ export class OperatorService {
       updatedBy: [...(operator.updatedBy || []), updatedBy],
     };
     if (operatorData.callSign !== undefined) {
-      updates.callSign = (operatorData.callSign ?? '').trim();
+      const raw = (operatorData.callSign ?? '').trim();
+      if (!isValidCallSignFormat(raw, { allowSlashes: false })) {
+        throw new BadRequestException('error.callSignPlainOnly');
+      }
+      const newCallSign = normalizePlainCallSign(raw);
+      const usedByBranch = await this.branchCallSignRepository.count({
+        where: { callSign: newCallSign },
+      });
+      if (usedByBranch > 0) {
+        throw new ForbiddenException('error.callSignUsedByBranch');
+      }
+      updates.callSign = newCallSign;
     }
     if (operatorData.fullName !== undefined) {
       updates.fullName = trimOrNull(operatorData.fullName);
@@ -452,9 +488,13 @@ export class OperatorService {
   ): Promise<void> {
     const operators = records
       .filter((record) => (record.callSign ?? '').trim())
+      .filter((record) => {
+        const raw = (record.callSign ?? '').trim();
+        return isValidCallSignFormat(raw, { allowSlashes: true });
+      })
       .map((record) => {
         const operator = new Operator();
-        operator.callSign = (record.callSign ?? '').trim().toUpperCase();
+        operator.callSign = extractPlainCallSign(record.callSign ?? '');
         operator.prefix = (record.prefix ?? '').trim() || undefined;
         operator.suffix = (record.suffix ?? '').trim() || undefined;
         operator.country = (record.country ?? '').trim()
@@ -474,6 +514,19 @@ export class OperatorService {
         operator.updatedBy = [];
         return operator;
       });
+
+    const branchCallSignsList = await this.branchCallSignRepository.find({
+      select: ['callSign'],
+    });
+    const branchCallSignSet = new Set(
+      branchCallSignsList.map((cs) => cs.callSign),
+    );
+    const usedByBranch = operators.filter((op) =>
+      branchCallSignSet.has(op.callSign),
+    );
+    if (usedByBranch.length > 0) {
+      throw new ForbiddenException('error.callSignUsedByBranch');
+    }
 
     const batchSize = 100;
 

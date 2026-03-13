@@ -12,6 +12,7 @@ import { Branch } from '../entities/branch.entity';
 import { BranchCallSign } from '../entities/branch-call-sign.entity';
 import { UserBranchMembership } from '../entities/user-branch-membership.entity';
 import { User } from '../../user/entities/user.entity';
+import { Operator } from '../../operator/entities/operator.entity';
 import { CreateBranchDto } from '../dto/create-branch.dto';
 import { UpdateBranchDto } from '../dto/update-branch.dto';
 import { DeleteBranchDto } from '../dto/delete-branch.dto';
@@ -19,6 +20,10 @@ import { Role } from '../../auth/enums/role.enum';
 import { BranchRole } from '../enums/branch-role.enum';
 import { MembershipStatus } from '../enums/membership-status.enum';
 import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
+import {
+  isValidCallSignFormat,
+  normalizePlainCallSign,
+} from '../../shared/utils/call-sign.util';
 
 @Injectable()
 export class BranchService {
@@ -31,6 +36,8 @@ export class BranchService {
     private readonly membershipRepository: Repository<UserBranchMembership>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Operator)
+    private readonly operatorRepository: Repository<Operator>,
   ) {}
 
   async create(
@@ -46,13 +53,32 @@ export class BranchService {
       throw new ConflictException('error.branchNameExists');
     }
 
-    // Check if any callSign already exists globally
+    for (const raw of dto.callSigns) {
+      const trimmed = (raw ?? '').trim();
+      if (!isValidCallSignFormat(trimmed, { allowSlashes: false })) {
+        throw new BadRequestException('error.callSignPlainOnly');
+      }
+    }
+
+    const normalizedCallSigns = dto.callSigns.map((raw) =>
+      normalizePlainCallSign((raw ?? '').trim()),
+    );
+
+    // Check if any callSign already exists in another branch
     const existingCallSigns = await this.callSignRepository
       .createQueryBuilder('cs')
-      .where('cs.callSign IN (:...callSigns)', { callSigns: dto.callSigns })
+      .where('cs.callSign IN (:...callSigns)', { callSigns: normalizedCallSigns })
       .getMany();
     if (existingCallSigns.length > 0) {
       throw new ConflictException('error.callSignExists');
+    }
+    // Check that none of the call signs are used by an operator
+    const usedByOperator = await this.operatorRepository
+      .createQueryBuilder('op')
+      .where('op.callSign IN (:...callSigns)', { callSigns: normalizedCallSigns })
+      .getCount();
+    if (usedByOperator > 0) {
+      throw new ConflictException('error.callSignUsedByOperator');
     }
 
     // Create branch
@@ -68,7 +94,7 @@ export class BranchService {
     branch.updatedBy = [];
 
     // Create callSigns - first one is default
-    const callSigns = dto.callSigns.map((callSignValue, index) => {
+    const callSigns = normalizedCallSigns.map((callSignValue, index) => {
       const callSign = new BranchCallSign();
       callSign.callSign = callSignValue;
       callSign.isDefault = index === 0;
@@ -247,8 +273,16 @@ export class BranchService {
         throw new BadRequestException('error.atLeastOneCallSignRequired');
       }
 
-      // Check for duplicates in input
-      const callSignValues = dto.callSigns.map((cs) => cs.callSign);
+      for (const item of dto.callSigns) {
+        const trimmed = (item.callSign ?? '').trim();
+        if (!isValidCallSignFormat(trimmed, { allowSlashes: false })) {
+          throw new BadRequestException('error.callSignPlainOnly');
+        }
+      }
+
+      const callSignValues = dto.callSigns.map((cs) =>
+        normalizePlainCallSign((cs.callSign ?? '').trim()),
+      );
       if (new Set(callSignValues).size !== callSignValues.length) {
         throw new ConflictException('error.duplicateCallSigns');
       }
@@ -264,6 +298,15 @@ export class BranchService {
         throw new ConflictException('error.callSignExists');
       }
 
+      // Check that none of the call signs are used by an operator
+      const usedByOperator = await this.operatorRepository
+        .createQueryBuilder('op')
+        .where('op.callSign IN (:...values)', { values: callSignValues })
+        .getCount();
+      if (usedByOperator > 0) {
+        throw new ConflictException('error.callSignUsedByOperator');
+      }
+
       // Delete all existing and recreate
       await this.callSignRepository.delete({ branchId: id });
 
@@ -271,7 +314,7 @@ export class BranchService {
       for (let i = 0; i < dto.callSigns.length; i++) {
         const cs = new BranchCallSign();
         cs.branchId = id;
-        cs.callSign = dto.callSigns[i].callSign;
+        cs.callSign = callSignValues[i];
         cs.isDefault = hasDefault ? dto.callSigns[i].isDefault : i === 0;
         cs.createdBy = updatedBy;
         await this.callSignRepository.save(cs);
