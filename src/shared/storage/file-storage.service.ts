@@ -31,6 +31,18 @@ export class FileStorageService {
   }
 
   async getWithContentType(logicalPath: string): Promise<GetResult | null> {
+    const isCategoryImage = logicalPath.startsWith('uploads/equipment-categories/');
+    if (isCategoryImage) {
+      const local = this.localPath(logicalPath);
+      try {
+        const body = await readFile(local);
+        const contentType = this.contentTypeFromPath(logicalPath);
+        return { body, contentType };
+      } catch {
+        return null;
+      }
+    }
+
     const cached = this.r2Cache.get(logicalPath);
     const now = Date.now();
     if (cached && cached.expiresAt > now) {

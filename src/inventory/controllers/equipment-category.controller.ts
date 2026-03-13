@@ -11,9 +11,10 @@ import {
   UseInterceptors,
   BadRequestException,
 } from '@nestjs/common';
+import { writeFile } from 'fs/promises';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { FileStorageService } from '../../shared/storage';
 import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
@@ -95,7 +96,8 @@ export class EquipmentCategoryController {
     }
     const filename = `${crypto.randomUUID()}${extname(file.originalname)}`;
     const logicalPath = `uploads/equipment-categories/${filename}`;
-    await this.fileStorage.putBytes(logicalPath, file.buffer, file.mimetype);
+    const absolutePath = join(process.cwd(), logicalPath);
+    await writeFile(absolutePath, file.buffer);
     return this.categoryService.uploadPhoto(id, logicalPath);
   }
 
