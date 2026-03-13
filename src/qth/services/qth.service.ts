@@ -239,11 +239,13 @@ export class QthService {
     const data = (await res.json()) as {
       address?: Record<string, string>;
       display_name?: string;
+      error?: string;
     };
+    if (data?.error) return null;
     return data;
   }
 
-  async getElevation(lat: number, lng: number): Promise<number | null> {
+  async getElevation(lat: number, lng: number): Promise<number> {
     const url = `${OPENTOPODATA_URL}?locations=${lat},${lng}`;
     const res = await fetch(url, {
       headers: { Accept: 'application/json' },
@@ -256,7 +258,8 @@ export class QthService {
     if (typeof m === 'number' && Number.isFinite(m)) {
       return Math.round(m);
     }
-    return null;
+    // Deniz/okyanus vb. için veri dönmeyebilir; rakamı 0 kabul et
+    return 0;
   }
 
   async getCountries(): Promise<Country[]> {

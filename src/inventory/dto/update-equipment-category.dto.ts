@@ -26,6 +26,12 @@ export class UpdateEquipmentCategoryDto {
   @IsOptional()
   sortOrder?: number;
 
+  /** Set to null to remove the category photo (only on PATCH). */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  photoPath?: string | null;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateUpdateCategoryPropertyDto)
