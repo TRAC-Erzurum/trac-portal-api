@@ -107,7 +107,7 @@ export class EquipmentService {
       qb.andWhere('equipment.isVisible = :isVisible', { isVisible: true });
     }
 
-    this.applyFilters(qb, query);
+    await this.applyFilters(qb, query);
     return this.paginate(qb, query);
   }
 
@@ -121,7 +121,7 @@ export class EquipmentService {
       })
       .andWhere('equipment.branchId = :branchId', { branchId });
 
-    this.applyFilters(qb, query);
+    await this.applyFilters(qb, query);
     return this.paginate(qb, query);
   }
 
@@ -143,7 +143,7 @@ export class EquipmentService {
       })
       .andWhere('equipment.isVisible = :isVisible', { isVisible: true });
 
-    this.applyFilters(qb, query);
+    await this.applyFilters(qb, query);
     return this.paginate(qb, query);
   }
 
@@ -578,10 +578,10 @@ export class EquipmentService {
       .addOrderBy('equipment.createdAt', 'DESC');
   }
 
-  private applyFilters(
+  private async applyFilters(
     qb: SelectQueryBuilder<Equipment>,
     query: EquipmentQueryDto,
-  ): void {
+  ): Promise<void> {
     if (query.search) {
       const search = normalizeTurkishSearchTerm(query.search);
       qb.andWhere(
@@ -591,8 +591,11 @@ export class EquipmentService {
     }
 
     if (query.categoryId) {
-      qb.andWhere('equipment.categoryId = :categoryId', {
-        categoryId: query.categoryId,
+      const categoryIds = await this.categoryService.getCategoryAndDescendantIds(
+        query.categoryId,
+      );
+      qb.andWhere('equipment.categoryId IN (:...categoryIds)', {
+        categoryIds,
       });
     }
 
