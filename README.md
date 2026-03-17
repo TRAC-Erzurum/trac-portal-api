@@ -50,5 +50,5 @@ yarn test:cov   # coverage
 ## Katkı
 
 - **Issue’lar** yalnızca **ana repoda** (trac-portal): [trac-portal — Issues](https://github.com/TRAC-Erzurum/trac-portal/issues).
-- **PR’lar** **bu repo’ya** (trac-portal-api), **master**’a açılır. master korumalıdır; katkı yalnızca PR ile.
-- Akış, PR kuralları ve deploy: [Geliştirici dökümanı](https://github.com/TRAC-Erzurum/trac-portal/blob/master/docs/gelistirici.md).
+- **PR’lar** **bu repo’ya** (trac-portal-api), **main**’e açılır. main korumalıdır; katkı yalnızca PR ile.
+- Akış, PR kuralları ve deploy: [Geliştirici dökümanı](https://github.com/TRAC-Erzurum/trac-portal/blob/main/docs/gelistirici.md).
