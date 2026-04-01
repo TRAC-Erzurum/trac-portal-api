@@ -45,6 +45,6 @@ import { PasswordResetRequest } from './entities/password-reset-request.entity';
     GoogleStrategy,
     RolesGuard,
   ],
-  exports: [AuthService],
+  exports: [AuthService, CAPTCHA_SERVICE],
 })
 export class AuthModule {}

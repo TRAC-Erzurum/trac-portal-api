@@ -25,6 +25,8 @@ export interface AuthUser {
   role: EffectiveRole;
   globalRole?: GlobalRole;
   callSign?: string;
+  operatorId?: string;
+  currentBranchId?: string | null;
   provider: string;
   providerId?: string | null;
   fullName?: string | null;
