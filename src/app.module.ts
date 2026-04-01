@@ -1,9 +1,11 @@
 import { Module, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { resolve } from 'node:path';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { UserModule } from './user/user.module';
@@ -23,12 +25,24 @@ import { CommunicationChannelModule } from './communication-channel/communicatio
 import { NetSchedulerModule } from './net-scheduler/net-scheduler.module';
 import { CertificateTemplateModule } from './certificate-template/certificate-template.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { FeedbackModule } from './feedback/feedback.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
+      // Resolve api/.env even when process.cwd() is repo root or another workspace folder
+      envFilePath: [resolve(__dirname, '../.env'), '.env'],
       load: [databaseConfig, r2Config],
       isGlobal: true,
+    }),
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          name: 'default',
+          ttl: 60000,
+          limit: 100,
+        },
+      ],
     }),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
@@ -55,8 +69,10 @@ import { InventoryModule } from './inventory/inventory.module';
     CertificateTemplateModule,
     InventoryModule,
     StorageModule,
+    FeedbackModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     Logger,
