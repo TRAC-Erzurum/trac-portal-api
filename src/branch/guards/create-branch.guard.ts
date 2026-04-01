@@ -6,10 +6,9 @@ import {
 } from '@nestjs/common';
 import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { MembershipService } from '../services/membership.service';
-import { MembershipStatus } from '../enums/membership-status.enum';
 
 @Injectable()
-export class BranchMemberGuard implements CanActivate {
+export class CreateBranchGuard implements CanActivate {
   constructor(private readonly membershipService: MembershipService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -23,17 +22,11 @@ export class BranchMemberGuard implements CanActivate {
       return true;
     }
 
-    const branchId = request.params.branchId ?? request.params.id;
-    if (!branchId) {
-      throw new ForbiddenException('error.forbiddenDescription');
-    }
-
-    const membership = await this.membershipService.findMembership(
+    const ok = await this.membershipService.hasApprovedPresidentInAnyBranch(
       String(user.id),
-      String(branchId),
     );
-    if (!membership || membership.status !== MembershipStatus.APPROVED) {
-      throw new ForbiddenException('error.forbiddenDescription');
+    if (!ok) {
+      throw new ForbiddenException('error.noPermission');
     }
 
     return true;

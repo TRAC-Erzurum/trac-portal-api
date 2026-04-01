@@ -1,4 +1,4 @@
-import { Role, GlobalRole } from '../enums/role.enum';
+import { type EffectiveRole, GlobalRole } from '../enums/role.enum';
 
 export interface GoogleProfile {
   id: string;
@@ -22,7 +22,7 @@ export interface PendingSsoRegistration {
 export interface AuthUser {
   id: string;
   email: string;
-  role: Role;
+  role: EffectiveRole;
   globalRole?: GlobalRole;
   callSign?: string;
   provider: string;
@@ -36,6 +36,6 @@ export interface JwtPayload {
   sub: string;
   email: string;
   provider: string;
-  role: Role;
+  role: EffectiveRole;
   callSign?: string;
 }

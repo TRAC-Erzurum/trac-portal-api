@@ -8,15 +8,20 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { CommunicationChannelService } from '../services/communication-channel.service';
 import { CreateCommunicationChannelDto } from '../dto/create-communication-channel.dto';
 import { UpdateCommunicationChannelDto } from '../dto/update-communication-channel.dto';
 import { Public } from '../../auth/decorators/public.decorator';
 import { Roles } from '../../auth/decorators/roles.decorator';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole } from '../../auth/enums/role.enum';
 import { RequestWithUser } from '../../shared/types/request.types';
 import { CommunicationChannelType } from '../enums/communication-channel-type.enum';
+import { BranchAdminGuard } from '../../branch/guards/branch-admin.guard';
+import { BranchCommunicationChannelAdminGuard } from '../guards/branch-communication-channel-admin.guard';
+import { MembershipService } from '../../branch/services/membership.service';
+import { isApprovedBranchLeadership } from '../../branch/utils/is-approved-branch-leadership.util';
 
 @Controller('communication-channel')
 export class CommunicationChannelController {
@@ -25,7 +30,7 @@ export class CommunicationChannelController {
   ) {}
 
   @Post()
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   async create(
     @Body() createCommunicationChannelDto: CreateCommunicationChannelDto,
     @Req() req: RequestWithUser,
@@ -71,7 +76,7 @@ export class CommunicationChannelController {
       options.search = search;
     }
 
-    if (includeInactive === 'true' && req.user?.role === Role.SUPER_ADMIN) {
+    if (includeInactive === 'true' && req.user?.role === GlobalRole.SUPER_ADMIN) {
       options.includeInactive = true;
     }
 
@@ -102,7 +107,7 @@ export class CommunicationChannelController {
   }
 
   @Patch(':id')
-  @Roles(Role.SUPER_ADMIN)
+  @UseGuards(BranchCommunicationChannelAdminGuard)
   async update(
     @Param('id') id: string,
     @Body() updateCommunicationChannelDto: UpdateCommunicationChannelDto,
@@ -116,19 +121,19 @@ export class CommunicationChannelController {
   }
 
   @Patch(':id/activate')
-  @Roles(Role.SUPER_ADMIN)
+  @UseGuards(BranchCommunicationChannelAdminGuard)
   async activate(@Param('id') id: string, @Req() req: RequestWithUser) {
     return this.communicationChannelService.activate(id, req.user.id);
   }
 
   @Patch(':id/deactivate')
-  @Roles(Role.SUPER_ADMIN)
+  @UseGuards(BranchCommunicationChannelAdminGuard)
   async deactivate(@Param('id') id: string, @Req() req: RequestWithUser) {
     return this.communicationChannelService.deactivate(id, req.user.id);
   }
 
   @Delete(':id')
-  @Roles(Role.SUPER_ADMIN)
+  @UseGuards(BranchCommunicationChannelAdminGuard)
   async delete(@Param('id') id: string) {
     await this.communicationChannelService.delete(id);
     return { success: true };
@@ -139,6 +144,7 @@ export class CommunicationChannelController {
 export class BranchCommunicationChannelController {
   constructor(
     private readonly communicationChannelService: CommunicationChannelService,
+    private readonly membershipService: MembershipService,
   ) {}
 
   @Get()
@@ -151,8 +157,18 @@ export class BranchCommunicationChannelController {
     @Query('search') search?: string,
     @Query('type') type?: string,
   ) {
-    const includeInactiveFlag =
-      includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN;
+    let includeInactiveFlag = false;
+    if (includeInactive === 'true') {
+      if (req.user.role === GlobalRole.SUPER_ADMIN) {
+        includeInactiveFlag = true;
+      } else {
+        const membership = await this.membershipService.findMembership(
+          String(req.user.id),
+          branchId,
+        );
+        includeInactiveFlag = isApprovedBranchLeadership(membership);
+      }
+    }
     const page = pageNumber ? parseInt(pageNumber, 10) : undefined;
     const size = pageSize ? parseInt(pageSize, 10) : undefined;
     return this.communicationChannelService.findByBranch(
@@ -166,7 +182,7 @@ export class BranchCommunicationChannelController {
   }
 
   @Post()
-  @Roles(Role.SUPER_ADMIN)
+  @UseGuards(BranchAdminGuard)
   async create(
     @Param('branchId') branchId: string,
     @Body() dto: CreateCommunicationChannelDto,

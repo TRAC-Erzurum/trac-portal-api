@@ -16,16 +16,18 @@ import { UpdateBranchDto } from '../dto/update-branch.dto';
 import { UpdateStatusDto } from '../dto/update-status.dto';
 import { DeleteBranchDto } from '../dto/delete-branch.dto';
 import { Roles } from '../../auth/decorators/roles.decorator';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { RequestWithUser } from '../../shared/types/request.types';
 import { BranchAdminGuard } from '../guards/branch-admin.guard';
+import { CreateBranchGuard } from '../guards/create-branch.guard';
 
 @Controller('branches')
 export class BranchController {
   constructor(private readonly branchService: BranchService) { }
 
   @Post()
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.GUEST)
+  @UseGuards(CreateBranchGuard)
   async create(
     @Body() createBranchDto: CreateBranchDto,
     @Req() req: RequestWithUser,
@@ -38,7 +40,7 @@ export class BranchController {
   }
 
   @Get('admin/inactive-branches')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   async findInactive() {
     return this.branchService.findInactive();
   }
@@ -59,7 +61,7 @@ export class BranchController {
     } = {};
 
     // Only SUPER_ADMIN can use includeInactive
-    if (includeInactive === 'true' && req.user.role === Role.SUPER_ADMIN) {
+    if (includeInactive === 'true' && req.user.role === GlobalRole.SUPER_ADMIN) {
       options.includeInactive = true;
     }
 
@@ -84,7 +86,7 @@ export class BranchController {
   }
 
   @Delete(':id')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   async delete(
     @Param('id') id: string,
     @Body() deleteBranchDto: DeleteBranchDto,
@@ -103,7 +105,7 @@ export class BranchController {
   }
 
   @Patch(':id/status')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   async updateStatus(
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateStatusDto,

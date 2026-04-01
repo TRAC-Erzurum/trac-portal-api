@@ -28,7 +28,7 @@ import { NetScheduler } from '../../net-scheduler/entities/net-scheduler.entity'
 import { BranchService } from '../../branch/services/branch.service';
 import { MembershipService } from '../../branch/services/membership.service';
 import { UserService } from '../../user/services/user.service';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { CertificateTemplateService } from '../../certificate-template/certificate-template.service';
 import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
 
@@ -74,7 +74,7 @@ export class NetService {
 
     // Check user is SUPER_ADMIN or has approved membership in branch
     const effectiveRole = await this.userService.getEffectiveRole(userId);
-    if (effectiveRole !== Role.SUPER_ADMIN) {
+    if (effectiveRole !== GlobalRole.SUPER_ADMIN) {
       await this.userService.validateBranchMembership(
         userId,
         createNetDto.branchId,

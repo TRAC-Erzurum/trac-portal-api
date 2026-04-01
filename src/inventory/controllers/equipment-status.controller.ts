@@ -9,7 +9,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { Roles } from '../../auth/decorators/roles.decorator';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { EquipmentStatusService } from '../services/equipment-status.service';
 import {
   CreateEquipmentStatusDto,
@@ -17,7 +17,7 @@ import {
 } from '../dto';
 
 @Controller('equipment-statuses')
-@Roles(Role.VOLUNTEER)
+@Roles(BranchRole.VOLUNTEER)
 export class EquipmentStatusController {
   constructor(
     private readonly statusService: EquipmentStatusService,
@@ -29,13 +29,13 @@ export class EquipmentStatusController {
   }
 
   @Post()
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   create(@Body() dto: CreateEquipmentStatusDto, @Req() req: any) {
     return this.statusService.create(dto, req.user.email);
   }
 
   @Patch(':id')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateEquipmentStatusDto,
@@ -45,7 +45,7 @@ export class EquipmentStatusController {
   }
 
   @Delete(':id')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   delete(@Param('id') id: string) {
     return this.statusService.delete(id);
   }

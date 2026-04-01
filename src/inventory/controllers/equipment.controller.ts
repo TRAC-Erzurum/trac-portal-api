@@ -19,7 +19,7 @@ import { extname } from 'path';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { FileStorageService } from '../../shared/storage';
 import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { EquipmentService } from '../services/equipment.service';
 import {
   CreateEquipmentDto,
@@ -30,7 +30,7 @@ import {
 import { OwnerType } from '../enums/owner-type.enum';
 
 @Controller('equipment')
-@Roles(Role.VOLUNTEER)
+@Roles(BranchRole.VOLUNTEER)
 export class EquipmentController {
   constructor(
     private readonly equipmentService: EquipmentService,
@@ -158,7 +158,7 @@ export class EquipmentController {
   }
 
   private async verifyOwnership(id: string, req: any): Promise<void> {
-    if (req.user.role === Role.SUPER_ADMIN) return;
+    if (req.user.role === GlobalRole.SUPER_ADMIN) return;
 
     const equipment = await this.equipmentService.findOne(id);
 
@@ -172,7 +172,8 @@ export class EquipmentController {
     if (
       equipment.ownerType === OwnerType.BRANCH &&
       equipment.branchId === req.user.currentBranchId &&
-      (req.user.role === Role.ADMIN || req.user.role === Role.SUPER_ADMIN)
+      (req.user.role === BranchRole.ADMIN ||
+        req.user.role === BranchRole.PRESIDENT)
     ) {
       return;
     }

@@ -15,8 +15,8 @@ import { Attendee } from '../entities/attendee.entity';
 import type { CertificateTemplateElement } from '../../certificate-template/entities/certificate-template.entity';
 import { UserService } from '../../user/services/user.service';
 import { MembershipService } from '../../branch/services/membership.service';
-import { BranchRole } from '../../branch/enums/branch-role.enum';
-import { Role } from '../../auth/enums/role.enum';
+import { isApprovedBranchLeadership } from '../../branch/utils/is-approved-branch-leadership.util';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 
 @Injectable()
 export class CertificateService {
@@ -73,7 +73,7 @@ export class CertificateService {
     };
   }
 
-  /** True if user may download any attendee's certificate (super_admin, net operator, or branch admin). */
+  /** True if user may download any attendee's certificate (super_admin, net operator, or branch admin/president). */
   async canDownloadAnyCertificate(netId: string, userId: string): Promise<boolean> {
     const net = await this.netRepository.findOne({
       where: { id: netId },
@@ -81,14 +81,13 @@ export class CertificateService {
     });
     if (!net) return false;
     const effectiveRole = await this.userService.getEffectiveRole(userId);
-    if (effectiveRole === Role.SUPER_ADMIN) return true;
+    if (effectiveRole === GlobalRole.SUPER_ADMIN) return true;
     if (net.operator?.user?.id === userId) return true;
     const membership = await this.membershipService.findMembership(
       userId,
       net.branchId,
     );
-    if (membership?.status === 'approved' && membership.role === BranchRole.ADMIN)
-      return true;
+    if (isApprovedBranchLeadership(membership)) return true;
     return false;
   }
 
@@ -109,15 +108,14 @@ export class CertificateService {
     });
     if (!attendee) return false;
     const effectiveRole = await this.userService.getEffectiveRole(userId);
-    if (effectiveRole === Role.SUPER_ADMIN) return true;
+    if (effectiveRole === GlobalRole.SUPER_ADMIN) return true;
     if (net.operator?.user?.id === userId) return true;
     if (attendee.operator?.user?.id === userId) return true;
     const membership = await this.membershipService.findMembership(
       userId,
       net.branchId,
     );
-    if (membership?.status === 'approved' && membership.role === BranchRole.ADMIN)
-      return true;
+    if (isApprovedBranchLeadership(membership)) return true;
     return false;
   }
 
@@ -331,13 +329,11 @@ export class CertificateService {
       userId,
       net.branchId,
     );
-    const isBranchAdmin =
-      membership?.status === 'approved' &&
-      membership.role === BranchRole.ADMIN;
+    const isBranchLeader = isApprovedBranchLeadership(membership);
     if (
-      effectiveRole !== Role.SUPER_ADMIN &&
+      effectiveRole !== GlobalRole.SUPER_ADMIN &&
       !isNetOperator &&
-      !isBranchAdmin
+      !isBranchLeader
     ) {
       throw new ForbiddenException('error.forbiddenDescription');
     }

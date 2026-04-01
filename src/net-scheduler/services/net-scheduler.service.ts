@@ -18,7 +18,7 @@ import { OperatorService } from '../../operator/services/operator.service';
 import { CertificateTemplateService } from '../../certificate-template/certificate-template.service';
 import { UserService } from '../../user/services/user.service';
 import { MembershipService } from '../../branch/services/membership.service';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { CreateNetDto } from '../../net/dto/create-net.dto';
 import { NetCommunicationChannelDto } from '../../net/dto/net-communication-channel.dto';
 import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
@@ -262,7 +262,7 @@ export class NetSchedulerService {
     }
 
     const effectiveRole = await this.userService.getEffectiveRole(userId);
-    if (effectiveRole !== Role.SUPER_ADMIN) {
+    if (effectiveRole !== GlobalRole.SUPER_ADMIN) {
       await this.userService.validateBranchMembership(userId, dto.branchId);
     }
 
@@ -342,7 +342,7 @@ export class NetSchedulerService {
     }
     const scheduler = await this.findOne(id);
     const effectiveRole = await this.userService.getEffectiveRole(userId);
-    if (effectiveRole !== Role.SUPER_ADMIN) {
+    if (effectiveRole !== GlobalRole.SUPER_ADMIN) {
       await this.userService.validateBranchMembership(userId, scheduler.branchId);
     }
 
@@ -448,7 +448,7 @@ export class NetSchedulerService {
       qb.andWhere('s.branchId = :branchId', { branchId });
     } else if (userId) {
       const role = await this.userService.getEffectiveRole(userId);
-      if (role !== Role.SUPER_ADMIN) {
+      if (role !== GlobalRole.SUPER_ADMIN) {
         const branches = await this.membershipService.getUserBranches(userId);
         const ids = branches.map((b) => b.branchId);
         if (ids.length) qb.andWhere('s.branchId IN (:...ids)', { ids });

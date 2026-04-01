@@ -10,7 +10,13 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial, ILike, In } from 'typeorm';
 import { User } from '../entities/user.entity';
-import { Role, GlobalRole } from '../../auth/enums/role.enum';
+import {
+  GlobalRole,
+  BranchRole,
+  type EffectiveRole,
+  effectiveRoleRank,
+  isLeadershipOrSuperEffective,
+} from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
 import { OperatorService } from '../../operator/services/operator.service';
 import { UpdateUserDto } from '../dto/update-user.dto';
@@ -23,7 +29,6 @@ import { AuthUser } from '../../auth/types/auth.types';
 import { BranchService } from '../../branch/services/branch.service';
 import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
-import { BranchRole } from '../../branch/enums/branch-role.enum';
 
 @Injectable()
 export class UserService {
@@ -47,10 +52,8 @@ export class UserService {
     const userCount = await this.userRepository.count();
 
     if (userCount === 0) {
-      user.role = Role.SUPER_ADMIN;
       user.globalRole = GlobalRole.SUPER_ADMIN;
     } else {
-      user.role = Role.GUEST;
       user.globalRole = GlobalRole.GUEST;
     }
 
@@ -64,7 +67,8 @@ export class UserService {
         .digest('hex');
     }
 
-    await this.userRepository.save(user);
+    const saved = await this.userRepository.save(user as User);
+    await this.syncRoleColumn(saved.id);
 
     return this.findByEmail(user.email);
   }
@@ -73,27 +77,96 @@ export class UserService {
     return this.userRepository.find();
   }
 
+  private async isApprovedBranchLeader(userId: string): Promise<boolean> {
+    const n = await this.membershipRepository.count({
+      where: {
+        userId,
+        status: MembershipStatus.APPROVED,
+        role: In([BranchRole.ADMIN, BranchRole.PRESIDENT]),
+      },
+    });
+    return n > 0;
+  }
+
+  private async isBranchLeaderInBranch(
+    userId: string,
+    branchId: string,
+  ): Promise<boolean> {
+    const m = await this.membershipRepository.findOne({
+      where: {
+        userId,
+        branchId,
+        status: MembershipStatus.APPROVED,
+        role: In([BranchRole.ADMIN, BranchRole.PRESIDENT]),
+      },
+    });
+    return !!m;
+  }
+
+  /** `users.role` önbelleğini üyelikler + globalRole ile günceller. */
+  async syncRoleColumn(userId: string): Promise<void> {
+    const eff = await this.getEffectiveRole(userId);
+    await this.userRepository.update({ id: userId }, { role: eff });
+  }
+
   async updateUserRole(
     userId: string,
-    role: Role,
-    updatedBy: string,
+    role: BranchRole,
+    requester: AuthUser,
   ): Promise<User> {
-    if (role === Role.SUPER_ADMIN) {
-      throw new ForbiddenException('error.superAdminRoleCannotBeAssigned');
-    }
-
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('error.notFound');
     }
 
-    if (user.role === Role.SUPER_ADMIN) {
+    if (user.globalRole === GlobalRole.SUPER_ADMIN) {
       throw new ForbiddenException('error.superAdminRoleCannotBeChanged');
     }
 
-    user.role = role;
-    user.updatedBy = [...(user.updatedBy || []), updatedBy];
-    return this.userRepository.save(user);
+    const requesterElevated = isLeadershipOrSuperEffective(requester.role);
+
+    if (!requesterElevated) {
+      const ok = await this.isApprovedBranchLeader(requester.id);
+      if (!ok) {
+        throw new ForbiddenException('error.noPermission');
+      }
+      if (role === BranchRole.ADMIN || role === BranchRole.PRESIDENT) {
+        throw new ForbiddenException('error.noPermission');
+      }
+      const targetEff = await this.getEffectiveRole(userId);
+      if (
+        targetEff === BranchRole.ADMIN ||
+        targetEff === BranchRole.PRESIDENT
+      ) {
+        throw new ForbiddenException('error.noPermission');
+      }
+    }
+
+    const memberships = await this.membershipRepository.find({
+      where: { userId, status: MembershipStatus.APPROVED },
+    });
+
+    if (memberships.length === 0) {
+      throw new BadRequestException('error.invalidData');
+    }
+
+    const isSuper = requester.role === GlobalRole.SUPER_ADMIN;
+
+    for (const m of memberships) {
+      const can =
+        isSuper || (await this.isBranchLeaderInBranch(requester.id, m.branchId));
+      if (can) {
+        m.role = role;
+        m.updatedBy = [...(m.updatedBy || []), requester.email];
+        await this.membershipRepository.save(m);
+      }
+    }
+
+    await this.syncRoleColumn(userId);
+    user.updatedBy = [...(user.updatedBy || []), requester.email];
+    await this.userRepository.save(user);
+
+    return this.findOne(userId);
   }
 
   async findOne(id: string, requester?: AuthUser): Promise<User> {
@@ -119,7 +192,7 @@ export class UserService {
     targetUserId: string,
   ): Promise<boolean> {
     if (
-      requester.role === Role.SUPER_ADMIN ||
+      requester.role === GlobalRole.SUPER_ADMIN ||
       requester.globalRole === GlobalRole.SUPER_ADMIN ||
       requester.id === targetUserId
     ) {
@@ -163,27 +236,31 @@ export class UserService {
     return this.operatorService.findByUserId(userId);
   }
 
-  async getEffectiveRole(userId: string): Promise<Role> {
+  async getEffectiveRole(userId: string): Promise<EffectiveRole> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
     });
-    if (!user) return Role.GUEST;
-    if (user.globalRole === GlobalRole.SUPER_ADMIN) return Role.SUPER_ADMIN;
+    if (!user) return GlobalRole.GUEST;
+    if (user.globalRole === GlobalRole.SUPER_ADMIN) {
+      return GlobalRole.SUPER_ADMIN;
+    }
     const memberships = await this.membershipRepository.find({
       where: { userId, status: MembershipStatus.APPROVED },
     });
-    if (memberships.length === 0) return Role.GUEST;
-    const hasAdmin = memberships.some(
-      (m) => m.role === BranchRole.ADMIN || m.role === BranchRole.PRESIDENT,
-    );
-    const hasMember = memberships.some((m) => m.role === BranchRole.MEMBER);
-    const hasVolunteer = memberships.some(
-      (m) => m.role === BranchRole.VOLUNTEER,
-    );
-    if (hasAdmin) return Role.ADMIN;
-    if (hasMember) return Role.MEMBER;
-    if (hasVolunteer) return Role.VOLUNTEER;
-    return Role.GUEST;
+    if (memberships.length === 0) return GlobalRole.GUEST;
+    if (memberships.some((m) => m.role === BranchRole.PRESIDENT)) {
+      return BranchRole.PRESIDENT;
+    }
+    if (memberships.some((m) => m.role === BranchRole.ADMIN)) {
+      return BranchRole.ADMIN;
+    }
+    if (memberships.some((m) => m.role === BranchRole.MEMBER)) {
+      return BranchRole.MEMBER;
+    }
+    if (memberships.some((m) => m.role === BranchRole.VOLUNTEER)) {
+      return BranchRole.VOLUNTEER;
+    }
+    return GlobalRole.GUEST;
   }
 
   async exists(id: string): Promise<boolean> {
@@ -402,16 +479,11 @@ export class UserService {
   ): Promise<void> {
     const targetEffectiveRole = await this.getEffectiveRole(targetUserId);
 
-    const roleHierarchy = {
-      [Role.SUPER_ADMIN]: 5,
-      [Role.ADMIN]: 4,
-      [Role.MEMBER]: 3,
-      [Role.VOLUNTEER]: 2,
-      [Role.GUEST]: 1,
-    };
-
-    if (adminUser.role !== Role.SUPER_ADMIN) {
-      if (roleHierarchy[targetEffectiveRole] >= roleHierarchy[adminUser.role]) {
+    if (adminUser.role !== GlobalRole.SUPER_ADMIN) {
+      if (
+        effectiveRoleRank(targetEffectiveRole) >=
+        effectiveRoleRank(adminUser.role)
+      ) {
         throw new ForbiddenException('error.cannotResetHigherRolePassword');
       }
     }
@@ -435,12 +507,12 @@ export class UserService {
 
   async isAdmin(userId: string): Promise<boolean> {
     const role = await this.getEffectiveRole(userId);
-    return role === Role.ADMIN || role === Role.SUPER_ADMIN;
+    return isLeadershipOrSuperEffective(role);
   }
 
   async isSuperAdmin(userId: string): Promise<boolean> {
     const role = await this.getEffectiveRole(userId);
-    return role === Role.SUPER_ADMIN;
+    return role === GlobalRole.SUPER_ADMIN;
   }
 
   async forceSetPassword(userId: string, newPassword: string): Promise<void> {
@@ -472,7 +544,7 @@ export class UserService {
     await this.branchService.findOne(branchId);
 
     const effectiveRole = await this.getEffectiveRole(userId);
-    if (effectiveRole === Role.SUPER_ADMIN) {
+    if (effectiveRole === GlobalRole.SUPER_ADMIN) {
       return;
     }
 

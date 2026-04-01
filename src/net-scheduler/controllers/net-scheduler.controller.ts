@@ -13,7 +13,7 @@ import { NetSchedulerService } from '../services/net-scheduler.service';
 import { CreateNetSchedulerDto } from '../dto/create-net-scheduler.dto';
 import { UpdateNetSchedulerDto } from '../dto/update-net-scheduler.dto';
 import { Roles } from '../../auth/decorators/roles.decorator';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { RequestWithUser } from '../../shared/types/request.types';
 
 @Controller('net-schedulers')
@@ -21,7 +21,7 @@ export class NetSchedulerController {
   constructor(private readonly netSchedulerService: NetSchedulerService) {}
 
   @Post()
-  @Roles(Role.MEMBER)
+  @Roles(BranchRole.MEMBER)
   create(
     @Body() dto: CreateNetSchedulerDto,
     @Req() req: RequestWithUser,
@@ -34,7 +34,7 @@ export class NetSchedulerController {
   }
 
   @Get()
-  @Roles(Role.MEMBER)
+  @Roles(BranchRole.MEMBER)
   findAll(
     @Query('branchId') branchId: string | undefined,
     @Query('search') search: string | undefined,
@@ -54,13 +54,13 @@ export class NetSchedulerController {
   }
 
   @Get(':id')
-  @Roles(Role.MEMBER)
+  @Roles(BranchRole.MEMBER)
   findOne(@Param('id') id: string) {
     return this.netSchedulerService.findOne(id);
   }
 
   @Get(':id/upcoming-nets')
-  @Roles(Role.MEMBER)
+  @Roles(BranchRole.MEMBER)
   getUpcomingNets(
     @Param('id') id: string,
     @Query('limit') limit?: string,
@@ -75,7 +75,7 @@ export class NetSchedulerController {
   }
 
   @Patch(':id')
-  @Roles(Role.MEMBER)
+  @Roles(BranchRole.MEMBER)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateNetSchedulerDto,
@@ -90,7 +90,7 @@ export class NetSchedulerController {
   }
 
   @Delete(':id')
-  @Roles(Role.MEMBER)
+  @Roles(BranchRole.MEMBER)
   delete(@Param('id') id: string) {
     return this.netSchedulerService.delete(id);
   }

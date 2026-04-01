@@ -18,7 +18,7 @@ import { extname, join } from 'path';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { FileStorageService } from '../../shared/storage';
 import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { EquipmentCategoryService } from '../services/equipment-category.service';
 import {
   CreateEquipmentCategoryDto,
@@ -28,7 +28,7 @@ import {
 } from '../dto';
 
 @Controller('equipment-categories')
-@Roles(Role.VOLUNTEER)
+@Roles(BranchRole.VOLUNTEER)
 export class EquipmentCategoryController {
   constructor(
     private readonly categoryService: EquipmentCategoryService,
@@ -49,13 +49,13 @@ export class EquipmentCategoryController {
   }
 
   @Post()
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   create(@Body() dto: CreateEquipmentCategoryDto, @Req() req: any) {
     return this.categoryService.create(dto, req.user.email);
   }
 
   @Patch(':id')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateEquipmentCategoryDto,
@@ -65,13 +65,13 @@ export class EquipmentCategoryController {
   }
 
   @Delete(':id')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   delete(@Param('id') id: string) {
     return this.categoryService.delete(id);
   }
 
   @Post(':id/upload')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -102,7 +102,7 @@ export class EquipmentCategoryController {
   }
 
   @Post(':id/properties')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   addProperty(
     @Param('id') id: string,
     @Body() dto: CreateCategoryPropertyDto,
@@ -112,7 +112,7 @@ export class EquipmentCategoryController {
   }
 
   @Patch(':id/properties/:propertyId')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   updateProperty(
     @Param('id') id: string,
     @Param('propertyId') propertyId: string,
@@ -128,7 +128,7 @@ export class EquipmentCategoryController {
   }
 
   @Delete(':id/properties/:propertyId')
-  @Roles(Role.SUPER_ADMIN)
+  @Roles(GlobalRole.SUPER_ADMIN)
   deleteProperty(
     @Param('id') id: string,
     @Param('propertyId') propertyId: string,

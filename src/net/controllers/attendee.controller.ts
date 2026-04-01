@@ -12,7 +12,7 @@ import {
 import { AttendeeService } from '../services/attendee.service';
 import { AttendeeDto } from '../dto/attendee.dto';
 import { Roles } from '../../auth/decorators/roles.decorator';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { UseGuards } from '@nestjs/common';
 import { ManageNetGuard } from '../guards/manage-net.guard';
 import { ManageNet } from '../decorators/manage-net.decorator';
@@ -20,7 +20,7 @@ import { PaginationDto } from '../../shared/dto/pagination.dto';
 import { RequestWithUser } from '../../shared/types/request.types';
 
 @Controller('net/:netId/attendee')
-@Roles(Role.VOLUNTEER)
+@Roles(BranchRole.VOLUNTEER)
 @UseGuards(ManageNetGuard)
 export class AttendeeController {
   constructor(private readonly attendeeService: AttendeeService) {}

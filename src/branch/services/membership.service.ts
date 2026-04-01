@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserBranchMembership } from '../entities/user-branch-membership.entity';
 import { Branch } from '../entities/branch.entity';
@@ -17,8 +17,7 @@ import { User } from '../../user/entities/user.entity';
 import { Net } from '../../net/entities/net.entity';
 import { BranchRole } from '../enums/branch-role.enum';
 import { MembershipStatus } from '../enums/membership-status.enum';
-import { Role } from '../../auth/enums/role.enum';
-import { GlobalRole } from '../../auth/enums/role.enum';
+import { GlobalRole, type EffectiveRole } from '../../auth/enums/role.enum';
 import {
   ActivityEvent,
   ACTIVITY_EVENT,
@@ -53,6 +52,10 @@ export class MembershipService {
     private readonly operatorService: OperatorService,
   ) {}
 
+  private async syncUserEffectiveRole(userId: string): Promise<void> {
+    await this.userService.syncRoleColumn(userId);
+  }
+
   async createMembership(
     userId: string,
     branchId: string,
@@ -76,7 +79,9 @@ export class MembershipService {
     membership.createdBy = createdBy;
     membership.updatedBy = [];
 
-    return this.membershipRepository.save(membership);
+    const saved = await this.membershipRepository.save(membership);
+    await this.syncUserEffectiveRole(userId);
+    return saved;
   }
 
   async addMemberDirectly(
@@ -99,6 +104,7 @@ export class MembershipService {
       existingMembership.role = role;
       existingMembership.updatedBy = [...existingMembership.updatedBy, addedBy];
       const saved = await this.membershipRepository.save(existingMembership);
+      await this.syncUserEffectiveRole(userId);
 
       this.eventEmitter.emit('membership.approved', {
         membership: saved,
@@ -140,6 +146,8 @@ export class MembershipService {
       membership: saved,
       actorCallSign,
     });
+
+    await this.syncUserEffectiveRole(userId);
 
     return saved;
   }
@@ -203,7 +211,9 @@ export class MembershipService {
           ),
         );
       }
-      
+
+      await this.syncUserEffectiveRole(userId);
+
       return saved;
     } catch (error) {
       if (error.code === '23505') {
@@ -279,6 +289,8 @@ export class MembershipService {
         }
       }
 
+      await this.syncUserEffectiveRole(membership.userId);
+
       const targetCallSign = membership.user?.operator?.callSign ?? null;
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
@@ -353,7 +365,7 @@ export class MembershipService {
     branchId: string,
     removedBy: string,
     actorCallSign: string,
-    actorRole: Role,
+    actorRole: EffectiveRole,
   ): Promise<void> {
     const branch = await this.branchRepository.findOne({
       where: { id: branchId },
@@ -372,7 +384,10 @@ export class MembershipService {
     }
 
     // Only SUPER_ADMIN can remove another SUPER_ADMIN
-    if (user.globalRole === GlobalRole.SUPER_ADMIN && actorRole !== Role.SUPER_ADMIN) {
+    if (
+      user.globalRole === GlobalRole.SUPER_ADMIN &&
+      actorRole !== GlobalRole.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('error.cannotRemoveSuperAdmin');
     }
 
@@ -411,6 +426,7 @@ export class MembershipService {
 
     try {
       await this.membershipRepository.remove(membership);
+      await this.syncUserEffectiveRole(userId);
 
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
@@ -503,6 +519,29 @@ export class MembershipService {
       where: { userId, branchId },
       relations: ['user', 'branch'],
     });
+  }
+
+  async hasApprovedPresidentInAnyBranch(userId: string): Promise<boolean> {
+    const n = await this.membershipRepository.count({
+      where: {
+        userId,
+        status: MembershipStatus.APPROVED,
+        role: BranchRole.PRESIDENT,
+      },
+    });
+    return n > 0;
+  }
+
+  /** Onaylı şube yöneticisi veya başkan (herhangi bir şube). */
+  async hasApprovedBranchLeadershipInAnyBranch(userId: string): Promise<boolean> {
+    const n = await this.membershipRepository.count({
+      where: {
+        userId,
+        status: MembershipStatus.APPROVED,
+        role: In([BranchRole.ADMIN, BranchRole.PRESIDENT]),
+      },
+    });
+    return n > 0;
   }
 
   async getUserMemberships(userId: string): Promise<UserBranchMembership[]> {
@@ -602,6 +641,7 @@ export class MembershipService {
           },
         ),
       );
+      await this.syncUserEffectiveRole(membership.userId);
       return saved;
     } catch (error) {
       console.error('Membership updateRole error:', error);
@@ -622,7 +662,7 @@ export class MembershipService {
   async getPendingRequestsCountForAdmin(userId: string): Promise<number> {
     const effectiveRole = await this.userService.getEffectiveRole(userId);
 
-    if (effectiveRole === Role.SUPER_ADMIN) {
+    if (effectiveRole === GlobalRole.SUPER_ADMIN) {
       return this.membershipRepository.count({
         where: { status: MembershipStatus.PENDING },
       });
@@ -658,7 +698,7 @@ export class MembershipService {
 
     let branches: Array<{ branchId: string; name: string }> = [];
 
-    if (effectiveRole === Role.SUPER_ADMIN) {
+    if (effectiveRole === GlobalRole.SUPER_ADMIN) {
       const allBranches = await this.branchRepository.find({
         where: { isActive: true },
         select: ['id', 'name'],
@@ -690,7 +730,7 @@ export class MembershipService {
 
     for (const branch of branches) {
       const pending = await this.getPendingMembershipsByBranch(branch.branchId);
-      if (pending.length > 0 || effectiveRole === Role.SUPER_ADMIN) {
+      if (pending.length > 0 || effectiveRole === GlobalRole.SUPER_ADMIN) {
         result.push({
           branchId: branch.branchId,
           branchName: branch.name,

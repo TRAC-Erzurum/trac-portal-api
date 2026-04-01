@@ -5,8 +5,20 @@ import {
   IsOptional,
   IsArray,
   ArrayMinSize,
+  ValidateNested,
+  IsBoolean,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { BranchType } from '../enums/branch-type.enum';
+
+class CreateBranchCallSignDto {
+  @IsString()
+  @IsNotEmpty()
+  callSign: string;
+
+  @IsBoolean()
+  isDefault: boolean;
+}
 
 export class CreateBranchDto {
   @IsString()
@@ -19,8 +31,9 @@ export class CreateBranchDto {
 
   @IsArray()
   @ArrayMinSize(1)
-  @IsString({ each: true })
-  callSigns: string[];
+  @ValidateNested({ each: true })
+  @Type(() => CreateBranchCallSignDto)
+  callSigns: CreateBranchCallSignDto[];
 
   @IsString()
   @IsOptional()
