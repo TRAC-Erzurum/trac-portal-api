@@ -6,14 +6,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { MANAGE_NET_KEY } from '../decorators/manage-net.decorator';
+import {
+  MANAGE_NET_KEY,
+  MANAGE_NET_DELETE_LEADERSHIP_ONLY_KEY,
+} from '../decorators/manage-net.decorator';
 import { ICurrentUser } from '../../user/types/user.types';
 import { UserService } from '../../user/services/user.service';
 import { NetService } from '../services/net.service';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole } from '../../auth/enums/role.enum';
 import { MembershipService } from '../../branch/services/membership.service';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
-import { BranchRole } from '../../branch/enums/branch-role.enum';
+import { isApprovedBranchLeadership } from '../../branch/utils/is-approved-branch-leadership.util';
 
 @Injectable()
 export class ManageNetGuard implements CanActivate {
@@ -34,6 +37,11 @@ export class ManageNetGuard implements CanActivate {
       return true;
     }
 
+    const deleteLeadershipOnly = this.reflector.getAllAndOverride<boolean>(
+      MANAGE_NET_DELETE_LEADERSHIP_ONLY_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
     const request = context.switchToHttp().getRequest();
     const netId: string = request.params[paramName];
     const user: ICurrentUser = request.user;
@@ -48,33 +56,35 @@ export class ManageNetGuard implements CanActivate {
       throw new NotFoundException('Çevrim bulunamadı');
     }
 
-    // SUPER_ADMIN can manage all nets
     const effectiveRole = await this.userService.getEffectiveRole(user.id);
-    if (effectiveRole === Role.SUPER_ADMIN) {
+    if (effectiveRole === GlobalRole.SUPER_ADMIN) {
       return true;
     }
 
-    // Check if user is the net operator
-    if (net.operator.user && net.operator.user.id === user.id) {
-      return true;
-    }
-
-    // Check branch membership - user must be MEMBER+ in the net's branch
     const membership = await this.membershipService.findMembership(
       user.id,
       net.branchId,
     );
 
+    if (
+      membership?.status === MembershipStatus.APPROVED &&
+      isApprovedBranchLeadership(membership)
+    ) {
+      return true;
+    }
+
+    if (deleteLeadershipOnly) {
+      throw new ForbiddenException('error.noPermission');
+    }
+
+    if (net.operator.user && net.operator.user.id === user.id) {
+      return true;
+    }
+
     if (!membership || membership.status !== MembershipStatus.APPROVED) {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 
-    // Branch ADMIN can manage all nets in their branch
-    if (membership.role === BranchRole.ADMIN) {
-      return true;
-    }
-
-    // For other operations, only the operator can manage (already checked above)
     throw new ForbiddenException('error.forbiddenDescription');
   }
 }

@@ -15,7 +15,7 @@ import { AuthService } from '../services/auth.service';
 import { CaptchaService, CAPTCHA_SERVICE } from '../services/captcha.interface';
 import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
-import { Role } from '../enums/role.enum';
+import { GlobalRole } from '../enums/role.enum';
 import {
   AuthUser,
   PendingSsoRegistration,
@@ -32,6 +32,7 @@ import { PasswordResetRequestDto } from '../dto/password-reset-request.dto';
 import { MembershipService } from '../../branch/services/membership.service';
 import { BranchService } from '../../branch/services/branch.service';
 import { UserService } from '../../user/services/user.service';
+import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
 
 interface RequestWithUser extends Request {
   user: AuthUser | PendingSsoRegistration;
@@ -115,11 +116,19 @@ export class AuthController {
           gridSquare: user.operator.gridSquare ?? undefined,
         }
       : undefined;
+    const branchMemberships =
+      user.branchMemberships?.map((m) => ({
+        branchId: m.branchId,
+        role: m.role,
+        status: m.status,
+      })) ?? [];
+
     return {
       user: {
         ...authUser,
         currentBranchId: user.currentBranchId,
         operator,
+        branchMemberships,
       },
     };
   }
@@ -239,7 +248,8 @@ export class AuthController {
   }
 
   @Get('admin/pending-requests/count')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async getAdminPendingRequestsCount(@Req() req: RequestWithUser) {
     const userId = (req.user as AuthUser).id;
     const [membershipCount, passwordResetCount] = await Promise.all([
@@ -250,7 +260,8 @@ export class AuthController {
   }
 
   @Get('admin/pending-requests')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async getAdminPendingRequests(@Req() req: RequestWithUser) {
     const userId = (req.user as AuthUser).id;
     const [membershipRequests, passwordResetRequests] = await Promise.all([
@@ -264,13 +275,15 @@ export class AuthController {
   }
 
   @Get('password-reset-requests')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async getPendingPasswordResetRequests() {
     return this.authService.getPendingPasswordResetRequests();
   }
 
   @Get('password-reset-requests/count')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async getPendingPasswordResetRequestsCount() {
     return {
       count: await this.authService.getPendingPasswordResetRequestsCount(),
@@ -278,7 +291,8 @@ export class AuthController {
   }
 
   @Post('password-reset-requests/:id/approve')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async approvePasswordResetRequest(
     @Param('id') id: string,
     @Body() dto: ApprovePasswordResetDto,
@@ -293,7 +307,8 @@ export class AuthController {
   }
 
   @Post('password-reset-requests/:id/reject')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async rejectPasswordResetRequest(
     @Param('id') id: string,
     @Req() req: RequestWithUser,

@@ -5,9 +5,8 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Role } from '../../auth/enums/role.enum';
+import { BranchRole, GlobalRole } from '../../auth/enums/role.enum';
 import { MembershipService } from '../services/membership.service';
-import { BranchRole } from '../enums/branch-role.enum';
 import { MembershipStatus } from '../enums/membership-status.enum';
 
 @Injectable()
@@ -24,7 +23,7 @@ export class BranchAdminGuard implements CanActivate {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 
-    if (user.role === Role.SUPER_ADMIN) {
+    if (user.role === GlobalRole.SUPER_ADMIN) {
       return true;
     }
 

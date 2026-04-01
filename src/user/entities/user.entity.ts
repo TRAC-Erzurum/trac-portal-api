@@ -1,6 +1,9 @@
 import { Entity, Column, OneToOne, OneToMany } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import { Role, GlobalRole } from '../../auth/enums/role.enum';
+import {
+  GlobalRole,
+  type EffectiveRole,
+} from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
@@ -31,8 +34,9 @@ export class User extends BaseEntity {
   @Exclude()
   salt: string | null;
 
-  @Column({ type: 'enum', enum: Role, default: Role.GUEST })
-  role: Role;
+  /** Önbellek: `getEffectiveRole` ile uyumlu; liste filtreleri için. */
+  @Column({ type: 'varchar', length: 32, default: GlobalRole.GUEST })
+  role: EffectiveRole;
 
   @Column({
     type: 'enum',

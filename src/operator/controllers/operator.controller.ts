@@ -10,11 +10,12 @@ import {
   UploadedFile,
   UseInterceptors,
   Req,
+  UseGuards,
   DefaultValuePipe,
   ParseIntPipe,
 } from '@nestjs/common';
 import { Operator } from '../entities/operator.entity';
-import { Role } from '../../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import {
   OperatorService,
@@ -28,6 +29,7 @@ import { CsvParserService } from '../services/csv-parser.service';
 import { OperatorQueryDto } from '../dto/operator-query.dto';
 import { RequestWithUser } from '../../shared/types/request.types';
 import { Express } from 'express';
+import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
 
 @Controller('operator')
 export class OperatorController {
@@ -37,7 +39,7 @@ export class OperatorController {
   ) {}
 
   @Get()
-  @Roles(Role.VOLUNTEER)
+  @Roles(BranchRole.VOLUNTEER)
   getOperators(
     @Query() query: OperatorQueryDto,
     @Req() req: RequestWithUser,
@@ -46,13 +48,13 @@ export class OperatorController {
   }
 
   @Get('user')
-  @Roles(Role.VOLUNTEER)
+  @Roles(BranchRole.VOLUNTEER)
   getOperatorsWithUser(@Req() req: RequestWithUser): Promise<Operator[]> {
     return this.operatorService.findAllWithUser(req.user?.id);
   }
 
   @Get('search')
-  @Roles(Role.VOLUNTEER)
+  @Roles(BranchRole.VOLUNTEER)
   searchOperators(
     @Query('q') query: string,
     @Query('sortBy') sortBy?: 'managed' | 'attended' | 'default',
@@ -70,19 +72,19 @@ export class OperatorController {
   }
 
   @Get(':id')
-  @Roles(Role.VOLUNTEER)
+  @Roles(BranchRole.VOLUNTEER)
   getOperator(@Param('id') id: string): Promise<Operator> {
     return this.operatorService.findOne(id);
   }
 
   @Get(':id/stats')
-  @Roles(Role.VOLUNTEER)
+  @Roles(BranchRole.VOLUNTEER)
   getOperatorStats(@Param('id') id: string): Promise<OperatorStats> {
     return this.operatorService.getStats(id);
   }
 
   @Get(':id/recent-nets')
-  @Roles(Role.VOLUNTEER)
+  @Roles(BranchRole.VOLUNTEER)
   getOperatorRecentNets(
     @Param('id') id: string,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -98,13 +100,14 @@ export class OperatorController {
   }
 
   @Get(':id/certificates')
-  @Roles(Role.VOLUNTEER)
+  @Roles(BranchRole.VOLUNTEER)
   getOperatorCertificates(@Param('id') id: string) {
     return this.operatorService.getCertificates(id);
   }
 
   @Post('import')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   @UseInterceptors(FileInterceptor('file'))
   async importOperators(
     @UploadedFile() file: Express.Multer.File,
@@ -120,13 +123,15 @@ export class OperatorController {
   }
 
   @Delete(':id')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async deleteOperator(@Param('id') id: string): Promise<void> {
     await this.operatorService.delete(id);
   }
 
   @Patch(':id')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async updateOperator(
     @Param('id') id: string,
     @Body() dto: OperatorDto,

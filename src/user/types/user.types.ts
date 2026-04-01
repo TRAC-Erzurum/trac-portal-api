@@ -1,9 +1,9 @@
-import { Role, GlobalRole } from '../../auth/enums/role.enum';
+import { type EffectiveRole, GlobalRole } from '../../auth/enums/role.enum';
 
 export interface ICurrentUser {
   id: string;
   email: string;
-  role: Role;
+  role: EffectiveRole;
   globalRole: GlobalRole;
   provider: string;
   currentBranchId?: string;

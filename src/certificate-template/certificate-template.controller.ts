@@ -24,7 +24,7 @@ import { CreateCertificateTemplateDto } from './dto/create-certificate-template.
 import { UpdateCertificateTemplateDto } from './dto/update-certificate-template.dto';
 import { BranchAdminGuard } from '../branch/guards/branch-admin.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { Role } from '../auth/enums/role.enum';
+import { GlobalRole, BranchRole } from '../auth/enums/role.enum';
 import { RequestWithUser } from '../shared/types/request.types';
 
 @Controller('branches/:branchId/certificate-templates')
@@ -49,7 +49,7 @@ export class CertificateTemplateController {
 
   @Post('upload')
   @UseGuards(BranchAdminGuard)
-  @Roles(Role.GUEST)
+  @Roles(GlobalRole.GUEST)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -91,7 +91,7 @@ export class CertificateTemplateController {
 
   @Post()
   @UseGuards(BranchAdminGuard)
-  @Roles(Role.GUEST)
+  @Roles(GlobalRole.GUEST)
   async create(
     @Param('branchId') branchId: string,
     @Body() dto: CreateCertificateTemplateDto,
@@ -106,7 +106,7 @@ export class CertificateTemplateController {
 
   @Patch(':id')
   @UseGuards(BranchAdminGuard)
-  @Roles(Role.GUEST)
+  @Roles(GlobalRole.GUEST)
   async update(
     @Param('branchId') branchId: string,
     @Param('id') id: string,
@@ -123,7 +123,7 @@ export class CertificateTemplateController {
 
   @Delete(':id')
   @UseGuards(BranchAdminGuard)
-  @Roles(Role.GUEST)
+  @Roles(GlobalRole.GUEST)
   async remove(
     @Param('branchId') branchId: string,
     @Param('id') id: string,
@@ -138,7 +138,7 @@ export class CertificateTemplateController {
 
   @Get(':id/nets-using')
   @UseGuards(BranchAdminGuard)
-  @Roles(Role.GUEST)
+  @Roles(GlobalRole.GUEST)
   async getNetsUsing(
     @Param('branchId') branchId: string,
     @Param('id') id: string,

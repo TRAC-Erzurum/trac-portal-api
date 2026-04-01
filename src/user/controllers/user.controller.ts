@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
   BadRequestException,
   Req,
@@ -14,7 +15,7 @@ import {
 import { UserService } from '../services/user.service';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { ICurrentUser } from '../types/user.types';
-import { Role } from '../../auth/enums/role.enum';
+import { BranchRole, GlobalRole } from '../../auth/enums/role.enum';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { CreateOperatorDto } from '../dto/create-operator.dto';
 import { AllowWithoutCallsign } from '../../auth/decorators/allow-without-callsign.decorator';
@@ -32,9 +33,10 @@ import { AuthService } from '../../auth/services/auth.service';
 import { ConfigService } from '@nestjs/config';
 import { FileStorageService } from '../../shared/storage';
 import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
+import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
 
 @Controller('user')
-@Roles(Role.GUEST)
+@Roles(GlobalRole.GUEST)
 export class UserController {
   constructor(
     private readonly userService: UserService,
@@ -105,7 +107,7 @@ export class UserController {
   }
 
   @Get(':id')
-  @Roles(Role.VOLUNTEER)
+  @Roles(BranchRole.VOLUNTEER)
   async getUser(@Param('id') id: string, @CurrentUser() user: ICurrentUser) {
     return this.userService.findOne(id, user);
   }
@@ -172,17 +174,19 @@ export class UserController {
   }
 
   @Patch(':id/role')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async updateUserRole(
     @Param('id') id: string,
-    @Body('role') role: Role,
+    @Body('role') role: BranchRole,
     @Req() req: RequestWithUser,
   ) {
-    return this.userService.updateUserRole(id, role, req.user.email);
+    return this.userService.updateUserRole(id, role, req.user);
   }
 
   @Post(':id/reset-password')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async adminResetPassword(
     @Param('id') id: string,
     @Body() dto: AdminResetPasswordDto,
@@ -192,13 +196,15 @@ export class UserController {
   }
 
   @Get(':id/operator')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async getOperatorByUserId(@Param('id') id: string) {
     return this.userService.getOperatorOfUser(id);
   }
 
   @Patch(':id/operator')
-  @Roles(Role.ADMIN)
+  @UseGuards(PortalOrBranchLeaderGuard)
+  @Roles(GlobalRole.GUEST)
   async updateOperatorByUserId(
     @Param('id') id: string,
     @Body() dto: UpdateOperatorDto,

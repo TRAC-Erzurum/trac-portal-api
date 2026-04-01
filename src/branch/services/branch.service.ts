@@ -16,8 +16,7 @@ import { Operator } from '../../operator/entities/operator.entity';
 import { CreateBranchDto } from '../dto/create-branch.dto';
 import { UpdateBranchDto } from '../dto/update-branch.dto';
 import { DeleteBranchDto } from '../dto/delete-branch.dto';
-import { Role } from '../../auth/enums/role.enum';
-import { BranchRole } from '../enums/branch-role.enum';
+import { BranchRole, GlobalRole } from '../../auth/enums/role.enum';
 import { MembershipStatus } from '../enums/membership-status.enum';
 import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
 import {
@@ -53,16 +52,19 @@ export class BranchService {
       throw new ConflictException('error.branchNameExists');
     }
 
-    for (const raw of dto.callSigns) {
-      const trimmed = (raw ?? '').trim();
+    for (const item of dto.callSigns) {
+      const trimmed = (item.callSign ?? '').trim();
       if (!isValidCallSignFormat(trimmed, { allowSlashes: false })) {
         throw new BadRequestException('error.callSignPlainOnly');
       }
     }
 
-    const normalizedCallSigns = dto.callSigns.map((raw) =>
-      normalizePlainCallSign((raw ?? '').trim()),
+    const normalizedCallSigns = dto.callSigns.map((item) =>
+      normalizePlainCallSign((item.callSign ?? '').trim()),
     );
+    if (new Set(normalizedCallSigns).size !== normalizedCallSigns.length) {
+      throw new ConflictException('error.duplicateCallSigns');
+    }
 
     // Check if any callSign already exists in another branch
     const existingCallSigns = await this.callSignRepository
@@ -85,6 +87,7 @@ export class BranchService {
     const branch = new Branch();
     branch.name = dto.name;
     branch.type = dto.type;
+    branch.city = dto.city;
     branch.address = dto.address;
     branch.phone = dto.phone;
     branch.email = dto.email;
@@ -93,11 +96,11 @@ export class BranchService {
     branch.createdBy = createdBy;
     branch.updatedBy = [];
 
-    // Create callSigns - first one is default
+    const hasDefault = dto.callSigns.some((cs) => cs.isDefault);
     const callSigns = normalizedCallSigns.map((callSignValue, index) => {
       const callSign = new BranchCallSign();
       callSign.callSign = callSignValue;
-      callSign.isDefault = index === 0;
+      callSign.isDefault = hasDefault ? dto.callSigns[index].isDefault : index === 0;
       callSign.branch = branch;
       callSign.createdBy = createdBy;
       callSign.updatedBy = [];
@@ -110,8 +113,9 @@ export class BranchService {
       const saved = await this.branchRepository.save(branch);
 
       const superAdmins = await this.userRepository.find({
-        where: { role: Role.SUPER_ADMIN },
+        where: { role: GlobalRole.SUPER_ADMIN },
       });
+      const superAdminIds = new Set(superAdmins.map((a) => a.id));
 
       for (const admin of superAdmins) {
         const membership = new UserBranchMembership();
@@ -122,6 +126,23 @@ export class BranchService {
         membership.createdBy = createdBy;
         membership.updatedBy = [];
         await this.membershipRepository.save(membership);
+      }
+
+      if (!superAdminIds.has(createdBy)) {
+        const existingCreatorMembership =
+          await this.membershipRepository.findOne({
+            where: { userId: createdBy, branchId: saved.id },
+          });
+        if (!existingCreatorMembership) {
+          const creatorMembership = new UserBranchMembership();
+          creatorMembership.userId = createdBy;
+          creatorMembership.branchId = saved.id;
+          creatorMembership.role = BranchRole.ADMIN;
+          creatorMembership.status = MembershipStatus.APPROVED;
+          creatorMembership.createdBy = createdBy;
+          creatorMembership.updatedBy = [];
+          await this.membershipRepository.save(creatorMembership);
+        }
       }
 
       return this.findOne(saved.id);
