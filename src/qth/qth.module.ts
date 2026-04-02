@@ -5,5 +5,6 @@ import { QthService } from './services/qth.service';
 @Module({
   controllers: [QthController],
   providers: [QthService],
+  exports: [QthService],
 })
 export class QthModule {}

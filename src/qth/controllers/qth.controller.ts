@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { City } from '../entities/city.entity';
 import { Country } from '../entities/country.entity';
 import { QthService } from '../services/qth.service';
@@ -10,6 +11,7 @@ export class QthController {
 
   @Public()
   @Get('geocode')
+  @Throttle({ default: { limit: 400, ttl: 60000 } })
   async getGeocode(
     @Query('city') city: string,
     @Query('district') district?: string,
@@ -21,6 +23,7 @@ export class QthController {
 
   @Public()
   @Get('search')
+  @Throttle({ default: { limit: 400, ttl: 60000 } })
   async search(
     @Query('q') query: string,
     @Query('limit') limitStr?: string,

@@ -7,7 +7,6 @@ import { Operator } from '../../operator/entities/operator.entity';
 import { Activity } from '../../activity/entities/activity.entity';
 import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
-
 export interface StatusResponse {
   activeNetsCount: number;
   hasActiveNets: boolean;
@@ -155,9 +154,17 @@ export interface BusiestTimeResponse {
   byHour: { hour: number; count: number }[];
 }
 
+export type GeographyCountMode = 'total' | 'unique';
+
 export interface GeographyStatsResponse {
   countries: { country: string; count: number }[];
-  cities: { city: string; count: number }[];
+  cities: {
+    city: string;
+    count: number;
+    /** İsteğe bağlı; harita bileşeni eksikse `/qth/geocode` ile doldurur. */
+    lat?: number;
+    lng?: number;
+  }[];
   districts: { city: string; district: string; count: number }[];
 }
 
@@ -1189,12 +1196,19 @@ export class DashboardService {
     };
   }
 
-  async getGeography(): Promise<GeographyStatsResponse> {
+  async getGeography(
+    mode: GeographyCountMode = 'unique',
+  ): Promise<GeographyStatsResponse> {
+    const countExpr =
+      mode === 'unique'
+        ? 'COUNT(DISTINCT UPPER(TRIM(attendee.callSign)))'
+        : 'COUNT(attendee.id)';
+
     const countriesRaw = await this.attendeeRepository
       .createQueryBuilder('attendee')
       .innerJoin('attendee.net', 'net')
       .select('TRIM(attendee.country)', 'country')
-      .addSelect('COUNT(attendee.id)', 'count')
+      .addSelect(countExpr, 'count')
       .where('attendee.country IS NOT NULL')
       .andWhere("TRIM(attendee.country) != ''")
       .andWhere('net.startedAt IS NOT NULL')
@@ -1208,7 +1222,7 @@ export class DashboardService {
       .createQueryBuilder('attendee')
       .innerJoin('attendee.net', 'net')
       .select('TRIM(attendee.city)', 'city')
-      .addSelect('COUNT(attendee.id)', 'count')
+      .addSelect(countExpr, 'count')
       .where('attendee.city IS NOT NULL')
       .andWhere("TRIM(attendee.city) != ''")
       .andWhere('net.startedAt IS NOT NULL')
@@ -1223,7 +1237,7 @@ export class DashboardService {
       .innerJoin('attendee.net', 'net')
       .select('TRIM(attendee.city)', 'city')
       .addSelect('TRIM(attendee.district)', 'district')
-      .addSelect('COUNT(attendee.id)', 'count')
+      .addSelect(countExpr, 'count')
       .where('attendee.city IS NOT NULL')
       .andWhere("TRIM(attendee.city) != ''")
       .andWhere('attendee.district IS NOT NULL')
@@ -1236,15 +1250,17 @@ export class DashboardService {
       .limit(100)
       .getRawMany();
 
+    const cities: GeographyStatsResponse['cities'] = citiesRaw.map((r) => ({
+      city: String(r.city ?? ''),
+      count: parseInt(String(r.count), 10),
+    }));
+
     return {
       countries: countriesRaw.map((r) => ({
         country: String(r.country ?? ''),
         count: parseInt(String(r.count), 10),
       })),
-      cities: citiesRaw.map((r) => ({
-        city: String(r.city ?? ''),
-        count: parseInt(String(r.count), 10),
-      })),
+      cities,
       districts: districtsRaw.map((r) => ({
         city: String(r.city ?? ''),
         district: String(r.district ?? ''),

@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../../user/decorators/current-user.decorator';
 import { User } from '../../user/entities/user.entity';
 import { Public } from '../../auth/decorators/public.decorator';
@@ -24,6 +25,7 @@ import {
   ParticipationStatsResponse,
   PersonalTrendResponse,
   BusiestTimeResponse,
+  GeographyCountMode,
   GeographyStatsResponse,
   MonthlyTrendEntry,
   NetComparePreviousResponse,
@@ -158,8 +160,15 @@ export class DashboardController {
 
   @Get('stats/geography')
   @Public()
-  async getGeography(): Promise<GeographyStatsResponse> {
-    return this.dashboardService.getGeography();
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
+  async getGeography(
+    @Query('mode', new DefaultValuePipe('unique')) mode: string,
+  ): Promise<GeographyStatsResponse> {
+    const valid: GeographyCountMode[] = ['total', 'unique'];
+    const m = valid.includes(mode as GeographyCountMode)
+      ? (mode as GeographyCountMode)
+      : 'unique';
+    return this.dashboardService.getGeography(m);
   }
 
   @Get('stats/monthly-trend')
