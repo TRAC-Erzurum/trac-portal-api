@@ -4,17 +4,12 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { BranchRole, GlobalRole } from '../../auth/enums/role.enum';
+import { GlobalRole } from '../../auth/enums/role.enum';
 import { MembershipService } from '../services/membership.service';
-import { MembershipStatus } from '../enums/membership-status.enum';
 
 @Injectable()
 export class BranchAdminGuard implements CanActivate {
-  constructor(
-    private readonly membershipService: MembershipService,
-    private readonly reflector: Reflector,
-  ) {}
+  constructor(private readonly membershipService: MembershipService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -32,16 +27,11 @@ export class BranchAdminGuard implements CanActivate {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 
-    const membership = await this.membershipService.findMembership(
+    const canLead = await this.membershipService.canActAsBranchLeaderOnBranch(
       String(user.id),
       String(branchId),
     );
-    if (
-      !membership ||
-      membership.status !== MembershipStatus.APPROVED ||
-      (membership.role !== BranchRole.ADMIN &&
-        membership.role !== BranchRole.PRESIDENT)
-    ) {
+    if (!canLead) {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 

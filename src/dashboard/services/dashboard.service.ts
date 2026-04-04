@@ -5,7 +5,7 @@ import { Net } from '../../net/entities/net.entity';
 import { Attendee } from '../../net/entities/attendee.entity';
 import { Operator } from '../../operator/entities/operator.entity';
 import { Activity } from '../../activity/entities/activity.entity';
-import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
+import { OperatorBranchMembership } from '../../branch/entities/operator-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 export interface StatusResponse {
   activeNetsCount: number;
@@ -201,13 +201,20 @@ export class DashboardService {
     private readonly operatorRepository: Repository<Operator>,
     @InjectRepository(Activity)
     private readonly activityRepository: Repository<Activity>,
-    @InjectRepository(UserBranchMembership)
-    private readonly membershipRepository: Repository<UserBranchMembership>,
+    @InjectRepository(OperatorBranchMembership)
+    private readonly membershipRepository: Repository<OperatorBranchMembership>,
   ) {}
 
   private async getBranchIdsForUser(userId: string): Promise<string[]> {
+    const operator = await this.operatorRepository.findOne({
+      where: { user: { id: userId } },
+      select: ['id'],
+    });
+    if (!operator) {
+      return [];
+    }
     const memberships = await this.membershipRepository.find({
-      where: { userId, status: MembershipStatus.APPROVED },
+      where: { operatorId: operator.id, status: MembershipStatus.APPROVED },
       select: ['branchId'],
     });
     return memberships.map((m) => m.branchId);

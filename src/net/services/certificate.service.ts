@@ -2,24 +2,35 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { Readable } from 'stream';
 import { FileStorageService } from '../../shared/storage';
 import type { Response } from 'express';
-import archiver from 'archiver';
-import { PDFDocument, rgb, RGB, StandardFonts } from 'pdf-lib';
+import archiver = require('archiver');
+import * as fk from '@pdf-lib/fontkit';
+import { PDFDocument, rgb, RGB, type PDFFont } from 'pdf-lib';
 import { Net } from '../entities/net.entity';
 import { Attendee } from '../entities/attendee.entity';
 import type { CertificateTemplateElement } from '../../certificate-template/entities/certificate-template.entity';
+import {
+  CERTIFICATE_EMBEDDED_FONT_FILE,
+  getCertificateFontsDir,
+} from '../../certificate-template/certificate-fonts';
 import { UserService } from '../../user/services/user.service';
 import { MembershipService } from '../../branch/services/membership.service';
-import { isApprovedBranchLeadership } from '../../branch/utils/is-approved-branch-leadership.util';
-import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
+import { GlobalRole } from '../../auth/enums/role.enum';
+
+const fontkit = (fk as any).default ?? fk;
 
 @Injectable()
-export class CertificateService {
+export class CertificateService implements OnModuleInit {
+  private certificateFontBytes: Buffer;
+
   constructor(
     @InjectRepository(Net)
     private readonly netRepository: Repository<Net>,
@@ -29,6 +40,13 @@ export class CertificateService {
     private readonly membershipService: MembershipService,
     private readonly fileStorage: FileStorageService,
   ) {}
+
+  onModuleInit(): void {
+    const dir = getCertificateFontsDir();
+    this.certificateFontBytes = readFileSync(
+      join(dir, CERTIFICATE_EMBEDDED_FONT_FILE),
+    );
+  }
 
   /** Returns template imagePath, elements, and placeholders for a single attendee (for UI preview). */
   async getPreviewData(
@@ -83,11 +101,14 @@ export class CertificateService {
     const effectiveRole = await this.userService.getEffectiveRole(userId);
     if (effectiveRole === GlobalRole.SUPER_ADMIN) return true;
     if (net.operator?.user?.id === userId) return true;
-    const membership = await this.membershipService.findMembership(
-      userId,
-      net.branchId,
-    );
-    if (isApprovedBranchLeadership(membership)) return true;
+    if (
+      await this.membershipService.canActAsBranchLeaderOnBranch(
+        userId,
+        net.branchId,
+      )
+    ) {
+      return true;
+    }
     return false;
   }
 
@@ -111,11 +132,14 @@ export class CertificateService {
     if (effectiveRole === GlobalRole.SUPER_ADMIN) return true;
     if (net.operator?.user?.id === userId) return true;
     if (attendee.operator?.user?.id === userId) return true;
-    const membership = await this.membershipService.findMembership(
-      userId,
-      net.branchId,
-    );
-    if (isApprovedBranchLeadership(membership)) return true;
+    if (
+      await this.membershipService.canActAsBranchLeaderOnBranch(
+        userId,
+        net.branchId,
+      )
+    ) {
+      return true;
+    }
     return false;
   }
 
@@ -159,6 +183,12 @@ export class CertificateService {
     );
     const pdfBuffer = await this.renderPdf(net.certificateTemplate, placeholders);
     if (res) {
+      const basename = this.buildCertificatePdfBasename(net, attendee);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        this.buildPdfAttachmentContentDisposition(`${basename}.pdf`),
+      );
       return new Promise<void>((resolve, reject) => {
         const stream = Readable.from(pdfBuffer);
         stream.pipe(res);
@@ -255,6 +285,103 @@ export class CertificateService {
     return rgb(0, 0, 0);
   }
 
+  private formatAttendeeJoinedTimestampForFilename(d: Date): string {
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Istanbul',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(d);
+    const map: Record<string, string> = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    }
+    const day = map.day ?? '01';
+    const month = map.month ?? '01';
+    const year = map.year ?? '1970';
+    const hour = (map.hour ?? '00').padStart(2, '0');
+    const minute = (map.minute ?? '00').padStart(2, '0');
+    return `${day}-${month}-${year}-${hour}-${minute}`;
+  }
+
+  private formatNetStartedDateOnlyForFilename(d: Date): string {
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Istanbul',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    const parts = fmt.formatToParts(d);
+    const map: Record<string, string> = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    }
+    const day = map.day ?? '01';
+    const month = map.month ?? '01';
+    const year = map.year ?? '1970';
+    return `${day}-${month}-${year}`;
+  }
+
+  /** Önce katılımcı createdAt; yoksa çevrim startedAt (sadece tarih). */
+  private resolveCertificateFilenameDateStamp(net: Net, attendee: Attendee): string {
+    const createdRaw = attendee.createdAt;
+    if (createdRaw) {
+      const join =
+        createdRaw instanceof Date ? createdRaw : new Date(createdRaw);
+      if (!Number.isNaN(join.getTime())) {
+        return this.formatAttendeeJoinedTimestampForFilename(join);
+      }
+    }
+    const startedRaw = net.startedAt;
+    if (startedRaw) {
+      const start =
+        startedRaw instanceof Date ? startedRaw : new Date(startedRaw);
+      if (!Number.isNaN(start.getTime())) {
+        return this.formatNetStartedDateOnlyForFilename(start);
+      }
+    }
+    return '01-01-1970-00-00';
+  }
+
+  private sanitizeCertificateFilenameSegment(
+    raw: string | null | undefined,
+    fallback: string,
+  ): string {
+    let s = String(raw ?? '').trim();
+    s = s.replace(/[\u0000-\u001F\\\/:\*\?"<>\|]/g, '');
+    s = s.replace(/_/g, '-');
+    s = s.replace(/\s+/g, ' ').trim();
+    if (!s) return fallback;
+    return s;
+  }
+
+  /**
+   * Çağrıİşareti_ÇevrimAdı_{tarih} (uzantı yok).
+   * Tarih: katılımcı createdAt → GG-AA-YYYY-SS-DD; yoksa çevrim startedAt → GG-AA-YYYY.
+   */
+  private buildCertificatePdfBasename(net: Net, attendee: Attendee): string {
+    const op = attendee.operator;
+    const callsign =
+      op?.callSign ?? attendee.callSign ?? attendee.id.slice(0, 8);
+    const netName = net.name ?? 'Cevrim';
+    const stamp = this.resolveCertificateFilenameDateStamp(net, attendee);
+    const a = this.sanitizeCertificateFilenameSegment(callsign, 'cagri');
+    const b = this.sanitizeCertificateFilenameSegment(netName, 'Cevrim');
+    const c = this.sanitizeCertificateFilenameSegment(stamp, '01-01-1970-00-00');
+    return `${a} - ${b} ${c}`;
+  }
+
+  private buildPdfAttachmentContentDisposition(filenameUtf8: string): string {
+    const asciiFallback =
+      filenameUtf8.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '') ||
+      'certificate.pdf';
+    return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filenameUtf8)}`;
+  }
+
   /** Optional imageBytes avoids re-reading the same template file when generating many PDFs (e.g. download-all). */
   private async renderPdf(
     template: { imagePath: string; elements: CertificateTemplateElement[] },
@@ -264,6 +391,11 @@ export class CertificateService {
     const bytes =
       imageBytes ?? (await this.fileStorage.getBytes(template.imagePath));
     const pdfDoc = await PDFDocument.create();
+    pdfDoc.registerFontkit(fontkit);
+    const font: PDFFont = await pdfDoc.embedFont(this.certificateFontBytes, {
+      subset: false,
+    });
+
     const isPng =
       template.imagePath.toLowerCase().endsWith('.png') ||
       template.imagePath.toLowerCase().includes('.png');
@@ -276,7 +408,6 @@ export class CertificateService {
     page.drawImage(image, { x: 0, y: 0, width, height });
 
     const REFERENCE_HEIGHT = 300;
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     for (const el of template.elements || []) {
       const text =
         el.type === 'placeholder' && el.placeholderKey
@@ -325,11 +456,11 @@ export class CertificateService {
       throw new NotFoundException('error.certificateTemplateNotFound');
     const effectiveRole = await this.userService.getEffectiveRole(userId);
     const isNetOperator = net.operator?.user?.id === userId;
-    const membership = await this.membershipService.findMembership(
-      userId,
-      net.branchId,
-    );
-    const isBranchLeader = isApprovedBranchLeadership(membership);
+    const isBranchLeader =
+      await this.membershipService.canActAsBranchLeaderOnBranch(
+        userId,
+        net.branchId,
+      );
     if (
       effectiveRole !== GlobalRole.SUPER_ADMIN &&
       !isNetOperator &&
@@ -365,11 +496,8 @@ export class CertificateService {
         placeholders,
         templateImageBytes,
       );
-      const callsign = (attendee.callSign || `attendee-${i + 1}`).replace(
-        /[^a-zA-Z0-9-_]/g,
-        '_',
-      );
-      archive.append(pdf, { name: `${callsign}.pdf` });
+      const entryName = `${this.buildCertificatePdfBasename(net, attendee)}.pdf`;
+      archive.append(pdf, { name: entryName });
     }
     await new Promise<void>((resolve, reject) => {
       archive.on('end', resolve);

@@ -8,7 +8,6 @@ import {
   Post,
   Req,
   UseGuards,
-  NotFoundException,
   Query,
 } from '@nestjs/common';
 import { MembershipService } from '../services/membership.service';
@@ -44,7 +43,7 @@ export class MembershipController {
   ) {
     return this.membershipService.addMemberDirectly(
       branchId,
-      dto.userId,
+      dto.operatorId,
       dto.role ?? BranchRole.MEMBER,
       req.user.id,
       req.user.callSign || '',
@@ -57,49 +56,37 @@ export class MembershipController {
     return this.membershipService.getPendingMembershipsByBranch(branchId);
   }
 
-  @Patch(':branchId/members/:userId/approve')
+  @Patch(':branchId/members/:membershipId/approve')
   @UseGuards(BranchAdminGuard)
   async approve(
     @Param('branchId') branchId: string,
-    @Param('userId') userId: string,
+    @Param('membershipId') membershipId: string,
     @Body() dto: ApproveMembershipDto,
     @Req() req: RequestWithUser,
   ) {
-    const membership = await this.membershipService.findMembership(
-      userId,
-      branchId,
-    );
-    if (!membership) {
-      throw new NotFoundException('error.membershipNotFound');
-    }
     return this.membershipService.approve(
-      membership.id,
+      membershipId,
       req.user.id,
       req.user.callSign || '',
       dto.role ?? BranchRole.MEMBER,
+      branchId,
     );
   }
 
-  @Patch(':branchId/members/:userId/reject')
+  @Patch(':branchId/members/:membershipId/reject')
   @UseGuards(BranchAdminGuard)
   async reject(
     @Param('branchId') branchId: string,
-    @Param('userId') userId: string,
+    @Param('membershipId') membershipId: string,
     @Body() dto: RejectMembershipDto,
     @Req() req: RequestWithUser,
   ) {
-    const membership = await this.membershipService.findMembership(
-      userId,
-      branchId,
-    );
-    if (!membership) {
-      throw new NotFoundException('error.membershipNotFound');
-    }
     return this.membershipService.reject(
-      membership.id,
+      membershipId,
       req.user.id,
       req.user.callSign || '',
       dto.rejectionReason,
+      branchId,
     );
   }
 
@@ -120,15 +107,15 @@ export class MembershipController {
     );
   }
 
-  @Delete(':branchId/members/:userId')
+  @Delete(':branchId/members/:operatorId')
   @UseGuards(BranchAdminGuard)
   async remove(
     @Param('branchId') branchId: string,
-    @Param('userId') userId: string,
+    @Param('operatorId') operatorId: string,
     @Req() req: RequestWithUser,
   ) {
     await this.membershipService.remove(
-      userId,
+      operatorId,
       branchId,
       req.user.id,
       req.user.callSign || '',

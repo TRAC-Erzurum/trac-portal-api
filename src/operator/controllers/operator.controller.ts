@@ -30,12 +30,14 @@ import { OperatorQueryDto } from '../dto/operator-query.dto';
 import { RequestWithUser } from '../../shared/types/request.types';
 import { Express } from 'express';
 import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
+import { MembershipService } from '../../branch/services/membership.service';
 
 @Controller('operator')
 export class OperatorController {
   constructor(
     private readonly operatorService: OperatorService,
     private readonly csvParserService: CsvParserService,
+    private readonly membershipService: MembershipService,
   ) {}
 
   @Get()
@@ -69,6 +71,12 @@ export class OperatorController {
       priorityBranchId,
       req?.user?.id,
     );
+  }
+
+  @Get(':operatorId/memberships')
+  @Roles(BranchRole.VOLUNTEER)
+  getOperatorMemberships(@Param('operatorId') operatorId: string) {
+    return this.membershipService.getMembershipsForOperator(operatorId);
   }
 
   @Get(':id')

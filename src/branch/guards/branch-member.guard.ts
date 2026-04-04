@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
+import { GlobalRole } from '../../auth/enums/role.enum';
 import { MembershipService } from '../services/membership.service';
 import { MembershipStatus } from '../enums/membership-status.enum';
 
@@ -32,10 +32,18 @@ export class BranchMemberGuard implements CanActivate {
       String(user.id),
       String(branchId),
     );
-    if (!membership || membership.status !== MembershipStatus.APPROVED) {
-      throw new ForbiddenException('error.forbiddenDescription');
+    if (membership?.status === MembershipStatus.APPROVED) {
+      return true;
     }
 
-    return true;
+    const canLead = await this.membershipService.canActAsBranchLeaderOnBranch(
+      String(user.id),
+      String(branchId),
+    );
+    if (canLead) {
+      return true;
+    }
+
+    throw new ForbiddenException('error.forbiddenDescription');
   }
 }

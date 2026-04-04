@@ -10,7 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Branch } from '../entities/branch.entity';
 import { BranchCallSign } from '../entities/branch-call-sign.entity';
-import { UserBranchMembership } from '../entities/user-branch-membership.entity';
+import { OperatorBranchMembership } from '../entities/operator-branch-membership.entity';
 import { User } from '../../user/entities/user.entity';
 import { Operator } from '../../operator/entities/operator.entity';
 import { CreateBranchDto } from '../dto/create-branch.dto';
@@ -31,8 +31,8 @@ export class BranchService {
     private readonly branchRepository: Repository<Branch>,
     @InjectRepository(BranchCallSign)
     private readonly callSignRepository: Repository<BranchCallSign>,
-    @InjectRepository(UserBranchMembership)
-    private readonly membershipRepository: Repository<UserBranchMembership>,
+    @InjectRepository(OperatorBranchMembership)
+    private readonly membershipRepository: Repository<OperatorBranchMembership>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(Operator)
@@ -112,30 +112,32 @@ export class BranchService {
     try {
       const saved = await this.branchRepository.save(branch);
 
-      const superAdmins = await this.userRepository.find({
-        where: { role: GlobalRole.SUPER_ADMIN },
-      });
-      const superAdminIds = new Set(superAdmins.map((a) => a.id));
-
-      for (const admin of superAdmins) {
-        const membership = new UserBranchMembership();
-        membership.userId = admin.id;
-        membership.branchId = saved.id;
-        membership.role = BranchRole.ADMIN;
-        membership.status = MembershipStatus.APPROVED;
-        membership.createdBy = createdBy;
-        membership.updatedBy = [];
-        await this.membershipRepository.save(membership);
-      }
+      const superAdminIds = new Set(
+        (
+          await this.userRepository.find({
+            where: { globalRole: GlobalRole.SUPER_ADMIN },
+            select: ['id'],
+          })
+        ).map((a) => a.id),
+      );
 
       if (!superAdminIds.has(createdBy)) {
+        const creatorOperator = await this.operatorRepository.findOne({
+          where: { user: { id: createdBy } },
+        });
+        if (!creatorOperator) {
+          throw new BadRequestException('error.userMustHaveOperator');
+        }
         const existingCreatorMembership =
           await this.membershipRepository.findOne({
-            where: { userId: createdBy, branchId: saved.id },
+            where: {
+              operatorId: creatorOperator.id,
+              branchId: saved.id,
+            },
           });
         if (!existingCreatorMembership) {
-          const creatorMembership = new UserBranchMembership();
-          creatorMembership.userId = createdBy;
+          const creatorMembership = new OperatorBranchMembership();
+          creatorMembership.operatorId = creatorOperator.id;
           creatorMembership.branchId = saved.id;
           creatorMembership.role = BranchRole.ADMIN;
           creatorMembership.status = MembershipStatus.APPROVED;
@@ -446,7 +448,7 @@ export class BranchService {
         await netRepo.delete({ branchId: id });
       }
 
-      await tx.getRepository(UserBranchMembership).delete({ branchId: id });
+      await tx.getRepository(OperatorBranchMembership).delete({ branchId: id });
       await tx.getRepository(BranchCallSign).delete({ branchId: id });
       await tx.getRepository(Branch).delete(id);
     });

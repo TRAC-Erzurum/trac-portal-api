@@ -6,11 +6,17 @@ import { Net } from '../net/entities/net.entity';
 import { Attendee } from '../net/entities/attendee.entity';
 import { Operator } from '../operator/entities/operator.entity';
 import { Activity } from '../activity/entities/activity.entity';
-import { UserBranchMembership } from '../branch/entities/user-branch-membership.entity';
+import { OperatorBranchMembership } from '../branch/entities/operator-branch-membership.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Net, Attendee, Operator, Activity, UserBranchMembership]),
+    TypeOrmModule.forFeature([
+      Net,
+      Attendee,
+      Operator,
+      Activity,
+      OperatorBranchMembership,
+    ]),
   ],
   controllers: [DashboardController],
   providers: [DashboardService],

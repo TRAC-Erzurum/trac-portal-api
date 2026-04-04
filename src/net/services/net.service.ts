@@ -603,12 +603,17 @@ export class NetService {
     } else if (branchId) {
       qb.andWhere('net.branchId = :branchId', { branchId });
     } else if (userId) {
-      const userBranches = await this.membershipService.getUserBranches(userId);
-      const userBranchIds = userBranches.map((m) => m.branchId);
-      if (userBranchIds.length > 0) {
-        qb.andWhere('net.branchId IN (:...userBranchIds)', { userBranchIds });
+      const effectiveRole = await this.userService.getEffectiveRole(userId);
+      if (effectiveRole === GlobalRole.SUPER_ADMIN) {
+        // Üyelik satırı olmasa da sistem yöneticisi tüm çevrimleri görebilir
       } else {
-        qb.andWhere('1 = 0');
+        const userBranches = await this.membershipService.getUserBranches(userId);
+        const userBranchIds = userBranches.map((m) => m.branchId);
+        if (userBranchIds.length > 0) {
+          qb.andWhere('net.branchId IN (:...userBranchIds)', { userBranchIds });
+        } else {
+          qb.andWhere('1 = 0');
+        }
       }
     }
 

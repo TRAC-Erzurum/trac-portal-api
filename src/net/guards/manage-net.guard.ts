@@ -16,7 +16,6 @@ import { NetService } from '../services/net.service';
 import { GlobalRole } from '../../auth/enums/role.enum';
 import { MembershipService } from '../../branch/services/membership.service';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
-import { isApprovedBranchLeadership } from '../../branch/utils/is-approved-branch-leadership.util';
 
 @Injectable()
 export class ManageNetGuard implements CanActivate {
@@ -61,17 +60,18 @@ export class ManageNetGuard implements CanActivate {
       return true;
     }
 
+    const canLeadBranch = await this.membershipService.canActAsBranchLeaderOnBranch(
+      user.id,
+      net.branchId,
+    );
+    if (canLeadBranch) {
+      return true;
+    }
+
     const membership = await this.membershipService.findMembership(
       user.id,
       net.branchId,
     );
-
-    if (
-      membership?.status === MembershipStatus.APPROVED &&
-      isApprovedBranchLeadership(membership)
-    ) {
-      return true;
-    }
 
     if (deleteLeadershipOnly) {
       throw new ForbiddenException('error.noPermission');

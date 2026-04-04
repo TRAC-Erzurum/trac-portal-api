@@ -136,10 +136,17 @@ export class AuthService {
     );
 
     await this.operatorService.linkToUser(operator.id, user.id);
+    await this.userService.syncRoleColumn(user.id);
 
     const hqBranch = await this.branchService.findHeadquarters();
     if (hqBranch) {
-      await this.membershipService.join(user.id, hqBranch.id);
+      const hqM = await this.membershipService.findMembership(
+        user.id,
+        hqBranch.id,
+      );
+      if (!hqM) {
+        await this.membershipService.join(user.id, hqBranch.id);
+      }
     }
 
     const role = await this.userService.getEffectiveRole(user.id);
@@ -177,15 +184,6 @@ export class AuthService {
       throw new ConflictException('error.userAlreadyExists');
     }
 
-    const uniqueBranchIds = [...new Set(dto.branchIds)];
-    for (const branchId of uniqueBranchIds) {
-      try {
-        await this.branchService.findOne(branchId);
-      } catch {
-        throw new BadRequestException('error.branchNotFound');
-      }
-    }
-
     if (dto.privacyAccepted !== true) {
       throw new BadRequestException('error.privacyAcceptRequired');
     }
@@ -209,6 +207,23 @@ export class AuthService {
       dto.email,
     );
 
+    const uniqueBranchIds = [...new Set(dto.branchIds ?? [])];
+    const approvedCount =
+      await this.membershipService.countApprovedMembershipsForOperator(
+        operator.id,
+      );
+    if (approvedCount === 0 && uniqueBranchIds.length === 0) {
+      throw new BadRequestException('error.atLeastOneBranchRequired');
+    }
+
+    for (const branchId of uniqueBranchIds) {
+      try {
+        await this.branchService.findOne(branchId);
+      } catch {
+        throw new BadRequestException('error.branchNotFound');
+      }
+    }
+
     const user = await this.userService.create(
       {
         email: dto.email,
@@ -222,13 +237,28 @@ export class AuthService {
       dto.email,
     );
 
+    await this.userService.syncRoleColumn(user.id);
+
     const hqBranch = await this.branchService.findHeadquarters();
     if (hqBranch) {
-      await this.membershipService.join(user.id, hqBranch.id);
+      const hqM = await this.membershipService.findMembership(
+        user.id,
+        hqBranch.id,
+      );
+      if (!hqM) {
+        await this.membershipService.join(user.id, hqBranch.id);
+      }
     }
 
     for (const branchId of uniqueBranchIds) {
-      if (branchId !== hqBranch?.id) {
+      if (branchId === hqBranch?.id) {
+        continue;
+      }
+      const existing = await this.membershipService.findMembership(
+        user.id,
+        branchId,
+      );
+      if (!existing) {
         await this.membershipService.join(user.id, branchId);
       }
     }

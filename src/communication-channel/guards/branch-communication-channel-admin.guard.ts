@@ -8,9 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { GlobalRole } from '../../auth/enums/role.enum';
-import { isApprovedBranchLeadership } from '../../branch/utils/is-approved-branch-leadership.util';
 import { MembershipService } from '../../branch/services/membership.service';
-import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 import { BranchCommunicationChannel } from '../entities/branch-communication-channel.entity';
 
 /**
@@ -49,15 +47,11 @@ export class BranchCommunicationChannelAdminGuard implements CanActivate {
       throw new NotFoundException('error.communicationChannelNotFound');
     }
 
-    const membership = await this.membershipService.findMembership(
+    const canLead = await this.membershipService.canActAsBranchLeaderOnBranch(
       String(user.id),
       channel.branchId,
     );
-    if (
-      !membership ||
-      membership.status !== MembershipStatus.APPROVED ||
-      !isApprovedBranchLeadership(membership)
-    ) {
+    if (!canLead) {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 
