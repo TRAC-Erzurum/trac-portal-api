@@ -12,6 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserBranchMembership } from '../entities/user-branch-membership.entity';
+import { OperatorBranchPreMembership } from '../entities/operator-branch-pre-membership.entity';
 import { Branch } from '../entities/branch.entity';
 import { User } from '../../user/entities/user.entity';
 import { Net } from '../../net/entities/net.entity';
@@ -36,6 +37,8 @@ export class MembershipService {
   constructor(
     @InjectRepository(UserBranchMembership)
     private readonly membershipRepository: Repository<UserBranchMembership>,
+    @InjectRepository(OperatorBranchPreMembership)
+    private readonly preMembershipRepository: Repository<OperatorBranchPreMembership>,
     @InjectRepository(Branch)
     private readonly branchRepository: Repository<Branch>,
     @InjectRepository(User)
@@ -186,15 +189,16 @@ export class MembershipService {
     membership.branchId = branchId;
     membership.role = BranchRole.MEMBER;
     // SUPER_ADMIN users are automatically approved when joining a branch
-    membership.status = user.globalRole === GlobalRole.SUPER_ADMIN 
-      ? MembershipStatus.APPROVED 
-      : MembershipStatus.PENDING;
+    membership.status =
+      user.globalRole === GlobalRole.SUPER_ADMIN
+        ? MembershipStatus.APPROVED
+        : MembershipStatus.PENDING;
     membership.createdBy = userId;
     membership.updatedBy = [];
 
     try {
       const saved = await this.membershipRepository.save(membership);
-      
+
       // Emit activity event for SUPER_ADMIN auto-approval
       if (user.globalRole === GlobalRole.SUPER_ADMIN) {
         const targetCallSign = user.operator?.callSign ?? null;
@@ -533,7 +537,9 @@ export class MembershipService {
   }
 
   /** Onaylı şube yöneticisi veya başkan (herhangi bir şube). */
-  async hasApprovedBranchLeadershipInAnyBranch(userId: string): Promise<boolean> {
+  async hasApprovedBranchLeadershipInAnyBranch(
+    userId: string,
+  ): Promise<boolean> {
     const n = await this.membershipRepository.count({
       where: {
         userId,
@@ -616,8 +622,7 @@ export class MembershipService {
 
     try {
       const saved = await this.membershipRepository.save(membership);
-      let targetCallSign =
-        membership.user?.operator?.callSign ?? null;
+      let targetCallSign = membership.user?.operator?.callSign ?? null;
       if (!targetCallSign) {
         const operator = await this.operatorRepository.findOne({
           where: { user: { id: membership.userId } },
@@ -740,5 +745,118 @@ export class MembershipService {
     }
 
     return { branches: result };
+  }
+
+  /**
+   * Adds a branch member by callSign.
+   * - If the operator has a user account, adds them directly via `addMemberDirectly`.
+   * - If the operator has no user account yet, creates an `OperatorBranchPreMembership`
+   *   record so that when the operator registers the role is automatically claimed.
+   */
+  async addMemberByCallSign(
+    branchId: string,
+    callSign: string,
+    role: BranchRole,
+    addedBy: string,
+    actorCallSign: string,
+  ): Promise<UserBranchMembership | OperatorBranchPreMembership> {
+    const normalizedCallSign = callSign.trim().toUpperCase();
+
+    const operator = await this.operatorRepository.findOne({
+      where: { callSign: normalizedCallSign },
+      relations: ['user'],
+    });
+
+    if (!operator) {
+      throw new NotFoundException('error.operatorNotFound');
+    }
+
+    if (operator.user) {
+      return this.addMemberDirectly(
+        branchId,
+        operator.user.id,
+        role,
+        addedBy,
+        actorCallSign,
+      );
+    }
+
+    const branch = await this.branchRepository.findOne({
+      where: { id: branchId },
+    });
+    if (!branch) {
+      throw new NotFoundException('error.branchNotFound');
+    }
+
+    const existingPreMembership = await this.preMembershipRepository.findOne({
+      where: { callSign: normalizedCallSign, branchId },
+    });
+
+    if (existingPreMembership) {
+      existingPreMembership.role = role;
+      existingPreMembership.updatedBy = [
+        ...(existingPreMembership.updatedBy || []),
+        addedBy,
+      ];
+      return this.preMembershipRepository.save(existingPreMembership);
+    }
+
+    const preMembership = new OperatorBranchPreMembership();
+    preMembership.callSign = normalizedCallSign;
+    preMembership.branchId = branchId;
+    preMembership.role = role;
+    preMembership.createdBy = addedBy;
+    preMembership.updatedBy = [];
+
+    return this.preMembershipRepository.save(preMembership);
+  }
+
+  /**
+   * Called after a user account is created for an operator.
+   * Converts all `OperatorBranchPreMembership` records for the operator's callSign
+   * into real `UserBranchMembership` records with APPROVED status, then removes the
+   * pre-membership records.
+   */
+  async claimPreMemberships(userId: string, callSign: string): Promise<void> {
+    const normalizedCallSign = callSign.trim().toUpperCase();
+
+    const preMemberships = await this.preMembershipRepository.find({
+      where: { callSign: normalizedCallSign },
+    });
+
+    if (preMemberships.length === 0) {
+      return;
+    }
+
+    const branchIds = preMemberships.map((p) => p.branchId);
+
+    const existingMemberships = await this.membershipRepository.find({
+      where: { userId, branchId: In(branchIds) },
+      select: ['branchId'],
+    });
+    const existingBranchIdSet = new Set(
+      existingMemberships.map((m) => m.branchId),
+    );
+
+    const toCreate: UserBranchMembership[] = [];
+    for (const pre of preMemberships) {
+      if (!existingBranchIdSet.has(pre.branchId)) {
+        const membership = new UserBranchMembership();
+        membership.userId = userId;
+        membership.branchId = pre.branchId;
+        membership.role = pre.role;
+        membership.status = MembershipStatus.APPROVED;
+        membership.createdBy = pre.createdBy;
+        membership.updatedBy = [];
+        toCreate.push(membership);
+      }
+    }
+
+    if (toCreate.length > 0) {
+      await this.membershipRepository.save(toCreate);
+    }
+
+    await this.preMembershipRepository.remove(preMemberships);
+    await this.syncUserEffectiveRole(userId);
   }
 }

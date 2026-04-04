@@ -142,6 +142,11 @@ export class AuthService {
       await this.membershipService.join(user.id, hqBranch.id);
     }
 
+    await this.membershipService.claimPreMemberships(
+      user.id,
+      operator.callSign,
+    );
+
     const role = await this.userService.getEffectiveRole(user.id);
     return {
       id: user.id,
@@ -227,6 +232,11 @@ export class AuthService {
       await this.membershipService.join(user.id, hqBranch.id);
     }
 
+    await this.membershipService.claimPreMemberships(
+      user.id,
+      operator.callSign,
+    );
+
     for (const branchId of uniqueBranchIds) {
       if (branchId !== hqBranch?.id) {
         await this.membershipService.join(user.id, branchId);
@@ -254,8 +264,7 @@ export class AuthService {
       return;
     }
 
-    const operator =
-      await this.operatorService.findByCallSign(plainCallSign);
+    const operator = await this.operatorService.findByCallSign(plainCallSign);
 
     if (!operator) {
       this.logger.warn(
@@ -342,5 +351,4 @@ export class AuthService {
       `Password reset rejected for ${request.callSign} by admin ${adminId}`,
     );
   }
-
 }

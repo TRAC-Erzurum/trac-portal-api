@@ -21,6 +21,7 @@ import { ApproveMembershipDto } from '../dto/approve-membership.dto';
 import { RejectMembershipDto } from '../dto/reject-membership.dto';
 import { UpdateMembershipRoleDto } from '../dto/update-membership-role.dto';
 import { AddMemberDto } from '../dto/add-member.dto';
+import { AddMemberByCallSignDto } from '../dto/add-member-by-call-sign.dto';
 import { BranchRole } from '../enums/branch-role.enum';
 
 @Controller('branches')
@@ -45,6 +46,22 @@ export class MembershipController {
     return this.membershipService.addMemberDirectly(
       branchId,
       dto.userId,
+      dto.role ?? BranchRole.MEMBER,
+      req.user.id,
+      req.user.callSign || '',
+    );
+  }
+
+  @Post(':branchId/members/add-by-call-sign')
+  @UseGuards(BranchAdminGuard)
+  async addMemberByCallSign(
+    @Param('branchId') branchId: string,
+    @Body() dto: AddMemberByCallSignDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.membershipService.addMemberByCallSign(
+      branchId,
+      dto.callSign,
       dto.role ?? BranchRole.MEMBER,
       req.user.id,
       req.user.callSign || '',

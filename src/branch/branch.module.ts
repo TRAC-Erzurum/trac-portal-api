@@ -13,10 +13,18 @@ import { BranchMemberGuard } from './guards/branch-member.guard';
 import { CreateBranchGuard } from './guards/create-branch.guard';
 import { UserModule } from '../user/user.module';
 import { OperatorModule } from '../operator/operator.module';
+import { OperatorBranchPreMembership } from './entities/operator-branch-pre-membership.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([...entities, User, Net, Operator, NetScheduler]),
+    TypeOrmModule.forFeature([
+      ...entities,
+      User,
+      Net,
+      Operator,
+      NetScheduler,
+      OperatorBranchPreMembership,
+    ]),
     forwardRef(() => UserModule),
     forwardRef(() => OperatorModule),
   ],
@@ -28,10 +36,6 @@ import { OperatorModule } from '../operator/operator.module';
     CreateBranchGuard,
     PortalOrBranchLeaderGuard,
   ],
-  exports: [
-    ...services,
-    PortalOrBranchLeaderGuard,
-    BranchAdminGuard,
-  ],
+  exports: [...services, PortalOrBranchLeaderGuard, BranchAdminGuard],
 })
 export class BranchModule {}
