@@ -147,10 +147,6 @@ export class NetController {
     @Req() req: RequestWithUser,
     @Res() res: Response,
   ) {
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'attachment; filename="certificate.pdf"',
-    });
     await this.certificateService.generatePdf(
       id,
       attendeeId,

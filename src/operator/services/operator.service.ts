@@ -12,7 +12,7 @@ import { Attendee } from '../../net/entities/attendee.entity';
 import { Net } from '../../net/entities/net.entity';
 import { Branch } from '../../branch/entities/branch.entity';
 import { BranchCallSign } from '../../branch/entities/branch-call-sign.entity';
-import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
+import { OperatorBranchMembership } from '../../branch/entities/operator-branch-membership.entity';
 import { NetScheduler } from '../../net-scheduler/entities/net-scheduler.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 import { chunk } from 'lodash';
@@ -71,8 +71,8 @@ export class OperatorService {
     private readonly branchRepository: Repository<Branch>,
     @InjectRepository(BranchCallSign)
     private readonly branchCallSignRepository: Repository<BranchCallSign>,
-    @InjectRepository(UserBranchMembership)
-    private readonly membershipRepository: Repository<UserBranchMembership>,
+    @InjectRepository(OperatorBranchMembership)
+    private readonly membershipRepository: Repository<OperatorBranchMembership>,
     @InjectRepository(NetScheduler)
     private readonly netSchedulerRepository: Repository<NetScheduler>,
   ) {}
@@ -89,10 +89,16 @@ export class OperatorService {
 
     // 2. Get user's non-HQ branch IDs
     let userNonHqBranchIds: string[] = [];
-    const memberships = await this.membershipRepository.find({
-      where: { userId, status: MembershipStatus.APPROVED },
-      select: ['branchId'],
-    });
+    let memberships: { branchId: string }[] = [];
+    if (userOperator) {
+      memberships = await this.membershipRepository.find({
+        where: {
+          operatorId: userOperator.id,
+          status: MembershipStatus.APPROVED,
+        },
+        select: ['branchId'],
+      });
+    }
     if (memberships.length > 0) {
       const branchIds = memberships.map((m) => m.branchId);
       const nonHqBranches = await this.branchRepository
@@ -165,9 +171,9 @@ export class OperatorService {
       parts.push(
         `COALESCE((` +
           `SELECT COUNT(DISTINCT m_rel."branchId") * 8 ` +
-          `FROM "user_branch_memberships" m_rel ` +
+          `FROM "operator_branch_memberships" m_rel ` +
           `INNER JOIN "branches" b_rel ON b_rel."id" = m_rel."branchId" ` +
-          `WHERE m_rel."userId" = "user"."id" ` +
+          `WHERE m_rel."operatorId" = "operator"."id" ` +
           `AND m_rel."branchId" IN (:...relBranchIds) ` +
           `AND m_rel."status" = 'approved' ` +
           `AND b_rel."isHeadquarters" = false` +
@@ -610,23 +616,23 @@ export class OperatorService {
     const entities = result.entities;
 
     // Compute isBranchMember flag (kept for frontend display)
-    let branchMemberUserIds: Set<string> = new Set();
+    let branchMemberOperatorIds: Set<string> = new Set();
     if (priorityBranchId) {
       const memberships = await this.membershipRepository.find({
         where: {
           branchId: priorityBranchId,
           status: MembershipStatus.APPROVED,
         },
-        select: ['userId'],
+        select: ['operatorId'],
       });
-      branchMemberUserIds = new Set(memberships.map((m) => m.userId));
+      branchMemberOperatorIds = new Set(
+        memberships.map((m) => m.operatorId),
+      );
     }
 
     return entities.map((op) => ({
       ...op,
-      isBranchMember: op.user?.id
-        ? branchMemberUserIds.has(op.user.id)
-        : false,
+      isBranchMember: branchMemberOperatorIds.has(op.id),
     }));
   }
 

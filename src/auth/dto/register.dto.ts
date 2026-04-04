@@ -6,7 +6,6 @@ import {
   IsOptional,
   IsArray,
   IsUUID,
-  ArrayMinSize,
   IsBoolean,
 } from 'class-validator';
 
@@ -28,10 +27,10 @@ export class RegisterDto {
   @MinLength(6)
   password: string;
 
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1, { message: 'error.atLeastOneBranchRequired' })
   @IsUUID('4', { each: true })
-  branchIds: string[];
+  branchIds?: string[];
 
   @IsString()
   @IsOptional()

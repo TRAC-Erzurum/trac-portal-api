@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotAcceptableException,
   NotFoundException,
   UnauthorizedException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial, ILike, In } from 'typeorm';
@@ -27,7 +29,8 @@ import { SetPasswordDto } from '../dto/set-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { AuthUser } from '../../auth/types/auth.types';
 import { BranchService } from '../../branch/services/branch.service';
-import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
+import { MembershipService } from '../../branch/services/membership.service';
+import { OperatorBranchMembership } from '../../branch/entities/operator-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 
 @Injectable()
@@ -35,10 +38,12 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(UserBranchMembership)
-    private readonly membershipRepository: Repository<UserBranchMembership>,
+    @InjectRepository(OperatorBranchMembership)
+    private readonly membershipRepository: Repository<OperatorBranchMembership>,
     private readonly operatorService: OperatorService,
     private readonly branchService: BranchService,
+    @Inject(forwardRef(() => MembershipService))
+    private readonly membershipService: MembershipService,
   ) { }
 
   async findByEmail(email: string): Promise<User> {
@@ -78,23 +83,20 @@ export class UserService {
   }
 
   private async isApprovedBranchLeader(userId: string): Promise<boolean> {
-    const n = await this.membershipRepository.count({
-      where: {
-        userId,
-        status: MembershipStatus.APPROVED,
-        role: In([BranchRole.ADMIN, BranchRole.PRESIDENT]),
-      },
-    });
-    return n > 0;
+    return this.membershipService.hasApprovedBranchLeadershipInAnyBranch(userId);
   }
 
   private async isBranchLeaderInBranch(
     userId: string,
     branchId: string,
   ): Promise<boolean> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return false;
+    }
     const m = await this.membershipRepository.findOne({
       where: {
-        userId,
+        operatorId: operator.id,
         branchId,
         status: MembershipStatus.APPROVED,
         role: In([BranchRole.ADMIN, BranchRole.PRESIDENT]),
@@ -142,8 +144,16 @@ export class UserService {
       }
     }
 
+    const targetOperator = await this.operatorService.findByUserId(userId);
+    if (!targetOperator) {
+      throw new BadRequestException('error.invalidData');
+    }
+
     const memberships = await this.membershipRepository.find({
-      where: { userId, status: MembershipStatus.APPROVED },
+      where: {
+        operatorId: targetOperator.id,
+        status: MembershipStatus.APPROVED,
+      },
     });
 
     if (memberships.length === 0) {
@@ -154,7 +164,11 @@ export class UserService {
 
     for (const m of memberships) {
       const can =
-        isSuper || (await this.isBranchLeaderInBranch(requester.id, m.branchId));
+        isSuper ||
+        (await this.membershipService.canActAsBranchLeaderOnBranch(
+          requester.id,
+          m.branchId,
+        ));
       if (can) {
         m.role = role;
         m.updatedBy = [...(m.updatedBy || []), requester.email];
@@ -172,7 +186,7 @@ export class UserService {
   async findOne(id: string, requester?: AuthUser): Promise<User> {
     const user = await this.userRepository.findOneOrFail({
       where: { id },
-      relations: { operator: true, branchMemberships: true },
+      relations: { operator: { branchMemberships: { branch: true } } },
     });
 
     if (requester && !(await this.canAccessSensitiveData(requester, id))) {
@@ -199,16 +213,25 @@ export class UserService {
       return true;
     }
 
-    // Check if requester is an admin in a branch where the target user is a member
+    const requesterOperator = await this.operatorService.findByUserId(
+      requester.id,
+    );
+    const targetOperator = await this.operatorService.findByUserId(
+      targetUserId,
+    );
+    if (!requesterOperator || !targetOperator) {
+      return false;
+    }
+
     const requesterAdminMemberships = await this.membershipRepository.find({
       where: [
         {
-          userId: requester.id,
+          operatorId: requesterOperator.id,
           role: BranchRole.ADMIN,
           status: MembershipStatus.APPROVED,
         },
         {
-          userId: requester.id,
+          operatorId: requesterOperator.id,
           role: BranchRole.PRESIDENT,
           status: MembershipStatus.APPROVED,
         },
@@ -223,13 +246,35 @@ export class UserService {
 
     const isMemberInSameBranch = await this.membershipRepository.findOne({
       where: {
-        userId: targetUserId,
+        operatorId: targetOperator.id,
         branchId: In(branchIds),
         status: MembershipStatus.APPROVED,
       },
     });
 
-    return !!isMemberInSameBranch;
+    if (isMemberInSameBranch) {
+      return true;
+    }
+
+    const targetMemberships = await this.membershipRepository.find({
+      where: {
+        operatorId: targetOperator.id,
+        status: MembershipStatus.APPROVED,
+      },
+      select: ['branchId'],
+    });
+    for (const tm of targetMemberships) {
+      if (
+        await this.membershipService.canActAsBranchLeaderOnBranch(
+          requester.id,
+          tm.branchId,
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   async findOperatorByUserId(userId: string): Promise<Operator | null> {
@@ -244,8 +289,12 @@ export class UserService {
     if (user.globalRole === GlobalRole.SUPER_ADMIN) {
       return GlobalRole.SUPER_ADMIN;
     }
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return GlobalRole.GUEST;
+    }
     const memberships = await this.membershipRepository.find({
-      where: { userId, status: MembershipStatus.APPROVED },
+      where: { operatorId: operator.id, status: MembershipStatus.APPROVED },
     });
     if (memberships.length === 0) return GlobalRole.GUEST;
     if (memberships.some((m) => m.role === BranchRole.PRESIDENT)) {
@@ -541,22 +590,26 @@ export class UserService {
     userId: string,
     branchId: string,
   ): Promise<void> {
-    await this.branchService.findOne(branchId);
+    const branch = await this.branchService.findOne(branchId);
 
     const effectiveRole = await this.getEffectiveRole(userId);
     if (effectiveRole === GlobalRole.SUPER_ADMIN) {
       return;
     }
 
-    const membership = await this.membershipRepository.findOne({
-      where: {
-        userId,
-        branchId,
-        status: MembershipStatus.APPROVED,
-      },
-    });
+    if (
+      branch.isActive &&
+      (await this.membershipService.hasApprovedHeadquartersLeadership(userId))
+    ) {
+      return;
+    }
 
-    if (!membership) {
+    const membership = await this.membershipService.findMembership(
+      userId,
+      branchId,
+    );
+
+    if (!membership || membership.status !== MembershipStatus.APPROVED) {
       throw new ForbiddenException('error.notBranchMember');
     }
   }

@@ -26,10 +26,6 @@ export class CertificateTemplateElementDto {
   @IsNumber()
   y: number;
 
-  @IsString()
-  @IsNotEmpty()
-  fontFamily: string;
-
   @IsNumber()
   fontSize: number;
 

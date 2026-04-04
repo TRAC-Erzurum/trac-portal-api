@@ -27,7 +27,6 @@ export interface CertificateTemplateElement {
   placeholderKey?: string;
   x: number;
   y: number;
-  fontFamily: string;
   fontSize: number;
   color: string;
 }

@@ -12,7 +12,8 @@ import { randomUUID } from 'crypto';
 import { fileTypeFromBuffer } from 'file-type';
 import { AuthUser } from '../auth/types/auth.types';
 import { FileStorageService } from '../shared/storage/file-storage.service';
-import { UserBranchMembership } from '../branch/entities/user-branch-membership.entity';
+import { OperatorBranchMembership } from '../branch/entities/operator-branch-membership.entity';
+import { OperatorService } from '../operator/services/operator.service';
 import { MembershipStatus } from '../branch/enums/membership-status.enum';
 import {
   ALLOWED_FEEDBACK_IMAGE_MIMES,
@@ -33,8 +34,9 @@ export class FeedbackService {
   constructor(
     private readonly configService: ConfigService,
     private readonly fileStorage: FileStorageService,
-    @InjectRepository(UserBranchMembership)
-    private readonly membershipRepository: Repository<UserBranchMembership>,
+    @InjectRepository(OperatorBranchMembership)
+    private readonly membershipRepository: Repository<OperatorBranchMembership>,
+    private readonly operatorService: OperatorService,
   ) {}
 
   private getPublicOrigin(): string {
@@ -62,8 +64,12 @@ export class FeedbackService {
   }
 
   async countApprovedMemberships(userId: string): Promise<number> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return 0;
+    }
     return this.membershipRepository.count({
-      where: { userId, status: MembershipStatus.APPROVED },
+      where: { operatorId: operator.id, status: MembershipStatus.APPROVED },
     });
   }
 

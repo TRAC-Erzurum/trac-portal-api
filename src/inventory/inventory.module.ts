@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BranchModule } from '../branch/branch.module';
 import {
   EquipmentCategory,
   CategoryPropertyDefinition,
@@ -9,7 +10,7 @@ import {
   EquipmentPropertyValue,
   EquipmentRelation,
 } from './entities';
-import { UserBranchMembership } from '../branch/entities/user-branch-membership.entity';
+import { OperatorBranchMembership } from '../branch/entities/operator-branch-membership.entity';
 import { controllers } from './controllers';
 import {
   services,
@@ -20,6 +21,7 @@ import {
 
 @Module({
   imports: [
+    BranchModule,
     TypeOrmModule.forFeature([
       EquipmentCategory,
       CategoryPropertyDefinition,
@@ -28,7 +30,7 @@ import {
       EquipmentPhoto,
       EquipmentPropertyValue,
       EquipmentRelation,
-      UserBranchMembership,
+      OperatorBranchMembership,
     ]),
   ],
   controllers: [...controllers],

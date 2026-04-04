@@ -20,6 +20,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { FileStorageService } from '../../shared/storage';
 import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
 import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
+import { MembershipService } from '../../branch/services/membership.service';
 import { EquipmentService } from '../services/equipment.service';
 import {
   CreateEquipmentDto,
@@ -35,6 +36,7 @@ export class EquipmentController {
   constructor(
     private readonly equipmentService: EquipmentService,
     private readonly fileStorage: FileStorageService,
+    private readonly membershipService: MembershipService,
   ) {}
 
   @Get('operator/:operatorId')
@@ -171,9 +173,11 @@ export class EquipmentController {
 
     if (
       equipment.ownerType === OwnerType.BRANCH &&
-      equipment.branchId === req.user.currentBranchId &&
-      (req.user.role === BranchRole.ADMIN ||
-        req.user.role === BranchRole.PRESIDENT)
+      equipment.branchId &&
+      (await this.membershipService.canActAsBranchLeaderOnBranch(
+        req.user.id,
+        equipment.branchId,
+      ))
     ) {
       return;
     }

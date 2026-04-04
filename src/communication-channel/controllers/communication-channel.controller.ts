@@ -21,7 +21,6 @@ import { CommunicationChannelType } from '../enums/communication-channel-type.en
 import { BranchAdminGuard } from '../../branch/guards/branch-admin.guard';
 import { BranchCommunicationChannelAdminGuard } from '../guards/branch-communication-channel-admin.guard';
 import { MembershipService } from '../../branch/services/membership.service';
-import { isApprovedBranchLeadership } from '../../branch/utils/is-approved-branch-leadership.util';
 
 @Controller('communication-channel')
 export class CommunicationChannelController {
@@ -162,11 +161,11 @@ export class BranchCommunicationChannelController {
       if (req.user.role === GlobalRole.SUPER_ADMIN) {
         includeInactiveFlag = true;
       } else {
-        const membership = await this.membershipService.findMembership(
-          String(req.user.id),
-          branchId,
-        );
-        includeInactiveFlag = isApprovedBranchLeadership(membership);
+        includeInactiveFlag =
+          await this.membershipService.canActAsBranchLeaderOnBranch(
+            String(req.user.id),
+            branchId,
+          );
       }
     }
     const page = pageNumber ? parseInt(pageNumber, 10) : undefined;

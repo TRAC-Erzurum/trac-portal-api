@@ -3,7 +3,7 @@ import { BranchRole } from '../enums/branch-role.enum';
 
 export class AddMemberDto {
   @IsUUID()
-  userId: string;
+  operatorId: string;
 
   @IsOptional()
   @IsEnum(BranchRole)

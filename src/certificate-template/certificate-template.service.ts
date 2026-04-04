@@ -47,6 +47,20 @@ export class CertificateTemplateService {
     return template;
   }
 
+  private sanitizeElements(
+    elements: CreateCertificateTemplateDto['elements'],
+  ): CertificateTemplateElement[] {
+    return (elements ?? []).map((el) => ({
+      type: el.type,
+      content: el.content,
+      placeholderKey: el.placeholderKey,
+      x: el.x,
+      y: el.y,
+      fontSize: el.fontSize,
+      color: el.color,
+    }));
+  }
+
   async create(
     branchId: string,
     dto: CreateCertificateTemplateDto,
@@ -54,9 +68,10 @@ export class CertificateTemplateService {
   ): Promise<CertificateTemplate> {
     await this.branchService.findOne(branchId);
     const template = this.templateRepository.create({
-      ...dto,
+      name: dto.name,
+      imagePath: dto.imagePath,
       branchId,
-      elements: (dto.elements ?? []) as CertificateTemplateElement[],
+      elements: this.sanitizeElements(dto.elements),
       createdBy,
       updatedBy: [],
     });
@@ -79,7 +94,7 @@ export class CertificateTemplateService {
       template.imagePath = dto.imagePath;
     }
     if (dto.elements !== undefined)
-      template.elements = dto.elements as CertificateTemplateElement[];
+      template.elements = this.sanitizeElements(dto.elements);
     template.updatedBy = [...(template.updatedBy || []), updatedBy];
     return this.templateRepository.save(template);
   }

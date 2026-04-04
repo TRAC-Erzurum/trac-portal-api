@@ -11,7 +11,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { UserBranchMembership } from '../entities/user-branch-membership.entity';
+import { OperatorBranchMembership } from '../entities/operator-branch-membership.entity';
 import { Branch } from '../entities/branch.entity';
 import { User } from '../../user/entities/user.entity';
 import { Net } from '../../net/entities/net.entity';
@@ -34,8 +34,8 @@ import { NetScheduler } from '../../net-scheduler/entities/net-scheduler.entity'
 @Injectable()
 export class MembershipService {
   constructor(
-    @InjectRepository(UserBranchMembership)
-    private readonly membershipRepository: Repository<UserBranchMembership>,
+    @InjectRepository(OperatorBranchMembership)
+    private readonly membershipRepository: Repository<OperatorBranchMembership>,
     @InjectRepository(Branch)
     private readonly branchRepository: Repository<Branch>,
     @InjectRepository(User)
@@ -52,27 +52,43 @@ export class MembershipService {
     private readonly operatorService: OperatorService,
   ) {}
 
-  private async syncUserEffectiveRole(userId: string): Promise<void> {
-    await this.userService.syncRoleColumn(userId);
+  private async syncEffectiveRoleForOperator(
+    operatorId: string,
+  ): Promise<void> {
+    const op = await this.operatorRepository.findOne({
+      where: { id: operatorId },
+      relations: ['user'],
+    });
+    if (op?.user?.id) {
+      await this.userService.syncRoleColumn(op.user.id);
+    }
+  }
+
+  private async requireOperatorIdForUser(userId: string): Promise<string> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      throw new BadRequestException('error.userMustHaveOperator');
+    }
+    return operator.id;
   }
 
   async createMembership(
-    userId: string,
+    operatorId: string,
     branchId: string,
     role: BranchRole,
     status: MembershipStatus,
     createdBy: string,
-  ): Promise<UserBranchMembership> {
+  ): Promise<OperatorBranchMembership> {
     const existingMembership = await this.membershipRepository.findOne({
-      where: { userId, branchId },
+      where: { operatorId, branchId },
     });
 
     if (existingMembership) {
       return existingMembership;
     }
 
-    const membership = new UserBranchMembership();
-    membership.userId = userId;
+    const membership = new OperatorBranchMembership();
+    membership.operatorId = operatorId;
     membership.branchId = branchId;
     membership.role = role;
     membership.status = status;
@@ -80,20 +96,20 @@ export class MembershipService {
     membership.updatedBy = [];
 
     const saved = await this.membershipRepository.save(membership);
-    await this.syncUserEffectiveRole(userId);
+    await this.syncEffectiveRoleForOperator(operatorId);
     return saved;
   }
 
   async addMemberDirectly(
     branchId: string,
-    userId: string,
+    operatorId: string,
     role: BranchRole,
     addedBy: string,
     actorCallSign: string,
-  ): Promise<UserBranchMembership> {
+  ): Promise<OperatorBranchMembership> {
     const existingMembership = await this.membershipRepository.findOne({
-      where: { userId, branchId },
-      relations: ['user', 'branch'],
+      where: { operatorId, branchId },
+      relations: ['operator', 'operator.user', 'branch'],
     });
 
     if (existingMembership) {
@@ -104,7 +120,7 @@ export class MembershipService {
       existingMembership.role = role;
       existingMembership.updatedBy = [...existingMembership.updatedBy, addedBy];
       const saved = await this.membershipRepository.save(existingMembership);
-      await this.syncUserEffectiveRole(userId);
+      await this.syncEffectiveRoleForOperator(operatorId);
 
       this.eventEmitter.emit('membership.approved', {
         membership: saved,
@@ -121,16 +137,16 @@ export class MembershipService {
       throw new NotFoundException('error.branchNotFound');
     }
 
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['operator'],
+    const operator = await this.operatorRepository.findOne({
+      where: { id: operatorId },
+      relations: ['user'],
     });
-    if (!user) {
-      throw new NotFoundException('error.userNotFound');
+    if (!operator) {
+      throw new NotFoundException('error.operatorNotFound');
     }
 
-    const membership = new UserBranchMembership();
-    membership.userId = userId;
+    const membership = new OperatorBranchMembership();
+    membership.operatorId = operatorId;
     membership.branchId = branchId;
     membership.role = role;
     membership.status = MembershipStatus.APPROVED;
@@ -139,7 +155,7 @@ export class MembershipService {
 
     const saved = await this.membershipRepository.save(membership);
 
-    saved.user = user;
+    saved.operator = operator;
     saved.branch = branch;
 
     this.eventEmitter.emit('membership.approved', {
@@ -147,14 +163,19 @@ export class MembershipService {
       actorCallSign,
     });
 
-    await this.syncUserEffectiveRole(userId);
+    await this.syncEffectiveRoleForOperator(operatorId);
 
     return saved;
   }
 
-  async join(userId: string, branchId: string): Promise<UserBranchMembership> {
+  async join(
+    userId: string,
+    branchId: string,
+  ): Promise<OperatorBranchMembership> {
+    const operatorId = await this.requireOperatorIdForUser(userId);
+
     const existingMembership = await this.membershipRepository.findOne({
-      where: { userId, branchId },
+      where: { operatorId, branchId },
     });
 
     if (existingMembership) {
@@ -181,22 +202,22 @@ export class MembershipService {
       throw new NotFoundException('error.userNotFound');
     }
 
-    const membership = new UserBranchMembership();
-    membership.userId = userId;
+    const membership = new OperatorBranchMembership();
+    membership.operatorId = operatorId;
     membership.branchId = branchId;
     membership.role = BranchRole.MEMBER;
-    // SUPER_ADMIN users are automatically approved when joining a branch
-    membership.status = user.globalRole === GlobalRole.SUPER_ADMIN 
-      ? MembershipStatus.APPROVED 
+    const superAdminJoinsHq =
+      user.globalRole === GlobalRole.SUPER_ADMIN && branch.isHeadquarters;
+    membership.status = superAdminJoinsHq
+      ? MembershipStatus.APPROVED
       : MembershipStatus.PENDING;
     membership.createdBy = userId;
     membership.updatedBy = [];
 
     try {
       const saved = await this.membershipRepository.save(membership);
-      
-      // Emit activity event for SUPER_ADMIN auto-approval
-      if (user.globalRole === GlobalRole.SUPER_ADMIN) {
+
+      if (superAdminJoinsHq) {
         const targetCallSign = user.operator?.callSign ?? null;
         this.eventEmitter.emit(
           ACTIVITY_EVENT,
@@ -212,7 +233,7 @@ export class MembershipService {
         );
       }
 
-      await this.syncUserEffectiveRole(userId);
+      await this.syncEffectiveRoleForOperator(operatorId);
 
       return saved;
     } catch (error) {
@@ -229,13 +250,18 @@ export class MembershipService {
     approvedBy: string,
     actorCallSign: string,
     role: BranchRole = BranchRole.MEMBER,
-  ): Promise<UserBranchMembership> {
+    branchId?: string,
+  ): Promise<OperatorBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['user', 'user.operator', 'branch'],
+      relations: ['operator', 'operator.user', 'branch'],
     });
 
     if (!membership) {
+      throw new NotFoundException('error.membershipNotFound');
+    }
+
+    if (branchId && membership.branchId !== branchId) {
       throw new NotFoundException('error.membershipNotFound');
     }
 
@@ -245,7 +271,7 @@ export class MembershipService {
 
     const existingApprovedCount = await this.membershipRepository.count({
       where: {
-        userId: membership.userId,
+        operatorId: membership.operatorId,
         status: MembershipStatus.APPROVED,
       },
     });
@@ -270,14 +296,14 @@ export class MembershipService {
         if (hqBranch) {
           const existingHqMembership = await this.membershipRepository.findOne({
             where: {
-              userId: membership.userId,
+              operatorId: membership.operatorId,
               branchId: hqBranch.id,
             },
           });
 
           if (!existingHqMembership) {
-            const hqMembership = new UserBranchMembership();
-            hqMembership.userId = membership.userId;
+            const hqMembership = new OperatorBranchMembership();
+            hqMembership.operatorId = membership.operatorId;
             hqMembership.branchId = hqBranch.id;
             hqMembership.role = BranchRole.MEMBER;
             hqMembership.status = MembershipStatus.APPROVED;
@@ -289,19 +315,24 @@ export class MembershipService {
         }
       }
 
-      await this.syncUserEffectiveRole(membership.userId);
+      await this.syncEffectiveRoleForOperator(membership.operatorId);
 
-      const targetCallSign = membership.user?.operator?.callSign ?? null;
+      const targetUserId = membership.operator?.user?.id ?? null;
+      const targetCallSign = membership.operator?.callSign ?? null;
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
         new ActivityEvent(
           ActivityType.MEMBERSHIP_APPROVED,
           EntityType.MEMBERSHIP,
           saved.id,
-          membership.userId,
+          targetUserId,
           actorCallSign,
           targetCallSign,
-          { branchId: membership.branchId, branchName: membership.branch.name },
+          {
+            branchId: membership.branchId,
+            branchName: membership.branch.name,
+            operatorId: membership.operatorId,
+          },
         ),
       );
 
@@ -317,13 +348,18 @@ export class MembershipService {
     rejectedBy: string,
     actorCallSign: string,
     rejectionReason?: string,
-  ): Promise<UserBranchMembership> {
+    branchId?: string,
+  ): Promise<OperatorBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['user', 'user.operator', 'branch'],
+      relations: ['operator', 'operator.user', 'branch'],
     });
 
     if (!membership) {
+      throw new NotFoundException('error.membershipNotFound');
+    }
+
+    if (branchId && membership.branchId !== branchId) {
       throw new NotFoundException('error.membershipNotFound');
     }
 
@@ -339,17 +375,22 @@ export class MembershipService {
 
     try {
       const saved = await this.membershipRepository.save(membership);
-      const targetCallSign = membership.user?.operator?.callSign ?? null;
+      const targetUserId = membership.operator?.user?.id ?? null;
+      const targetCallSign = membership.operator?.callSign ?? null;
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
         new ActivityEvent(
           ActivityType.MEMBERSHIP_REJECTED,
           EntityType.MEMBERSHIP,
           saved.id,
-          membership.userId,
+          targetUserId,
           actorCallSign,
           targetCallSign,
-          { branchId: membership.branchId, branchName: membership.branch.name },
+          {
+            branchId: membership.branchId,
+            branchName: membership.branch.name,
+            operatorId: membership.operatorId,
+          },
         ),
       );
 
@@ -361,7 +402,7 @@ export class MembershipService {
   }
 
   async remove(
-    userId: string,
+    operatorId: string,
     branchId: string,
     removedBy: string,
     actorCallSign: string,
@@ -378,23 +419,27 @@ export class MembershipService {
       throw new ForbiddenException('error.cannotRemoveFromHeadquarters');
     }
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('error.userNotFound');
+    const operator = await this.operatorRepository.findOne({
+      where: { id: operatorId },
+      relations: ['user'],
+    });
+    if (!operator) {
+      throw new NotFoundException('error.operatorNotFound');
     }
 
-    // Only SUPER_ADMIN can remove another SUPER_ADMIN
-    if (
-      user.globalRole === GlobalRole.SUPER_ADMIN &&
-      actorRole !== GlobalRole.SUPER_ADMIN
-    ) {
-      throw new ForbiddenException('error.cannotRemoveSuperAdmin');
+    const linkedUser = operator.user;
+    if (linkedUser) {
+      if (
+        linkedUser.globalRole === GlobalRole.SUPER_ADMIN &&
+        actorRole !== GlobalRole.SUPER_ADMIN
+      ) {
+        throw new ForbiddenException('error.cannotRemoveSuperAdmin');
+      }
     }
 
     const hasActiveOrPendingNet = await this.netRepository
       .createQueryBuilder('net')
-      .innerJoin('net.operator', 'op')
-      .where('op.userId = :userId', { userId })
+      .where('net.operatorId = :operatorId', { operatorId })
       .andWhere('net.endedAt IS NULL')
       .getCount();
     if (hasActiveOrPendingNet > 0) {
@@ -402,31 +447,30 @@ export class MembershipService {
     }
 
     const membership = await this.membershipRepository.findOne({
-      where: { userId, branchId },
-      relations: ['user', 'user.operator', 'branch'],
+      where: { operatorId, branchId },
+      relations: ['operator', 'operator.user', 'branch'],
     });
 
     if (!membership) {
       throw new NotFoundException('error.membershipNotFound');
     }
 
-    if (membership.user?.operator) {
-      const usedInScheduler = await this.netSchedulerRepository.count({
-        where: {
-          operatorId: membership.user.operator.id,
-          branchId,
-        },
-      });
-      if (usedInScheduler > 0) {
-        throw new BadRequestException('error.operatorUsedInScheduler');
-      }
+    const usedInScheduler = await this.netSchedulerRepository.count({
+      where: {
+        operatorId,
+        branchId,
+      },
+    });
+    if (usedInScheduler > 0) {
+      throw new BadRequestException('error.operatorUsedInScheduler');
     }
 
-    const targetCallSign = membership.user?.operator?.callSign ?? null;
+    const targetCallSign = membership.operator?.callSign ?? null;
+    const targetUserId = membership.operator?.user?.id ?? null;
 
     try {
       await this.membershipRepository.remove(membership);
-      await this.syncUserEffectiveRole(userId);
+      await this.syncEffectiveRoleForOperator(operatorId);
 
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
@@ -434,10 +478,10 @@ export class MembershipService {
           ActivityType.MEMBERSHIP_REMOVED,
           EntityType.MEMBERSHIP,
           null,
-          userId,
+          targetUserId,
           actorCallSign,
           targetCallSign,
-          { branchId, branchName: branch.name },
+          { branchId, branchName: branch.name, operatorId },
         ),
       );
     } catch (error) {
@@ -453,11 +497,11 @@ export class MembershipService {
     search?: string,
     role?: string,
     userId?: string,
-  ): Promise<{ data: UserBranchMembership[]; total: number }> {
+  ): Promise<{ data: OperatorBranchMembership[]; total: number }> {
     const queryBuilder = this.membershipRepository
       .createQueryBuilder('membership')
-      .leftJoinAndSelect('membership.user', 'user')
-      .leftJoinAndSelect('user.operator', 'operator')
+      .leftJoinAndSelect('membership.operator', 'operator')
+      .leftJoinAndSelect('operator.user', 'user')
       .leftJoinAndSelect('membership.branch', 'branch')
       .where('membership.branchId = :branchId', { branchId })
       .andWhere('membership.status = :status', {
@@ -466,7 +510,12 @@ export class MembershipService {
 
     if (search) {
       queryBuilder.andWhere(
-        '(LOWER(user.fullName) LIKE LOWER(:search) OR LOWER(user.email) LIKE LOWER(:search) OR LOWER(operator.callSign) LIKE LOWER(:search))',
+        '(' +
+          'LOWER(COALESCE(user.fullName, \'\')) LIKE LOWER(:search) OR ' +
+          'LOWER(COALESCE(user.email, \'\')) LIKE LOWER(:search) OR ' +
+          'LOWER(operator.callSign) LIKE LOWER(:search) OR ' +
+          'LOWER(COALESCE(operator.fullName, \'\')) LIKE LOWER(:search)' +
+          ')',
         { search: `%${search}%` },
       );
     }
@@ -475,10 +524,8 @@ export class MembershipService {
       queryBuilder.andWhere('membership.role = :role', { role });
     }
 
-    // Count BEFORE adding relevance scoring (addSelect breaks getCount)
     const total = await queryBuilder.getCount();
 
-    // Apply relevance scoring or fall back to createdAt
     if (userId) {
       const ctx = await this.operatorService.getContextCached(userId);
       this.operatorService.buildRelevanceScore(queryBuilder, ctx);
@@ -498,10 +545,14 @@ export class MembershipService {
     return { data, total };
   }
 
-  async getUserBranches(userId: string): Promise<UserBranchMembership[]> {
+  async getUserBranches(userId: string): Promise<OperatorBranchMembership[]> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return [];
+    }
     return this.membershipRepository.find({
       where: {
-        userId,
+        operatorId: operator.id,
         status: MembershipStatus.APPROVED,
       },
       relations: ['branch', 'branch.callSigns'],
@@ -514,17 +565,25 @@ export class MembershipService {
   async findMembership(
     userId: string,
     branchId: string,
-  ): Promise<UserBranchMembership | null> {
+  ): Promise<OperatorBranchMembership | null> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return null;
+    }
     return this.membershipRepository.findOne({
-      where: { userId, branchId },
-      relations: ['user', 'branch'],
+      where: { operatorId: operator.id, branchId },
+      relations: ['operator', 'operator.user', 'branch'],
     });
   }
 
   async hasApprovedPresidentInAnyBranch(userId: string): Promise<boolean> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return false;
+    }
     const n = await this.membershipRepository.count({
       where: {
-        userId,
+        operatorId: operator.id,
         status: MembershipStatus.APPROVED,
         role: BranchRole.PRESIDENT,
       },
@@ -532,11 +591,14 @@ export class MembershipService {
     return n > 0;
   }
 
-  /** Onaylı şube yöneticisi veya başkan (herhangi bir şube). */
   async hasApprovedBranchLeadershipInAnyBranch(userId: string): Promise<boolean> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return false;
+    }
     const n = await this.membershipRepository.count({
       where: {
-        userId,
+        operatorId: operator.id,
         status: MembershipStatus.APPROVED,
         role: In([BranchRole.ADMIN, BranchRole.PRESIDENT]),
       },
@@ -544,9 +606,53 @@ export class MembershipService {
     return n > 0;
   }
 
-  async getUserMemberships(userId: string): Promise<UserBranchMembership[]> {
+  async hasApprovedHeadquartersLeadership(userId: string): Promise<boolean> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return false;
+    }
+    const n = await this.membershipRepository
+      .createQueryBuilder('m')
+      .innerJoin('m.branch', 'b')
+      .where('m.operatorId = :operatorId', { operatorId: operator.id })
+      .andWhere('m.status = :status', { status: MembershipStatus.APPROVED })
+      .andWhere('m.role IN (:...roles)', {
+        roles: [BranchRole.ADMIN, BranchRole.PRESIDENT],
+      })
+      .andWhere('b.isHeadquarters = true')
+      .getCount();
+    return n > 0;
+  }
+
+  async canActAsBranchLeaderOnBranch(
+    userId: string,
+    branchId: string,
+  ): Promise<boolean> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return false;
+    }
+    const local = await this.membershipRepository.findOne({
+      where: {
+        operatorId: operator.id,
+        branchId,
+        status: MembershipStatus.APPROVED,
+        role: In([BranchRole.ADMIN, BranchRole.PRESIDENT]),
+      },
+    });
+    if (local) {
+      return true;
+    }
+    return this.hasApprovedHeadquartersLeadership(userId);
+  }
+
+  async getUserMemberships(userId: string): Promise<OperatorBranchMembership[]> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return [];
+    }
     return this.membershipRepository.find({
-      where: { userId },
+      where: { operatorId: operator.id },
       relations: ['branch', 'branch.callSigns'],
       order: { createdAt: 'DESC' },
     });
@@ -558,10 +664,10 @@ export class MembershipService {
     updatedBy: string,
     actorCallSign: string,
     branchId?: string,
-  ): Promise<UserBranchMembership> {
+  ): Promise<OperatorBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['user', 'user.operator', 'branch'],
+      relations: ['operator', 'operator.user', 'branch'],
     });
 
     if (!membership) {
@@ -576,13 +682,8 @@ export class MembershipService {
       throw new BadRequestException('error.membershipNotApproved');
     }
 
-    const user = await this.userRepository.findOne({
-      where: { id: membership.userId },
-    });
-    if (!user) {
-      throw new NotFoundException('error.userNotFound');
-    }
-    if (user.globalRole === GlobalRole.SUPER_ADMIN) {
+    const linkedUser = membership.operator?.user;
+    if (linkedUser?.globalRole === GlobalRole.SUPER_ADMIN) {
       throw new ForbiddenException('error.cannotChangeSuperAdminRole');
     }
 
@@ -616,32 +717,26 @@ export class MembershipService {
 
     try {
       const saved = await this.membershipRepository.save(membership);
-      let targetCallSign =
-        membership.user?.operator?.callSign ?? null;
-      if (!targetCallSign) {
-        const operator = await this.operatorRepository.findOne({
-          where: { user: { id: membership.userId } },
-          select: ['callSign'],
-        });
-        targetCallSign = operator?.callSign ?? null;
-      }
+      const targetCallSign = membership.operator?.callSign ?? null;
+      const targetUserId = membership.operator?.user?.id ?? null;
       this.eventEmitter.emit(
         ACTIVITY_EVENT,
         new ActivityEvent(
           ActivityType.MEMBERSHIP_ROLE_UPDATED,
           EntityType.MEMBERSHIP,
           saved.id,
-          membership.userId,
+          targetUserId,
           actorCallSign,
           targetCallSign,
           {
             branchId: membership.branchId,
             branchName: membership.branch.name,
             newRole: role,
+            operatorId: membership.operatorId,
           },
         ),
       );
-      await this.syncUserEffectiveRole(membership.userId);
+      await this.syncEffectiveRoleForOperator(membership.operatorId);
       return saved;
     } catch (error) {
       console.error('Membership updateRole error:', error);
@@ -651,12 +746,35 @@ export class MembershipService {
 
   async getPendingMembershipsByBranch(
     branchId: string,
-  ): Promise<UserBranchMembership[]> {
+  ): Promise<OperatorBranchMembership[]> {
     return this.membershipRepository.find({
       where: { branchId, status: MembershipStatus.PENDING },
-      relations: ['user', 'user.operator', 'branch'],
+      relations: ['operator', 'operator.user', 'branch'],
       order: { createdAt: 'ASC' },
     });
+  }
+
+  private async getAdminBranchIdsForUser(userId: string): Promise<string[]> {
+    const operator = await this.operatorService.findByUserId(userId);
+    if (!operator) {
+      return [];
+    }
+    const adminMemberships = await this.membershipRepository.find({
+      where: [
+        {
+          operatorId: operator.id,
+          status: MembershipStatus.APPROVED,
+          role: BranchRole.ADMIN,
+        },
+        {
+          operatorId: operator.id,
+          status: MembershipStatus.APPROVED,
+          role: BranchRole.PRESIDENT,
+        },
+      ],
+      select: ['branchId'],
+    });
+    return adminMemberships.map((m) => m.branchId);
   }
 
   async getPendingRequestsCountForAdmin(userId: string): Promise<number> {
@@ -668,20 +786,11 @@ export class MembershipService {
       });
     }
 
-    const adminMemberships = await this.membershipRepository.find({
-      where: [
-        { userId, status: MembershipStatus.APPROVED, role: BranchRole.ADMIN },
-        {
-          userId,
-          status: MembershipStatus.APPROVED,
-          role: BranchRole.PRESIDENT,
-        },
-      ],
-    });
+    const branchIds = await this.getAdminBranchIdsForUser(userId);
     let count = 0;
-    for (const admin of adminMemberships) {
+    for (const branchId of branchIds) {
       count += await this.membershipRepository.count({
-        where: { branchId: admin.branchId, status: MembershipStatus.PENDING },
+        where: { branchId, status: MembershipStatus.PENDING },
       });
     }
     return count;
@@ -691,7 +800,7 @@ export class MembershipService {
     branches: Array<{
       branchId: string;
       branchName: string;
-      pendingMemberships: UserBranchMembership[];
+      pendingMemberships: OperatorBranchMembership[];
     }>;
   }> {
     const effectiveRole = await this.userService.getEffectiveRole(userId);
@@ -705,11 +814,19 @@ export class MembershipService {
       });
       branches = allBranches.map((b) => ({ branchId: b.id, name: b.name }));
     } else {
+      const operator = await this.operatorService.findByUserId(userId);
+      if (!operator) {
+        return { branches: [] };
+      }
       const adminMemberships = await this.membershipRepository.find({
         where: [
-          { userId, status: MembershipStatus.APPROVED, role: BranchRole.ADMIN },
           {
-            userId,
+            operatorId: operator.id,
+            status: MembershipStatus.APPROVED,
+            role: BranchRole.ADMIN,
+          },
+          {
+            operatorId: operator.id,
             status: MembershipStatus.APPROVED,
             role: BranchRole.PRESIDENT,
           },
@@ -725,7 +842,7 @@ export class MembershipService {
     const result: Array<{
       branchId: string;
       branchName: string;
-      pendingMemberships: UserBranchMembership[];
+      pendingMemberships: OperatorBranchMembership[];
     }> = [];
 
     for (const branch of branches) {
@@ -740,5 +857,22 @@ export class MembershipService {
     }
 
     return { branches: result };
+  }
+
+  /** Onaylı üyelik sayısı (operatör bazlı; kayıt koşulu için). */
+  async countApprovedMembershipsForOperator(operatorId: string): Promise<number> {
+    return this.membershipRepository.count({
+      where: { operatorId, status: MembershipStatus.APPROVED },
+    });
+  }
+
+  async getMembershipsForOperator(
+    operatorId: string,
+  ): Promise<OperatorBranchMembership[]> {
+    return this.membershipRepository.find({
+      where: { operatorId },
+      relations: ['branch', 'branch.callSigns'],
+      order: { createdAt: 'DESC' },
+    });
   }
 }

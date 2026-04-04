@@ -117,10 +117,11 @@ export class AuthController {
         }
       : undefined;
     const branchMemberships =
-      user.branchMemberships?.map((m) => ({
+      user.operator?.branchMemberships?.map((m) => ({
         branchId: m.branchId,
         role: m.role,
         status: m.status,
+        isHeadquarters: m.branch?.isHeadquarters ?? false,
       })) ?? [];
 
     return {

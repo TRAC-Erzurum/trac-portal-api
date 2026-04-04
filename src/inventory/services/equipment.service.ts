@@ -24,7 +24,7 @@ import {
 } from '../dto';
 import { EquipmentCategoryService } from './equipment-category.service';
 import { EquipmentStatusService } from './equipment-status.service';
-import { UserBranchMembership } from '../../branch/entities/user-branch-membership.entity';
+import { OperatorBranchMembership } from '../../branch/entities/operator-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
 import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
 
@@ -131,11 +131,10 @@ export class EquipmentService {
   ): Promise<{ data: Equipment[]; total: number }> {
     const qb = this.createListQuery()
       .innerJoinAndSelect('equipment.operator', 'operator')
-      .innerJoin('operator.user', 'user')
       .innerJoin(
-        UserBranchMembership,
+        OperatorBranchMembership,
         'membership',
-        'membership.userId = user.id AND membership.branchId = :branchId AND membership.status = :membershipStatus',
+        'membership.operatorId = operator.id AND membership.branchId = :branchId AND membership.status = :membershipStatus',
         { branchId, membershipStatus: MembershipStatus.APPROVED },
       )
       .where('equipment.ownerType = :ownerType', {
