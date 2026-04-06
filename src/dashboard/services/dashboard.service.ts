@@ -122,8 +122,9 @@ export interface LastNetInfo {
 }
 
 export interface PersonalLastNetsResponse {
-  lastAttended: LastNetInfo | null;
-  lastManaged: LastNetInfo | null;
+  /** Son tamamlanmış çevrimler, en yeniden eskiye (en fazla 3). */
+  lastAttendedNets: LastNetInfo[];
+  lastManagedNets: LastNetInfo[];
 }
 
 export interface TopStreakEntry {
@@ -142,22 +143,34 @@ export interface ParticipationStatsResponse {
   avgUniqueParticipantsPerNet: number;
 }
 
+export interface PersonalTrendMonthlyPoint {
+  year: number;
+  monthIndex: number;
+  participated: number;
+  managed: number;
+}
+
 export interface PersonalTrendResponse {
   thisMonthParticipated: number;
   lastMonthParticipated: number;
   thisMonthManaged: number;
   lastMonthManaged: number;
+  /** Son 12 ay (eskiden yeniye), ay başına katılım ve yönetim sayıları. */
+  monthlySeries: PersonalTrendMonthlyPoint[];
 }
 
 export interface BusiestTimeResponse {
+  /** UTC gün (0–6) ve saat (0–23). Frontend browser timezone'una çevirir. */
   byDay: { dayOfWeek: number; count: number }[];
   byHour: { hour: number; count: number }[];
+  /** UTC haftanın günü × saat yoğunluğu. */
+  cells: { dayOfWeek: number; hour: number; count: number }[];
 }
 
 export type GeographyCountMode = 'total' | 'unique';
 
 export interface GeographyStatsResponse {
-  countries: { country: string; count: number }[];
+  countries: { country: string; count: number; iso2?: string }[];
   cities: {
     city: string;
     count: number;
@@ -920,42 +933,53 @@ export class DashboardService {
   }
 
   async getPersonalLastNets(userId: string): Promise<PersonalLastNetsResponse> {
-    const [lastAttended, lastManaged] = await Promise.all([
-      this.attendeeRepository.findOne({
-        where: { operator: { user: { id: userId } } },
-        order: { createdAt: 'DESC' },
-        relations: { net: true },
-        select: { net: { id: true, name: true, startedAt: true } },
-      }),
-      this.netRepository.findOne({
-        where: { operator: { user: { id: userId } } },
-        order: { startedAt: 'DESC' },
-        select: { id: true, name: true, startedAt: true },
-      }),
-    ]);
+    const rawRows = await this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .innerJoin('attendee.net', 'net')
+      .innerJoin('attendee.operator', 'operator')
+      .innerJoin('operator.user', 'user')
+      .where('user.id = :userId', { userId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .select('net.id', 'netId')
+      .addSelect('net.name', 'name')
+      .addSelect('net.endedAt', 'endedAt')
+      .orderBy('net.endedAt', 'DESC')
+      .getRawMany();
 
-    return {
-      lastAttended: lastAttended?.net
-        ? {
-            id: lastAttended.net.id,
-            name: lastAttended.net.name,
-            date: lastAttended.net.startedAt
-              ? new Date(lastAttended.net.startedAt).toISOString()
-              : '',
-            netId: lastAttended.net.id,
-          }
-        : null,
-      lastManaged: lastManaged
-        ? {
-            id: lastManaged.id,
-            name: lastManaged.name,
-            date: lastManaged.startedAt
-              ? new Date(lastManaged.startedAt).toISOString()
-              : '',
-            netId: lastManaged.id,
-          }
-        : null,
-    };
+    const seenNetIds = new Set<string>();
+    const lastAttendedNets: LastNetInfo[] = [];
+    for (const row of rawRows) {
+      const id = String(row.netId ?? '');
+      if (!id || seenNetIds.has(id)) continue;
+      seenNetIds.add(id);
+      lastAttendedNets.push({
+        id,
+        netId: id,
+        name: String(row.name ?? ''),
+        date: row.endedAt ? new Date(row.endedAt).toISOString() : '',
+      });
+      if (lastAttendedNets.length >= 3) break;
+    }
+
+    const managedNets = await this.netRepository
+      .createQueryBuilder('net')
+      .innerJoin('net.operator', 'operator')
+      .innerJoin('operator.user', 'user')
+      .where('user.id = :userId', { userId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .orderBy('net.endedAt', 'DESC')
+      .take(3)
+      .select(['net.id', 'net.name', 'net.endedAt'])
+      .getMany();
+
+    const lastManagedNets: LastNetInfo[] = managedNets.map((n) => ({
+      id: n.id,
+      netId: n.id,
+      name: n.name,
+      date: n.endedAt ? new Date(n.endedAt).toISOString() : '',
+    }));
+
+    return { lastAttendedNets, lastManagedNets };
   }
 
   async getTopStreakByBranch(branchId: string): Promise<TopStreakEntry[]> {
@@ -1171,35 +1195,128 @@ export class DashboardService {
               .getCount(),
       ]);
 
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - 11, 1, 0, 0, 0, 0);
+
+    const participatedMonthlyQb = this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .innerJoin('attendee.net', 'net')
+      .innerJoin('attendee.operator', 'operator')
+      .innerJoin('operator.user', 'user')
+      .where('user.id = :userId', { userId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .andWhere('net.endedAt >= :monthStart', { monthStart })
+      .select("to_char(date_trunc('month', net.endedAt), 'YYYY-MM')", 'ym')
+      .addSelect('COUNT(*)', 'cnt')
+      .groupBy('ym')
+      .orderBy('ym', 'ASC');
+    if (branchId) {
+      participatedMonthlyQb.andWhere('net.branchId = :branchId', { branchId });
+    }
+
+    const managedMonthlyQb = this.netRepository
+      .createQueryBuilder('net')
+      .innerJoin('net.operator', 'operator')
+      .innerJoin('operator.user', 'user')
+      .where('user.id = :userId', { userId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .andWhere('net.endedAt >= :monthStart', { monthStart })
+      .select("to_char(date_trunc('month', net.endedAt), 'YYYY-MM')", 'ym')
+      .addSelect('COUNT(*)', 'cnt')
+      .groupBy('ym')
+      .orderBy('ym', 'ASC');
+    if (branchId) {
+      managedMonthlyQb.andWhere('net.branchId = :branchId', { branchId });
+    }
+
+    const [participatedBuckets, managedBuckets] = await Promise.all([
+      participatedMonthlyQb.getRawMany(),
+      managedMonthlyQb.getRawMany(),
+    ]);
+
+    const pMap = new Map<string, number>();
+    for (const r of participatedBuckets) {
+      pMap.set(String(r.ym), parseInt(String(r.cnt), 10));
+    }
+    const mMap = new Map<string, number>();
+    for (const r of managedBuckets) {
+      mMap.set(String(r.ym), parseInt(String(r.cnt), 10));
+    }
+
+    const monthlySeries: PersonalTrendMonthlyPoint[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthlySeries.push({
+        year: d.getFullYear(),
+        monthIndex: d.getMonth(),
+        participated: pMap.get(ym) ?? 0,
+        managed: mMap.get(ym) ?? 0,
+      });
+    }
+
     return {
       thisMonthParticipated,
       lastMonthParticipated,
       thisMonthManaged,
       lastMonthManaged,
+      monthlySeries,
     };
   }
 
   async getBusiestTime(): Promise<BusiestTimeResponse> {
-    const nets = await this.netRepository.find({
-      where: { startedAt: Not(IsNull()) },
-      select: { startedAt: true },
-    });
+    type BusiestTimeRawRow = {
+      dayOfWeek: string | number;
+      hour: string | number;
+      count: string | number;
+    };
 
-    const byDay = new Array(7).fill(0).map((_, i) => ({ dayOfWeek: i, count: 0 }));
+    const rows = await this.netRepository
+      .createQueryBuilder('net')
+      .select('EXTRACT(DOW FROM net.startedAt)::int', 'dayOfWeek')
+      .addSelect('EXTRACT(HOUR FROM net.startedAt)::int', 'hour')
+      .addSelect('COUNT(*)::int', 'count')
+      .where('net.startedAt IS NOT NULL')
+      .groupBy('EXTRACT(DOW FROM net.startedAt)::int')
+      .addGroupBy('EXTRACT(HOUR FROM net.startedAt)::int')
+      .orderBy('EXTRACT(DOW FROM net.startedAt)::int', 'ASC')
+      .addOrderBy('EXTRACT(HOUR FROM net.startedAt)::int', 'ASC')
+      .getRawMany<BusiestTimeRawRow>();
+
+    const byDay = new Array(7)
+      .fill(0)
+      .map((_, i) => ({ dayOfWeek: i, count: 0 }));
     const byHour = new Array(24).fill(0).map((_, i) => ({ hour: i, count: 0 }));
 
-    for (const net of nets) {
-      if (!net.startedAt) continue;
-      const d = new Date(net.startedAt);
-      const day = d.getDay();
-      const hour = d.getHours();
-      if (day >= 0 && day < 7) byDay[day].count++;
-      if (hour >= 0 && hour < 24) byHour[hour].count++;
+    const cells = rows
+      .map((row) => ({
+        dayOfWeek: Number(row.dayOfWeek),
+        hour: Number(row.hour),
+        count: Number(row.count),
+      }))
+      .filter(
+        (cell) =>
+          Number.isInteger(cell.dayOfWeek) &&
+          cell.dayOfWeek >= 0 &&
+          cell.dayOfWeek < 7 &&
+          Number.isInteger(cell.hour) &&
+          cell.hour >= 0 &&
+          cell.hour < 24,
+      )
+      .sort((a, b) =>
+        a.dayOfWeek !== b.dayOfWeek
+          ? a.dayOfWeek - b.dayOfWeek
+          : a.hour - b.hour,
+      );
+
+    for (const cell of cells) {
+      byDay[cell.dayOfWeek].count += cell.count;
+      byHour[cell.hour].count += cell.count;
     }
 
     return {
-      byDay: byDay.map((d) => ({ dayOfWeek: d.dayOfWeek, count: d.count })),
-      byHour: byHour.map((h) => ({ hour: h.hour, count: h.count })),
+      byDay,
+      byHour,
+      cells,
     };
   }
 
@@ -1303,16 +1420,16 @@ export class DashboardService {
       const [completedNets, uniqueResult] = await Promise.all([
         this.netRepository
           .createQueryBuilder('net')
-          .where('net.startedAt >= :start', { start })
-          .andWhere('net.startedAt <= :endCap', { endCap })
+          .where('net.endedAt >= :start', { start })
+          .andWhere('net.endedAt <= :endCap', { endCap })
           .andWhere('net.endedAt IS NOT NULL')
           .getCount(),
         this.attendeeRepository
           .createQueryBuilder('attendee')
           .innerJoin('attendee.net', 'net')
           .select('COUNT(DISTINCT UPPER(TRIM(attendee.callSign)))', 'count')
-          .where('net.startedAt >= :start', { start })
-          .andWhere('net.startedAt <= :endCap', { endCap })
+          .where('net.endedAt >= :start', { start })
+          .andWhere('net.endedAt <= :endCap', { endCap })
           .andWhere('net.endedAt IS NOT NULL')
           .getRawOne(),
       ]);
