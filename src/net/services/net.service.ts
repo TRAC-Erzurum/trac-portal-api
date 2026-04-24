@@ -203,7 +203,9 @@ export class NetService {
     createdBy: string,
     actorCallSign: string,
   ) {
-    const operator = await this.operatorService.findOne(createNetDto.operatorId);
+    const operator = await this.operatorService.findOne(
+      createNetDto.operatorId,
+    );
     if (!operator) {
       throw new NotFoundException('Operator not found');
     }
@@ -390,8 +392,12 @@ export class NetService {
     // Update net fields
     net.name = updateNetDto.name;
     net.operator = operator;
-    net.startedAt = updateNetDto.startedAt;
-    net.endedAt = updateNetDto.endedAt;
+    if (updateNetDto.startedAt !== undefined) {
+      net.startedAt = updateNetDto.startedAt;
+    }
+    if (updateNetDto.endedAt !== undefined) {
+      net.endedAt = updateNetDto.endedAt;
+    }
     if (updateNetDto.branchCallSignId !== undefined) {
       net.branchCallSignId = updateNetDto.branchCallSignId;
     }
@@ -607,7 +613,8 @@ export class NetService {
       if (effectiveRole === GlobalRole.SUPER_ADMIN) {
         // Üyelik satırı olmasa da sistem yöneticisi tüm çevrimleri görebilir
       } else {
-        const userBranches = await this.membershipService.getUserBranches(userId);
+        const userBranches =
+          await this.membershipService.getUserBranches(userId);
         const userBranchIds = userBranches.map((m) => m.branchId);
         if (userBranchIds.length > 0) {
           qb.andWhere('net.branchId IN (:...userBranchIds)', { userBranchIds });

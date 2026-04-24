@@ -24,6 +24,7 @@ import {
 import { UserService } from '../../user/services/user.service';
 import { MembershipService } from '../../branch/services/membership.service';
 import { GlobalRole } from '../../auth/enums/role.enum';
+import { extractPlainCallSign } from '../../shared/utils/call-sign.util';
 
 const fontkit = (fk as any).default ?? fk;
 const DEFAULT_ELEMENT_BOX_WIDTH = 40;
@@ -56,12 +57,18 @@ export class CertificateService implements OnModuleInit {
     netId: string,
     attendeeId: string,
     userId: string,
+    userCallSign?: string,
   ): Promise<{
     imagePath: string;
     elements: CertificateTemplateElement[];
     placeholders: Record<string, string>;
   } | null> {
-    const can = await this.canDownloadCertificate(netId, attendeeId, userId);
+    const can = await this.canDownloadCertificate(
+      netId,
+      attendeeId,
+      userId,
+      userCallSign,
+    );
     if (!can) return null;
     const net = await this.netRepository.findOne({
       where: { id: netId },
@@ -119,6 +126,7 @@ export class CertificateService implements OnModuleInit {
     netId: string,
     attendeeId: string,
     userId: string,
+    userCallSign?: string,
   ): Promise<boolean> {
     const net = await this.netRepository.findOne({
       where: { id: netId },
@@ -135,6 +143,11 @@ export class CertificateService implements OnModuleInit {
     if (effectiveRole === GlobalRole.SUPER_ADMIN) return true;
     if (net.operator?.user?.id === userId) return true;
     if (attendee.operator?.user?.id === userId) return true;
+    const attendeeCallSign = extractPlainCallSign(attendee.callSign ?? '');
+    const actorCallSign = extractPlainCallSign(userCallSign ?? '');
+    if (attendeeCallSign && actorCallSign && attendeeCallSign === actorCallSign) {
+      return true;
+    }
     if (
       await this.membershipService.canActAsBranchLeaderOnBranch(
         userId,
@@ -150,9 +163,15 @@ export class CertificateService implements OnModuleInit {
     netId: string,
     attendeeId: string,
     userId: string,
+    userCallSign?: string,
     res?: Response,
   ): Promise<Buffer | void> {
-    const can = await this.canDownloadCertificate(netId, attendeeId, userId);
+    const can = await this.canDownloadCertificate(
+      netId,
+      attendeeId,
+      userId,
+      userCallSign,
+    );
     if (!can) {
       throw new ForbiddenException('error.forbiddenDescription');
     }

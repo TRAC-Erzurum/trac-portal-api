@@ -5,7 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  DeepPartial,
+  IsNull,
+  Not,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { Operator } from '../entities/operator.entity';
 import { User } from '../../user/entities/user.entity';
 import { Attendee } from '../../net/entities/attendee.entity';
@@ -192,9 +198,7 @@ export class OperatorService {
 
     // Same city: +4
     if (ctx.city) {
-      parts.push(
-        `CASE WHEN "operator"."city" = :relCity THEN 4 ELSE 0 END`,
-      );
+      parts.push(`CASE WHEN "operator"."city" = :relCity THEN 4 ELSE 0 END`);
       qb.setParameter('relCity', ctx.city);
     }
 
@@ -227,9 +231,24 @@ export class OperatorService {
       qb.setParameter('relDistrict', ctx.district);
     }
 
-    const scoreExpr =
-      parts.length > 0 ? `(${parts.join(' + ')})` : '0';
+    const scoreExpr = parts.length > 0 ? `(${parts.join(' + ')})` : '0';
     qb.addSelect(scoreExpr, 'relevance_score');
+  }
+
+  private applyExactCallSignPriority(
+    qb: SelectQueryBuilder<any>,
+    query: string,
+  ): void {
+    const exactCallSign = extractPlainCallSign(query);
+    if (!exactCallSign) {
+      return;
+    }
+
+    qb.orderBy(
+      'CASE WHEN operator.callSign = :exactCallSign THEN 1 ELSE 0 END',
+      'DESC',
+    );
+    qb.setParameter('exactCallSign', exactCallSign);
   }
 
   // ── Query methods ─────────────────────────────────────────────────
@@ -304,11 +323,12 @@ export class OperatorService {
     const total = await countQuery.getCount();
 
     // Apply relevance scoring or fall back to default sort
+    this.applyExactCallSignPriority(baseQueryBuilder, query.search ?? '');
     if (userId) {
       const ctx = await this.getContextCached(userId);
       this.buildRelevanceScore(baseQueryBuilder, ctx);
       baseQueryBuilder
-        .orderBy('relevance_score', 'DESC')
+        .addOrderBy('relevance_score', 'DESC')
         .addOrderBy('operator.callSign', 'ASC');
     } else {
       baseQueryBuilder
@@ -316,7 +336,7 @@ export class OperatorService {
           'CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END',
           'user_priority',
         )
-        .orderBy('CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END', 'ASC')
+        .addOrderBy('CASE WHEN user.id IS NOT NULL THEN 0 ELSE 1 END', 'ASC')
         .addOrderBy('operator.callSign', 'ASC');
     }
 
@@ -583,12 +603,13 @@ export class OperatorService {
     }
 
     // Apply relevance scoring or fall back to legacy sort
+    this.applyExactCallSignPriority(qb, query);
     if (userId) {
       const ctx = await this.getContextCached(userId);
       this.buildRelevanceScore(qb, ctx);
 
       // Primary: relevance, Secondary: sortBy metric, Tertiary: callSign
-      qb.orderBy('relevance_score', 'DESC');
+      qb.addOrderBy('relevance_score', 'DESC');
       if (sortBy === 'managed') {
         qb.addOrderBy('COUNT(DISTINCT net.id)', 'DESC');
         qb.addOrderBy('MAX(net.endedAt)', 'DESC', 'NULLS LAST');
@@ -599,16 +620,16 @@ export class OperatorService {
     } else {
       // Fallback: original sort without relevance
       if (sortBy === 'managed') {
-        qb.orderBy('COUNT(DISTINCT net.id)', 'DESC')
+        qb.addOrderBy('COUNT(DISTINCT net.id)', 'DESC')
           .addOrderBy('MAX(net.endedAt)', 'DESC', 'NULLS LAST')
           .addOrderBy('operator.callSign', 'ASC');
       } else if (sortBy === 'attended') {
-        qb.orderBy('COUNT(DISTINCT attendee.id)', 'DESC').addOrderBy(
+        qb.addOrderBy('COUNT(DISTINCT attendee.id)', 'DESC').addOrderBy(
           'operator.callSign',
           'ASC',
         );
       } else {
-        qb.orderBy('operator.callSign', 'ASC');
+        qb.addOrderBy('operator.callSign', 'ASC');
       }
     }
 
@@ -625,9 +646,7 @@ export class OperatorService {
         },
         select: ['operatorId'],
       });
-      branchMemberOperatorIds = new Set(
-        memberships.map((m) => m.operatorId),
-      );
+      branchMemberOperatorIds = new Set(memberships.map((m) => m.operatorId));
     }
 
     return entities.map((op) => ({

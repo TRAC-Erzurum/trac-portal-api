@@ -90,7 +90,7 @@ export class NetController {
   }
 
   @Get(':id/certificate/preview')
-  @Roles(BranchRole.MEMBER)
+  @Roles(BranchRole.VOLUNTEER)
   async getCertificatePreview(@Param('id') id: string) {
     const net = await this.netService.findOne(id);
     if (!net.certificateTemplate) return null;
@@ -102,7 +102,7 @@ export class NetController {
   }
 
   @Get(':id/certificate/download-all')
-  @Roles(BranchRole.MEMBER)
+  @Roles(BranchRole.VOLUNTEER)
   @ManageNet('id')
   async downloadAllCertificates(
     @Param('id') id: string,
@@ -113,7 +113,7 @@ export class NetController {
   }
 
   @Get(':id/certificate/can-download-others')
-  @Roles(BranchRole.MEMBER)
+  @Roles(BranchRole.VOLUNTEER)
   async getCanDownloadOthers(
     @Param('id') id: string,
     @Req() req: RequestWithUser,
@@ -126,7 +126,7 @@ export class NetController {
   }
 
   @Get(':id/certificate/:attendeeId/preview-data')
-  @Roles(BranchRole.MEMBER)
+  @Roles(BranchRole.VOLUNTEER)
   async getCertificatePreviewData(
     @Param('id') id: string,
     @Param('attendeeId') attendeeId: string,
@@ -136,11 +136,12 @@ export class NetController {
       id,
       attendeeId,
       req.user.id,
+      req.user.callSign,
     );
   }
 
   @Get(':id/certificate/:attendeeId')
-  @Roles(BranchRole.MEMBER)
+  @Roles(BranchRole.VOLUNTEER)
   async getCertificate(
     @Param('id') id: string,
     @Param('attendeeId') attendeeId: string,
@@ -151,6 +152,7 @@ export class NetController {
       id,
       attendeeId,
       req.user.id,
+      req.user.callSign,
       res,
     );
   }
