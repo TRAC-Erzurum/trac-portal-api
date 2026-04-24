@@ -16,6 +16,13 @@ import { FileStorageService } from '../shared/storage';
 
 @Injectable()
 export class CertificateTemplateService {
+  private static readonly DEFAULT_ELEMENT_BOX_WIDTH = 40;
+
+  private static readonly DEFAULT_ELEMENT_BOX_HEIGHT = 8;
+
+  private static readonly DEFAULT_ELEMENT_TEXT_ALIGN: 'left' | 'center' | 'right' =
+    'left';
+
   constructor(
     @InjectRepository(CertificateTemplate)
     private readonly templateRepository: Repository<CertificateTemplate>,
@@ -56,6 +63,13 @@ export class CertificateTemplateService {
       placeholderKey: el.placeholderKey,
       x: el.x,
       y: el.y,
+      boxWidth:
+        el.boxWidth ?? CertificateTemplateService.DEFAULT_ELEMENT_BOX_WIDTH,
+      boxHeight:
+        el.boxHeight ?? CertificateTemplateService.DEFAULT_ELEMENT_BOX_HEIGHT,
+      textAlign:
+        el.textAlign ??
+        CertificateTemplateService.DEFAULT_ELEMENT_TEXT_ALIGN,
       fontSize: el.fontSize,
       color: el.color,
     }));
