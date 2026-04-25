@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import {
   type EffectiveRole,
+  GlobalRole,
   effectiveRoleMeetsMinimum,
 } from '../enums/role.enum';
 import { ROLES_KEY } from '../decorators/roles.decorator';
@@ -33,8 +34,13 @@ export class RolesGuard implements CanActivate {
     );
 
     const { user } = context.switchToHttp().getRequest();
+    const userRole = user.role as EffectiveRole;
 
-    if (!user.callSign && !allowWithoutCallsign) {
+    if (
+      !user.callSign &&
+      !allowWithoutCallsign &&
+      userRole === GlobalRole.GUEST
+    ) {
       throw new ForbiddenException('error.forbiddenDescription');
     }
 
@@ -46,8 +52,6 @@ export class RolesGuard implements CanActivate {
     if (!requiredRoles) {
       return true;
     }
-
-    const userRole = user.role as EffectiveRole;
 
     const hasRole = requiredRoles.some((required) =>
       effectiveRoleMeetsMinimum(userRole, required),
