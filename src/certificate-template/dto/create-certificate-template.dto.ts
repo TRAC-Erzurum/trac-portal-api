@@ -1,5 +1,8 @@
 import {
+  Max,
+  Min,
   IsString,
+  IsIn,
   IsNotEmpty,
   IsArray,
   ValidateNested,
@@ -25,6 +28,23 @@ export class CertificateTemplateElementDto {
 
   @IsNumber()
   y: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @IsOptional()
+  boxWidth?: number;
+
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @IsOptional()
+  boxHeight?: number;
+
+  @IsString()
+  @IsIn(['left', 'center', 'right'])
+  @IsOptional()
+  textAlign?: 'left' | 'center' | 'right';
 
   @IsNumber()
   fontSize: number;

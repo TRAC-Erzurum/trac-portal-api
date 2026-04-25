@@ -26,6 +26,9 @@ import { MembershipService } from '../../branch/services/membership.service';
 import { GlobalRole } from '../../auth/enums/role.enum';
 
 const fontkit = (fk as any).default ?? fk;
+const DEFAULT_ELEMENT_BOX_WIDTH = 40;
+const DEFAULT_ELEMENT_BOX_HEIGHT = 8;
+const DEFAULT_ELEMENT_TEXT_ALIGN: 'left' | 'center' | 'right' = 'left';
 
 @Injectable()
 export class CertificateService implements OnModuleInit {
@@ -218,12 +221,11 @@ export class CertificateService implements OnModuleInit {
     const serial = branchCallSign
       ? `${branchCallSign}-${ddmmyy}-${orderStr}`
       : `${ddmmyy}-${orderStr}`;
-    const op = attendee.operator;
-    const operatorCallsign = op?.callSign ?? attendee.callSign ?? '';
-    const operatorName = op?.fullName ?? attendee.name ?? '';
-    const operatorCountry = op?.country ?? attendee.country ?? '';
-    const operatorCity = op?.city ?? attendee.city ?? '';
-    const operatorDistrict = op?.district ?? attendee.district ?? '';
+    const operatorCallsign = attendee.callSign;
+    const operatorName = attendee.name?.trim();
+    const operatorCountry = attendee.country;
+    const operatorCity = attendee.city;
+    const operatorDistrict = attendee.district;
     const netOperatorCallsign = net.operator?.callSign ?? '';
     const netOperatorName = net.operator?.fullName ?? '';
     const branchName = net.branch?.name ?? '';
@@ -417,13 +419,36 @@ export class CertificateService implements OnModuleInit {
             : '';
       if (!text) continue;
       const color = this.parseColor(el.color || '#000000');
-      // x,y 0–100 (%) olarak saklanıyor; piksele çeviriyoruz
-      const xPx = (el.x / 100) * width;
-      const yPx = (el.y / 100) * height;
+      const boxWidthPercent =
+        el.boxWidth ??
+        DEFAULT_ELEMENT_BOX_WIDTH;
+      const boxHeightPercent =
+        el.boxHeight ??
+        DEFAULT_ELEMENT_BOX_HEIGHT;
+      const textAlign =
+        el.textAlign ??
+        DEFAULT_ELEMENT_TEXT_ALIGN;
+
+      // x,y box top-left (%); box size de yüzde olarak saklanır.
+      const boxX = (el.x / 100) * width;
+      const boxY = (el.y / 100) * height;
+      const boxWidthPx = (boxWidthPercent / 100) * width;
+      const boxHeightPx = (boxHeightPercent / 100) * height;
+
       const fontSizePx = (el.fontSize || 12) * (height / REFERENCE_HEIGHT);
-      const yPdf = height - yPx - fontSizePx;
+      const textWidth = font.widthOfTextAtSize(text, fontSizePx);
+      const alignedX =
+        textAlign === 'center'
+          ? boxX + (boxWidthPx - textWidth) / 2
+          : textAlign === 'right'
+            ? boxX + boxWidthPx - textWidth
+            : boxX;
+      const xPdf = Math.max(boxX, alignedX);
+
+      // PDF alt-orijin koordinatı için box top-left anchor'ını baseline'a dönüştürüyoruz.
+      const yPdf = height - boxY - Math.min(fontSizePx, boxHeightPx);
       page.drawText(text, {
-        x: xPx,
+        x: xPdf,
         y: yPdf,
         size: fontSizePx,
         font,
