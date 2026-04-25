@@ -52,35 +52,45 @@ export class BranchService {
       throw new ConflictException('error.branchNameExists');
     }
 
-    for (const item of dto.callSigns) {
-      const trimmed = (item.callSign ?? '').trim();
-      if (!isValidCallSignFormat(trimmed, { allowSlashes: false })) {
-        throw new BadRequestException('error.callSignPlainOnly');
+    const inputCallSigns = dto.callSigns ?? [];
+    let normalizedCallSigns: string[] = [];
+
+    if (inputCallSigns.length > 0) {
+      for (const item of inputCallSigns) {
+        const trimmed = (item.callSign ?? '').trim();
+        if (!isValidCallSignFormat(trimmed, { allowSlashes: false })) {
+          throw new BadRequestException('error.callSignPlainOnly');
+        }
       }
-    }
 
-    const normalizedCallSigns = dto.callSigns.map((item) =>
-      normalizePlainCallSign((item.callSign ?? '').trim()),
-    );
-    if (new Set(normalizedCallSigns).size !== normalizedCallSigns.length) {
-      throw new ConflictException('error.duplicateCallSigns');
-    }
+      normalizedCallSigns = inputCallSigns.map((item) =>
+        normalizePlainCallSign((item.callSign ?? '').trim()),
+      );
+      if (new Set(normalizedCallSigns).size !== normalizedCallSigns.length) {
+        throw new ConflictException('error.duplicateCallSigns');
+      }
 
-    // Check if any callSign already exists in another branch
-    const existingCallSigns = await this.callSignRepository
-      .createQueryBuilder('cs')
-      .where('cs.callSign IN (:...callSigns)', { callSigns: normalizedCallSigns })
-      .getMany();
-    if (existingCallSigns.length > 0) {
-      throw new ConflictException('error.callSignExists');
-    }
-    // Check that none of the call signs are used by an operator
-    const usedByOperator = await this.operatorRepository
-      .createQueryBuilder('op')
-      .where('op.callSign IN (:...callSigns)', { callSigns: normalizedCallSigns })
-      .getCount();
-    if (usedByOperator > 0) {
-      throw new ConflictException('error.callSignUsedByOperator');
+      // Check if any callSign already exists in another branch
+      const existingCallSigns = await this.callSignRepository
+        .createQueryBuilder('cs')
+        .where('cs.callSign IN (:...callSigns)', {
+          callSigns: normalizedCallSigns,
+        })
+        .getMany();
+      if (existingCallSigns.length > 0) {
+        throw new ConflictException('error.callSignExists');
+      }
+
+      // Check that none of the call signs are used by an operator
+      const usedByOperator = await this.operatorRepository
+        .createQueryBuilder('op')
+        .where('op.callSign IN (:...callSigns)', {
+          callSigns: normalizedCallSigns,
+        })
+        .getCount();
+      if (usedByOperator > 0) {
+        throw new ConflictException('error.callSignUsedByOperator');
+      }
     }
 
     // Create branch
@@ -96,18 +106,24 @@ export class BranchService {
     branch.createdBy = createdBy;
     branch.updatedBy = [];
 
-    const hasDefault = dto.callSigns.some((cs) => cs.isDefault);
-    const callSigns = normalizedCallSigns.map((callSignValue, index) => {
-      const callSign = new BranchCallSign();
-      callSign.callSign = callSignValue;
-      callSign.isDefault = hasDefault ? dto.callSigns[index].isDefault : index === 0;
-      callSign.branch = branch;
-      callSign.createdBy = createdBy;
-      callSign.updatedBy = [];
-      return callSign;
-    });
+    if (inputCallSigns.length > 0) {
+      const hasDefault = inputCallSigns.some((cs) => cs.isDefault);
+      const callSigns = normalizedCallSigns.map((callSignValue, index) => {
+        const callSign = new BranchCallSign();
+        callSign.callSign = callSignValue;
+        callSign.isDefault = hasDefault
+          ? inputCallSigns[index].isDefault
+          : index === 0;
+        callSign.branch = branch;
+        callSign.createdBy = createdBy;
+        callSign.updatedBy = [];
+        return callSign;
+      });
 
-    branch.callSigns = callSigns;
+      branch.callSigns = callSigns;
+    } else {
+      branch.callSigns = [];
+    }
 
     try {
       const saved = await this.branchRepository.save(branch);
@@ -149,11 +165,12 @@ export class BranchService {
 
       return this.findOne(saved.id);
     } catch (error) {
-      if (error.code === '23505') {
-        if (error.constraint?.includes('name')) {
+      const dbError = error as { code?: string; constraint?: string };
+      if (dbError.code === '23505') {
+        if (dbError.constraint?.includes('name')) {
           throw new ConflictException('error.branchNameExists');
         }
-        if (error.constraint?.includes('callSign')) {
+        if (dbError.constraint?.includes('callSign')) {
           throw new ConflictException('error.callSignExists');
         }
         throw new ConflictException('error.alreadyExists');
@@ -292,42 +309,41 @@ export class BranchService {
 
     // Handle callSign updates if provided
     if (dto.callSigns !== undefined) {
-      if (dto.callSigns.length === 0) {
-        throw new BadRequestException('error.atLeastOneCallSignRequired');
-      }
-
-      for (const item of dto.callSigns) {
-        const trimmed = (item.callSign ?? '').trim();
-        if (!isValidCallSignFormat(trimmed, { allowSlashes: false })) {
-          throw new BadRequestException('error.callSignPlainOnly');
-        }
-      }
-
       const callSignValues = dto.callSigns.map((cs) =>
         normalizePlainCallSign((cs.callSign ?? '').trim()),
       );
-      if (new Set(callSignValues).size !== callSignValues.length) {
-        throw new ConflictException('error.duplicateCallSigns');
-      }
 
-      // Check conflicts with other branches
-      const conflicts = await this.callSignRepository
-        .createQueryBuilder('cs')
-        .where('cs."callSign" IN (:...values)', { values: callSignValues })
-        .andWhere('cs."branchId" != :branchId', { branchId: id })
-        .getCount();
+      if (dto.callSigns.length > 0) {
+        for (const item of dto.callSigns) {
+          const trimmed = (item.callSign ?? '').trim();
+          if (!isValidCallSignFormat(trimmed, { allowSlashes: false })) {
+            throw new BadRequestException('error.callSignPlainOnly');
+          }
+        }
 
-      if (conflicts > 0) {
-        throw new ConflictException('error.callSignExists');
-      }
+        if (new Set(callSignValues).size !== callSignValues.length) {
+          throw new ConflictException('error.duplicateCallSigns');
+        }
 
-      // Check that none of the call signs are used by an operator
-      const usedByOperator = await this.operatorRepository
-        .createQueryBuilder('op')
-        .where('op.callSign IN (:...values)', { values: callSignValues })
-        .getCount();
-      if (usedByOperator > 0) {
-        throw new ConflictException('error.callSignUsedByOperator');
+        // Check conflicts with other branches
+        const conflicts = await this.callSignRepository
+          .createQueryBuilder('cs')
+          .where('cs."callSign" IN (:...values)', { values: callSignValues })
+          .andWhere('cs."branchId" != :branchId', { branchId: id })
+          .getCount();
+
+        if (conflicts > 0) {
+          throw new ConflictException('error.callSignExists');
+        }
+
+        // Check that none of the call signs are used by an operator
+        const usedByOperator = await this.operatorRepository
+          .createQueryBuilder('op')
+          .where('op.callSign IN (:...values)', { values: callSignValues })
+          .getCount();
+        if (usedByOperator > 0) {
+          throw new ConflictException('error.callSignUsedByOperator');
+        }
       }
 
       // Delete all existing and recreate
@@ -350,8 +366,9 @@ export class BranchService {
       const saved = await this.branchRepository.save(branch);
       return this.findOne(saved.id);
     } catch (error) {
-      if (error.code === '23505') {
-        if (error.constraint?.includes('name')) {
+      const dbError = error as { code?: string; constraint?: string };
+      if (dbError.code === '23505') {
+        if (dbError.constraint?.includes('name')) {
           throw new ConflictException('error.branchNameExists');
         }
       }

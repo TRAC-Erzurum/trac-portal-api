@@ -4,7 +4,6 @@ import {
   IsEnum,
   IsOptional,
   IsArray,
-  ArrayMinSize,
   ValidateNested,
   IsBoolean,
 } from 'class-validator';
@@ -30,10 +29,10 @@ export class CreateBranchDto {
   type: BranchType;
 
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CreateBranchCallSignDto)
-  callSigns: CreateBranchCallSignDto[];
+  @IsOptional()
+  callSigns?: CreateBranchCallSignDto[];
 
   @IsString()
   @IsOptional()
