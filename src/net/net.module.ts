@@ -12,8 +12,8 @@ import { CertificateTemplateModule } from '../certificate-template/certificate-t
 @Module({
   imports: [
     TypeOrmModule.forFeature(entities),
-    OperatorModule,
-    UserModule,
+    forwardRef(() => OperatorModule),
+    forwardRef(() => UserModule),
     forwardRef(() => BranchModule),
     CertificateTemplateModule,
   ],

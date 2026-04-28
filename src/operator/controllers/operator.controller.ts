@@ -10,10 +10,12 @@ import {
   UploadedFile,
   UseInterceptors,
   Req,
+  Res,
   UseGuards,
   DefaultValuePipe,
   ParseIntPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { Operator } from '../entities/operator.entity';
 import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -31,6 +33,7 @@ import { RequestWithUser } from '../../shared/types/request.types';
 import { Express } from 'express';
 import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
 import { MembershipService } from '../../branch/services/membership.service';
+import { CertificateService } from '../../net/services/certificate.service';
 
 @Controller('operator')
 export class OperatorController {
@@ -38,6 +41,7 @@ export class OperatorController {
     private readonly operatorService: OperatorService,
     private readonly csvParserService: CsvParserService,
     private readonly membershipService: MembershipService,
+    private readonly certificateService: CertificateService,
   ) {}
 
   @Get()
@@ -111,6 +115,21 @@ export class OperatorController {
   @Roles(BranchRole.VOLUNTEER)
   getOperatorCertificates(@Param('id') id: string) {
     return this.operatorService.getCertificates(id);
+  }
+
+  @Get(':id/certificates/download-all')
+  @Roles(BranchRole.VOLUNTEER)
+  async downloadOperatorCertificates(
+    @Param('id') id: string,
+    @Req() req: RequestWithUser,
+    @Res() res: Response,
+  ) {
+    await this.certificateService.generateOperatorCertificates(
+      id,
+      req.user.id,
+      req.user.callSign,
+      res,
+    );
   }
 
   @Post('import')

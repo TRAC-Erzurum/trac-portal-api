@@ -11,10 +11,12 @@ import { services } from './services';
 import { OperatorService } from './services/operator.service';
 import { controllers } from './controllers';
 import { BranchModule } from '../branch/branch.module';
+import { NetModule } from '../net/net.module';
 
 @Module({
   imports: [
     forwardRef(() => BranchModule),
+    forwardRef(() => NetModule),
     TypeOrmModule.forFeature([
       Operator,
       Attendee,
