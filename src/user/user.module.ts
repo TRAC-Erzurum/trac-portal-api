@@ -11,7 +11,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, OperatorBranchMembership]),
-    OperatorModule,
+    forwardRef(() => OperatorModule),
     forwardRef(() => BranchModule),
     forwardRef(() => AuthModule),
   ],

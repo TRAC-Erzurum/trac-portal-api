@@ -549,4 +549,78 @@ export class CertificateService implements OnModuleInit {
       archive.finalize();
     });
   }
+
+  async generateOperatorCertificates(
+    operatorId: string,
+    userId: string,
+    userCallSign: string | undefined,
+    res: Response,
+  ): Promise<void> {
+    const certificates = await this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .innerJoin('attendee.net', 'net')
+      .leftJoin('attendee.operator', 'operator')
+      .where('attendee.operatorId = :operatorId', { operatorId })
+      .andWhere('net.endedAt IS NOT NULL')
+      .andWhere('net.certificateTemplateId IS NOT NULL')
+      .select([
+        'attendee.id AS "attendeeId"',
+        'attendee.callSign AS "attendeeCallSign"',
+        'net.id AS "netId"',
+        'net.name AS "netName"',
+        'net.endedAt AS "netDate"',
+        'operator.callSign AS "operatorCallSign"',
+      ])
+      .orderBy('net.endedAt', 'DESC')
+      .getRawMany<{
+        attendeeId: string;
+        attendeeCallSign: string | null;
+        netId: string;
+        netName: string | null;
+        netDate: string | Date | null;
+        operatorCallSign: string | null;
+      }>();
+
+    if (!certificates.length) {
+      throw new NotFoundException('error.notFound');
+    }
+
+    const zipLabelSource =
+      certificates[0]?.operatorCallSign ??
+      certificates[0]?.attendeeCallSign ??
+      operatorId;
+    const zipName = `${this.sanitizeCertificateFilenameSegment(zipLabelSource, 'operator')}-certificates.zip`;
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${zipName}"`,
+    });
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(res);
+
+    for (let i = 0; i < certificates.length; i++) {
+      const item = certificates[i];
+      const pdf = (await this.generatePdf(
+        item.netId,
+        item.attendeeId,
+        userId,
+        userCallSign,
+      )) as Buffer;
+      const netName = this.sanitizeCertificateFilenameSegment(
+        item.netName,
+        'Cevrim',
+      );
+      const datePart = item.netDate
+        ? new Date(item.netDate).toISOString().slice(0, 10)
+        : item.attendeeId.slice(0, 8);
+      const entryName = `${netName} - ${this.sanitizeCertificateFilenameSegment(datePart, '1970-01-01')}.pdf`;
+      archive.append(pdf, { name: entryName });
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      archive.on('end', resolve);
+      archive.on('error', reject);
+      archive.finalize();
+    });
+  }
 }
