@@ -17,6 +17,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { NetModule } from './net/net.module';
 import { OperatorModule } from './operator/operator.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { InsightsModule } from './insights/insights.module';
 import { ActivityModule } from './activity/activity.module';
 import { AppController } from './app.controller';
 import { QthModule } from './qth/qth.module';
@@ -61,6 +62,7 @@ import { FeedbackModule } from './feedback/feedback.module';
     NetModule,
     OperatorModule,
     DashboardModule,
+    InsightsModule,
     ActivityModule,
     QthModule,
     BranchModule,

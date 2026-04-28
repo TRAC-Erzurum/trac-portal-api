@@ -421,6 +421,7 @@ export class NetSchedulerService {
   async findAll(
     opts: {
       branchId?: string;
+      branchFilter?: 'all' | 'my-branches' | 'branch';
       userId?: string;
       search?: string;
       limit?: number;
@@ -430,7 +431,7 @@ export class NetSchedulerService {
     | NetScheduler[]
     | { data: NetScheduler[]; total: number; limit: number; offset: number }
   > {
-    const { branchId, userId, search, limit, offset } = opts;
+    const { branchId, branchFilter = 'my-branches', userId, search, limit, offset } = opts;
     const usePagination =
       limit !== undefined || offset !== undefined;
     const limitNum = Math.min(limit ?? 50, 100);
@@ -446,7 +447,7 @@ export class NetSchedulerService {
 
     if (branchId) {
       qb.andWhere('s.branchId = :branchId', { branchId });
-    } else if (userId) {
+    } else if (branchFilter === 'my-branches' && userId) {
       const role = await this.userService.getEffectiveRole(userId);
       if (role !== GlobalRole.SUPER_ADMIN) {
         const branches = await this.membershipService.getUserBranches(userId);

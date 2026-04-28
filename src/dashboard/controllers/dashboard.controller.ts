@@ -30,6 +30,7 @@ import {
   MonthlyTrendEntry,
   NetComparePreviousResponse,
   NetsAttendeesTrendEntry,
+  StatsScope,
 } from '../services/dashboard.service';
 
 @Controller('dashboard')
@@ -76,20 +77,23 @@ export class DashboardController {
   @Get('nets/personal')
   async getPersonalNetStats(
     @CurrentUser() user: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
   ): Promise<PersonalNetStats | PersonalNetStatsBranchAware> {
-    return this.dashboardService.getPersonalNetStats(user.id, branchId);
+    return this.dashboardService.getPersonalNetStats(user.id, branchFilter ?? 'all', branchId);
   }
 
   @Get('community')
   @Public()
   async getCommunityStats(
+    @CurrentUser() user?: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
     @Query('period', new DefaultValuePipe('all')) period?: ParticipationPeriod,
   ): Promise<CommunityStats | CommunityStatsBranchAware> {
     const valid: ParticipationPeriod[] = ['all', '7d', '30d'];
     const p = period && valid.includes(period) ? period : 'all';
-    return this.dashboardService.getCommunityStats(branchId, p);
+    return this.dashboardService.getCommunityStats(user?.id, branchFilter ?? 'all', branchId, p);
   }
 
   @Get('activity')
@@ -128,67 +132,88 @@ export class DashboardController {
   @Get('stats/top-streak')
   @Public()
   async getTopStreak(
+    @CurrentUser() user?: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
   ): Promise<TopStreakEntry[]> {
-    if (!branchId) return [];
-    return this.dashboardService.getTopStreakByBranch(branchId);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    if (branchIds && branchIds.length === 0) return [];
+    return this.dashboardService.getTopStreak(branchIds);
   }
 
   @Get('stats/participation')
   @Public()
   async getParticipation(
-    @Query('period', new DefaultValuePipe('all')) period: ParticipationPeriod,
+    @CurrentUser() user?: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
+    @Query('branchId') branchId?: string,
+    @Query('period', new DefaultValuePipe('all')) period?: ParticipationPeriod,
   ): Promise<ParticipationStatsResponse> {
     const valid: ParticipationPeriod[] = ['all', '7d', '30d'];
     const p = valid.includes(period) ? period : 'all';
-    return this.dashboardService.getParticipation(p);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    return this.dashboardService.getParticipation(p, branchIds);
   }
 
   @Get('personal/trend')
   async getPersonalTrend(
     @CurrentUser() user: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
   ): Promise<PersonalTrendResponse> {
-    return this.dashboardService.getPersonalTrend(user.id, branchId);
+    return this.dashboardService.getPersonalTrend(user.id, branchFilter ?? 'all', branchId);
   }
 
   @Get('stats/busiest-time')
   @Public()
-  async getBusiestTime(): Promise<BusiestTimeResponse> {
-    return this.dashboardService.getBusiestTime();
+  async getBusiestTime(
+    @CurrentUser() user?: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
+    @Query('branchId') branchId?: string,
+  ): Promise<BusiestTimeResponse> {
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    return this.dashboardService.getBusiestTime(branchIds);
   }
 
   @Get('stats/geography')
   @Public()
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   async getGeography(
-    @Query('mode', new DefaultValuePipe('unique')) mode: string,
+    @CurrentUser() user?: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
+    @Query('branchId') branchId?: string,
+    @Query('mode', new DefaultValuePipe('unique')) mode?: string,
   ): Promise<GeographyStatsResponse> {
     const valid: GeographyCountMode[] = ['total', 'unique'];
     const m = valid.includes(mode as GeographyCountMode)
       ? (mode as GeographyCountMode)
       : 'unique';
-    return this.dashboardService.getGeography(m);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    return this.dashboardService.getGeography(m, branchIds);
   }
 
   @Get('stats/monthly-trend')
   @Public()
   async getMonthlyTrend(
-    @Query('months', new DefaultValuePipe(12), ParseIntPipe) months: number,
+    @CurrentUser() user?: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
+    @Query('branchId') branchId?: string,
+    @Query('months', new DefaultValuePipe(12), ParseIntPipe) months?: number,
   ): Promise<MonthlyTrendEntry[]> {
-    return this.dashboardService.getMonthlyTrend(Math.min(Math.max(months, 1), 24));
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    return this.dashboardService.getMonthlyTrend(Math.min(Math.max(months, 1), 24), branchIds);
   }
 
   @Get('stats/nets-attendees-trend')
   @Public()
   async getNetsAttendeesTrend(
-    @Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit: number,
+    @CurrentUser() user?: User,
+    @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
+    @Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit?: number,
   ): Promise<NetsAttendeesTrendEntry[]> {
-    return this.dashboardService.getNetsAttendeesTrend(
-      Math.min(Math.max(limit, 1), 50),
-      branchId,
-    );
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    return this.dashboardService.getNetsAttendeesTrend(Math.min(Math.max(limit, 1), 50), branchIds);
   }
 
   @Get('net/:netId/compare-previous')
