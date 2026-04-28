@@ -20,5 +20,6 @@ import { OperatorBranchMembership } from '../branch/entities/operator-branch-mem
   ],
   controllers: [DashboardController],
   providers: [DashboardService],
+  exports: [DashboardService],
 })
 export class DashboardModule {}

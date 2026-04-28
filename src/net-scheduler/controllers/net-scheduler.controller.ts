@@ -37,6 +37,7 @@ export class NetSchedulerController {
   @Roles(BranchRole.MEMBER)
   findAll(
     @Query('branchId') branchId: string | undefined,
+    @Query('branchFilter') branchFilter: 'all' | 'my-branches' | 'branch' | undefined,
     @Query('search') search: string | undefined,
     @Query('limit') limitStr: string | undefined,
     @Query('offset') offsetStr: string | undefined,
@@ -46,6 +47,7 @@ export class NetSchedulerController {
     const offset = offsetStr != null ? parseInt(offsetStr, 10) : undefined;
     return this.netSchedulerService.findAll({
       branchId,
+      branchFilter,
       userId: req.user.id,
       search: search?.trim() || undefined,
       limit: Number.isFinite(limit) ? limit : undefined,
