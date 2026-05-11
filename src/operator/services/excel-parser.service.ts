@@ -4,7 +4,7 @@ import { Workbook } from 'exceljs';
 @Injectable()
 export class ExcelParserService {
   async parse(
-    buffer: Buffer<ArrayBufferLike> | ArrayBufferLike,
+    buffer: Buffer | ArrayBufferLike,
     mapping: Record<string, string>,
   ): Promise<Record<string, string>[]> {
     try {
