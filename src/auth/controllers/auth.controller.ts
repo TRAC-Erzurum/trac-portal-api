@@ -89,8 +89,15 @@ export class AuthController {
         picture: pending.picture,
         providerId: pending.providerId,
       };
-      res.redirect('/register/complete-sso');
-      return;
+      // Explicitly save session before redirecting to ensure data persists
+      return new Promise<void>((resolve) => {
+        (req as Request & { session?: { save: (cb: (err?: Error) => void) => void } }).session?.save(
+          () => {
+            res.redirect('/register/complete-sso');
+            resolve();
+          },
+        );
+      });
     }
 
     const { access_token } = this.authService.login(payload as AuthUser);

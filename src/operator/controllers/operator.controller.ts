@@ -27,7 +27,7 @@ import {
 } from '../services/operator.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OperatorDto } from '../dto/operator.dto';
-import { CsvParserService } from '../services/csv-parser.service';
+import { ExcelParserService } from '../services/excel-parser.service';
 import { OperatorQueryDto } from '../dto/operator-query.dto';
 import { RequestWithUser } from '../../shared/types/request.types';
 import { Express } from 'express';
@@ -39,7 +39,7 @@ import { CertificateService } from '../../net/services/certificate.service';
 export class OperatorController {
   constructor(
     private readonly operatorService: OperatorService,
-    private readonly csvParserService: CsvParserService,
+    private readonly excelParserService: ExcelParserService,
     private readonly membershipService: MembershipService,
     private readonly certificateService: CertificateService,
   ) {}
@@ -142,7 +142,7 @@ export class OperatorController {
     @Req() req: RequestWithUser,
   ): Promise<void> {
     const columnMapping = JSON.parse(mapping) as Record<string, string>;
-    const operators = await this.csvParserService.parse(
+    const operators = await this.excelParserService.parse(
       file.buffer,
       columnMapping,
     );

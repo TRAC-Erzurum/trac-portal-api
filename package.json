@@ -45,6 +45,7 @@
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "csv-parse": "^6.1.0",
+    "exceljs": "^4.4.0",
     "express-session": "^1.19.0",
     "file-type": "21.3.0",
     "lodash": "^4.17.23",
