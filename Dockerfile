@@ -15,7 +15,8 @@ RUN yarn build && \
 RUN yarn install --production --frozen-lockfile --ignore-scripts && \
     yarn cache clean && \
     find /app/node_modules -type f \( -name "*.md" -o -name "*.markdown" -o -name "CHANGELOG*" -o -name "LICENSE*" -o -name "*.map" -o -name "*.tsbuildinfo" -o -name "*.d.ts" \) -delete && \
-    find /app/node_modules -depth -type d \( -name "test" -o -name "tests" -o -name "__tests__" -o -name "doc" -o -name "docs" -o -name "example" -o -name "examples" \) -exec rm -rf {} + 2>/dev/null || true
+    find /app/node_modules -depth -type d \( -name "test" -o -name "tests" -o -name "__tests__" -o -name "example" -o -name "examples" \) -exec rm -rf {} + 2>/dev/null || true && \
+    find /app/node_modules -depth -type d -name "doc" ! -path "*/exceljs/*" -exec rm -rf {} + 2>/dev/null || true
 
 FROM node:20-alpine AS production
 
