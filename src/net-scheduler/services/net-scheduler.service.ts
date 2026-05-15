@@ -281,6 +281,17 @@ export class NetSchedulerService {
       );
     }
 
+    if (dto.branchCallSignId !== undefined) {
+      if (dto.branchCallSignId) {
+        const callSign = branch.callSigns?.find(
+          (cs) => cs.id === dto.branchCallSignId,
+        );
+        if (!callSign) {
+          throw new BadRequestException('error.callSignNotInBranch');
+        }
+      }
+    }
+
     if (dto.certificateTemplateId) {
       await this.certificateTemplateService.findOne(
         dto.certificateTemplateId,
@@ -292,7 +303,6 @@ export class NetSchedulerService {
       name: dto.name,
       branchId: dto.branchId,
       operatorId: dto.operatorId,
-      branchCallSignId: dto.branchCallSignId ?? null,
       startDate,
       recurrence: dto.recurrence,
       endDate: dto.endDate?.slice(0, 10) ?? null,
@@ -303,6 +313,14 @@ export class NetSchedulerService {
       createdBy,
       updatedBy: [],
     });
+
+    if (dto.branchCallSignId !== undefined) {
+      scheduler.branchCallSignId = dto.branchCallSignId ?? null;
+      scheduler.branchCallSign =
+        dto.branchCallSignId != null
+          ? branch.callSigns?.find((cs) => cs.id === dto.branchCallSignId) ?? null
+          : null;
+    }
 
     const saved = await this.schedulerRepository.save(scheduler);
 
@@ -359,8 +377,22 @@ export class NetSchedulerService {
       scheduler.branchId = dto.branchId;
       scheduler.branch = branch;
     }
-    if (dto.branchCallSignId !== undefined)
-      scheduler.branchCallSignId = dto.branchCallSignId;
+    if (dto.branchCallSignId !== undefined) {
+      if (dto.branchCallSignId) {
+        const branch = await this.branchService.findOne(scheduler.branchId);
+        const callSign = branch.callSigns?.find(
+          (cs) => cs.id === dto.branchCallSignId,
+        );
+        if (!callSign) {
+          throw new BadRequestException('error.callSignNotInBranch');
+        }
+        scheduler.branchCallSignId = callSign.id;
+        scheduler.branchCallSign = callSign;
+      } else {
+        scheduler.branchCallSignId = null;
+        scheduler.branchCallSign = null;
+      }
+    }
     if (dto.recurrence != null) scheduler.recurrence = dto.recurrence;
     if (dto.endDate !== undefined) scheduler.endDate = dto.endDate?.slice(0, 10) ?? null;
     if (dto.scheduledTime != null)
