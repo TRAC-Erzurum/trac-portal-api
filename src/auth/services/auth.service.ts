@@ -189,79 +189,96 @@ export class AuthService {
     }
 
     const callSignRaw = (dto.callSign ?? '').trim();
-    if (!isValidCallSignFormat(callSignRaw, { allowSlashes: false })) {
-      throw new BadRequestException('error.callSignPlainOnly');
-    }
+    const hasCallSign = callSignRaw.length > 0;
 
-    const operator = await this.operatorService.create(
-      {
-        callSign: normalizePlainCallSign(callSignRaw),
-        city: (dto.city ?? '').trim() || undefined,
-        country: (dto.country ?? '').trim() || undefined,
-        district: (dto.district ?? '').trim() || undefined,
-        fullName: (dto.fullName ?? '').trim() || undefined,
-        gridSquare: (dto.gridSquare ?? '').trim()
-          ? (dto.gridSquare ?? '').trim().toUpperCase()
-          : undefined,
-      },
-      dto.email,
-    );
-
-    const uniqueBranchIds = [...new Set(dto.branchIds ?? [])];
-    const approvedCount =
-      await this.membershipService.countApprovedMembershipsForOperator(
-        operator.id,
-      );
-    if (approvedCount === 0 && uniqueBranchIds.length === 0) {
-      throw new BadRequestException('error.atLeastOneBranchRequired');
-    }
-
-    for (const branchId of uniqueBranchIds) {
-      try {
-        await this.branchService.findOne(branchId);
-      } catch {
-        throw new BadRequestException('error.branchNotFound');
+    if (hasCallSign) {
+      if (!isValidCallSignFormat(callSignRaw, { allowSlashes: false })) {
+        throw new BadRequestException('error.callSignPlainOnly');
       }
+
+      const operator = await this.operatorService.create(
+        {
+          callSign: normalizePlainCallSign(callSignRaw),
+          city: (dto.city ?? '').trim() || undefined,
+          country: (dto.country ?? '').trim() || undefined,
+          district: (dto.district ?? '').trim() || undefined,
+          fullName: (dto.fullName ?? '').trim() || undefined,
+          gridSquare: (dto.gridSquare ?? '').trim()
+            ? (dto.gridSquare ?? '').trim().toUpperCase()
+            : undefined,
+        },
+        dto.email,
+      );
+
+      const uniqueBranchIds = [...new Set(dto.branchIds ?? [])];
+      const approvedCount =
+        await this.membershipService.countApprovedMembershipsForOperator(
+          operator.id,
+        );
+      if (approvedCount === 0 && uniqueBranchIds.length === 0) {
+        throw new BadRequestException('error.atLeastOneBranchRequired');
+      }
+
+      for (const branchId of uniqueBranchIds) {
+        try {
+          await this.branchService.findOne(branchId);
+        } catch {
+          throw new BadRequestException('error.branchNotFound');
+        }
+      }
+
+      const user = await this.userService.create(
+        {
+          email: dto.email,
+          password: dto.password,
+          salt: crypto.randomBytes(16).toString('hex'),
+          fullName: dto.fullName,
+          provider: 'local',
+          operator: operator,
+          privacyAcceptedAt: new Date(),
+        },
+        dto.email,
+      );
+
+      await this.userService.syncRoleColumn(user.id);
+
+      const hqBranch = await this.branchService.findHeadquarters();
+      if (hqBranch) {
+        const hqM = await this.membershipService.findMembership(
+          user.id,
+          hqBranch.id,
+        );
+        if (!hqM) {
+          await this.membershipService.join(user.id, hqBranch.id);
+        }
+      }
+
+      for (const branchId of uniqueBranchIds) {
+        if (branchId === hqBranch?.id) {
+          continue;
+        }
+        const existing = await this.membershipService.findMembership(
+          user.id,
+          branchId,
+        );
+        if (!existing) {
+          await this.membershipService.join(user.id, branchId);
+        }
+      }
+      return;
     }
 
-    const user = await this.userService.create(
+    await this.userService.create(
       {
         email: dto.email,
         password: dto.password,
         salt: crypto.randomBytes(16).toString('hex'),
         fullName: dto.fullName,
         provider: 'local',
-        operator: operator,
         privacyAcceptedAt: new Date(),
       },
       dto.email,
     );
-
-    await this.userService.syncRoleColumn(user.id);
-
-    const hqBranch = await this.branchService.findHeadquarters();
-    if (hqBranch) {
-      const hqM = await this.membershipService.findMembership(
-        user.id,
-        hqBranch.id,
-      );
-      if (!hqM) {
-        await this.membershipService.join(user.id, hqBranch.id);
-      }
-    }
-
-    for (const branchId of uniqueBranchIds) {
-      if (branchId === hqBranch?.id) {
-        continue;
-      }
-      const existing = await this.membershipService.findMembership(
-        user.id,
-        branchId,
-      );
-      if (!existing) {
-        await this.membershipService.join(user.id, branchId);
-      }
-    }
   }
 
   async createPasswordResetRequest(callSign: string): Promise<void> {
@@ -284,8 +301,7 @@ export class AuthService {
       return;
     }
 
-    const operator =
-      await this.operatorService.findByCallSign(plainCallSign);
+    const operator = await this.operatorService.findByCallSign(plainCallSign);
 
     if (!operator) {
       this.logger.warn(
@@ -372,5 +388,4 @@ export class AuthService {
       `Password reset rejected for ${request.callSign} by admin ${adminId}`,
     );
   }
-
 }

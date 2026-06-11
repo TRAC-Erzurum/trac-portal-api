@@ -5,16 +5,30 @@ export class CreateInventoryTables1773262791586 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Clean up any leftover tables from previous migration attempts
-    await queryRunner.query(`DROP TABLE IF EXISTS "equipment_relations" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "equipment_property_values" CASCADE`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "equipment_relations" CASCADE`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "equipment_property_values" CASCADE`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "equipment_photos" CASCADE`);
     await queryRunner.query(`DROP TABLE IF EXISTS "equipment" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "equipment_statuses" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "category_property_definitions" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "equipment_categories" CASCADE`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."relation_type_enum"`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "equipment_statuses" CASCADE`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "category_property_definitions" CASCADE`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "equipment_categories" CASCADE`,
+    );
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."relation_type_enum"`,
+    );
     await queryRunner.query(`DROP TYPE IF EXISTS "public"."owner_type_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."property_type_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."property_type_enum"`,
+    );
 
     // --- Enum types ---
     await queryRunner.query(`
@@ -294,9 +308,7 @@ export class CreateInventoryTables1773262791586 implements MigrationInterface {
     await queryRunner.query(
       `DROP INDEX IF EXISTS "IDX_equipment_property_values_equipmentId"`,
     );
-    await queryRunner.query(
-      `DROP TABLE IF EXISTS "equipment_property_values"`,
-    );
+    await queryRunner.query(`DROP TABLE IF EXISTS "equipment_property_values"`);
 
     await queryRunner.query(
       `ALTER TABLE "equipment_photos" DROP CONSTRAINT IF EXISTS "FK_equipment_photos_equipmentId"`,
@@ -318,24 +330,12 @@ export class CreateInventoryTables1773262791586 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "equipment" DROP CONSTRAINT IF EXISTS "FK_equipment_categoryId"`,
     );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_equipment_isVisible"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_equipment_branchId"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_equipment_operatorId"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_equipment_ownerType"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_equipment_statusId"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_equipment_categoryId"`,
-    );
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_equipment_isVisible"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_equipment_branchId"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_equipment_operatorId"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_equipment_ownerType"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_equipment_statusId"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_equipment_categoryId"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "equipment"`);
 
     await queryRunner.query(
@@ -367,9 +367,7 @@ export class CreateInventoryTables1773262791586 implements MigrationInterface {
     await queryRunner.query(
       `DROP TYPE IF EXISTS "public"."relation_type_enum"`,
     );
-    await queryRunner.query(
-      `DROP TYPE IF EXISTS "public"."owner_type_enum"`,
-    );
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."owner_type_enum"`);
     await queryRunner.query(
       `DROP TYPE IF EXISTS "public"."property_type_enum"`,
     );

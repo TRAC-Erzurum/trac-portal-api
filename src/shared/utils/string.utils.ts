@@ -15,9 +15,6 @@ export function toTitleCase(str: string): string {
     .toLocaleLowerCase('tr-TR')
     .split(' ')
     .filter((word) => word.length > 0)
-    .map(
-      (word) =>
-        word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1),
-    )
+    .map((word) => word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1))
     .join(' ');
 }

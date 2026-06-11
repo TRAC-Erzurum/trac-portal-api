@@ -9,7 +9,9 @@ import { NetService } from '../../net/services/net.service';
 /** GMT+3 today as YYYY-MM-DD. */
 function getTodayGMT3(): string {
   const now = new Date();
-  const gmt3 = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+  const gmt3 = new Date(
+    now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }),
+  );
   const y = gmt3.getFullYear();
   const m = String(gmt3.getMonth() + 1).padStart(2, '0');
   const d = String(gmt3.getDate()).padStart(2, '0');
@@ -19,7 +21,9 @@ function getTodayGMT3(): string {
 /** GMT+3 yesterday as YYYY-MM-DD. */
 function getYesterdayGMT3(): string {
   const now = new Date();
-  const gmt3 = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+  const gmt3 = new Date(
+    now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }),
+  );
   gmt3.setDate(gmt3.getDate() - 1);
   const y = gmt3.getFullYear();
   const m = String(gmt3.getMonth() + 1).padStart(2, '0');
@@ -49,7 +53,13 @@ export class NetSchedulerCronService {
   private async createNetsForToday(todayStr: string) {
     const schedulers = await this.schedulerRepository.find({
       where: { isActive: true },
-      relations: ['branch', 'operator', 'branchCallSign', 'communicationChannels', 'communicationChannels.communicationChannel'],
+      relations: [
+        'branch',
+        'operator',
+        'branchCallSign',
+        'communicationChannels',
+        'communicationChannels.communicationChannel',
+      ],
     });
 
     for (const scheduler of schedulers) {

@@ -49,7 +49,11 @@ export class FeedbackService {
     return `http://localhost:${port}`;
   }
 
-  private assertFeedbackConfigured(): { token: string; owner: string; repo: string } {
+  private assertFeedbackConfigured(): {
+    token: string;
+    owner: string;
+    repo: string;
+  } {
     const token =
       this.configService.get<string>('GITHUB_FEEDBACK_TOKEN')?.trim() ||
       process.env.GITHUB_FEEDBACK_TOKEN?.trim();
@@ -85,7 +89,7 @@ export class FeedbackService {
     if (!isFeedbackCategory(categoryRaw)) {
       throw new BadRequestException('error.feedbackInvalidCategory');
     }
-    const category = categoryRaw as FeedbackCategory;
+    const category = categoryRaw;
 
     const summary = (summaryRaw ?? '').trim();
     const body = (bodyRaw ?? '').trim();

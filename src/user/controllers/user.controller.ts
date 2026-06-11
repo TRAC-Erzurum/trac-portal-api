@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -34,6 +35,7 @@ import { ConfigService } from '@nestjs/config';
 import { FileStorageService } from '../../shared/storage';
 import { MAX_UPLOAD_BYTES } from '../../shared/constants/upload.constants';
 import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
+import { AdminUserListQueryDto } from '../dto/admin-user-list-query.dto';
 
 @Controller('user')
 @Roles(GlobalRole.GUEST)
@@ -49,6 +51,12 @@ export class UserController {
   @AllowWithoutCallsign()
   async profile(@CurrentUser() user: ICurrentUser) {
     return this.userService.findOne(user.id, user);
+  }
+
+  @Get('admin/list')
+  @Roles(GlobalRole.SUPER_ADMIN)
+  async adminList(@Query() query: AdminUserListQueryDto) {
+    return this.userService.adminList(query);
   }
 
   @Post('operator')

@@ -244,9 +244,13 @@ export class EquipmentCategoryService {
 
     if (dto.propertyDefinitions !== undefined) {
       const payloadIds = new Set(
-        dto.propertyDefinitions.map((p) => p.id).filter((x): x is string => !!x),
+        dto.propertyDefinitions
+          .map((p) => p.id)
+          .filter((x): x is string => !!x),
       );
-      const namesLower = dto.propertyDefinitions.map((p) => p.name.toLowerCase());
+      const namesLower = dto.propertyDefinitions.map((p) =>
+        p.name.toLowerCase(),
+      );
       const duplicateName = namesLower.some(
         (n, i) => namesLower.indexOf(n) !== i,
       );
@@ -329,10 +333,7 @@ export class EquipmentCategoryService {
     await this.categoryRepository.remove(category);
   }
 
-  async uploadPhoto(
-    id: string,
-    filePath: string,
-  ): Promise<EquipmentCategory> {
+  async uploadPhoto(id: string, filePath: string): Promise<EquipmentCategory> {
     const category = await this.categoryRepository.findOne({
       where: { id },
     });
@@ -398,10 +399,15 @@ export class EquipmentCategoryService {
       throw new NotFoundException('error.propertyNotFound');
     }
 
-    if (dto.name !== undefined && dto.name.toLowerCase() !== property.name.toLowerCase()) {
+    if (
+      dto.name !== undefined &&
+      dto.name.toLowerCase() !== property.name.toLowerCase()
+    ) {
       const effectiveProps = await this.getEffectiveProperties(categoryId);
       const nameConflict = effectiveProps.some(
-        (p) => p.id !== propertyId && p.name.toLowerCase() === dto.name.toLowerCase(),
+        (p) =>
+          p.id !== propertyId &&
+          p.name.toLowerCase() === dto.name.toLowerCase(),
       );
       if (nameConflict) {
         throw new ConflictException('error.propertyNameExists');
@@ -423,10 +429,7 @@ export class EquipmentCategoryService {
     return this.propertyDefinitionRepository.save(property);
   }
 
-  async deleteProperty(
-    categoryId: string,
-    propertyId: string,
-  ): Promise<void> {
+  async deleteProperty(categoryId: string, propertyId: string): Promise<void> {
     const property = await this.propertyDefinitionRepository.findOne({
       where: { id: propertyId, categoryId },
     });

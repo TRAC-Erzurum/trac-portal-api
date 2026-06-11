@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddDmrFieldsAndRepeaterTalkgroups1770663559336
-  implements MigrationInterface
-{
+export class AddDmrFieldsAndRepeaterTalkgroups1770663559336 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create dmr_network_enum type
     await queryRunner.query(`

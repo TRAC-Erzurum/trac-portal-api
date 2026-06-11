@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateCertificateTemplatesAndAddToNets1771428049695
-  implements MigrationInterface
-{
+export class CreateCertificateTemplatesAndAddToNets1771428049695 implements MigrationInterface {
   name = 'CreateCertificateTemplatesAndAddToNets1771428049695';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

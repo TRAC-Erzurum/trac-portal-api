@@ -480,8 +480,7 @@ export class BranchService {
       offset?: number;
     } = {},
   ): Promise<
-    | any[]
-    | { data: any[]; total: number; limit: number; offset: number }
+    any[] | { data: any[]; total: number; limit: number; offset: number }
   > {
     const { search, status, limit, offset } = opts;
     const usePagination = limit !== undefined || offset !== undefined;
@@ -560,7 +559,9 @@ export class BranchService {
       } else if (status === 'pending') {
         countQb.andWhere('net.startedAt IS NULL AND net.endedAt IS NULL');
       } else if (status === 'completed') {
-        countQb.andWhere('net.startedAt IS NOT NULL AND net.endedAt IS NOT NULL');
+        countQb.andWhere(
+          'net.startedAt IS NOT NULL AND net.endedAt IS NOT NULL',
+        );
       } else if (status === 'cancelled') {
         countQb.andWhere('net.startedAt IS NULL AND net.endedAt IS NOT NULL');
       }

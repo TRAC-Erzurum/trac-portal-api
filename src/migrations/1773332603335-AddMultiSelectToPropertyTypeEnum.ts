@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddMultiSelectToPropertyTypeEnum1773332603335
-  implements MigrationInterface
-{
+export class AddMultiSelectToPropertyTypeEnum1773332603335 implements MigrationInterface {
   name = 'AddMultiSelectToPropertyTypeEnum1773332603335';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

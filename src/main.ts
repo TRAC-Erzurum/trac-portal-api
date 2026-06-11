@@ -34,7 +34,11 @@ async function bootstrap() {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
-  const certTemplatesDir = path.join(process.cwd(), 'uploads', 'certificate-templates');
+  const certTemplatesDir = path.join(
+    process.cwd(),
+    'uploads',
+    'certificate-templates',
+  );
   if (!fs.existsSync(certTemplatesDir)) {
     fs.mkdirSync(certTemplatesDir, { recursive: true });
   }
@@ -46,7 +50,11 @@ async function bootstrap() {
   if (!fs.existsSync(equipmentDir)) {
     fs.mkdirSync(equipmentDir, { recursive: true });
   }
-  const equipmentCategoriesDir = path.join(process.cwd(), 'uploads', 'equipment-categories');
+  const equipmentCategoriesDir = path.join(
+    process.cwd(),
+    'uploads',
+    'equipment-categories',
+  );
   if (!fs.existsSync(equipmentCategoriesDir)) {
     fs.mkdirSync(equipmentCategoriesDir, { recursive: true });
   }
@@ -121,7 +129,8 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   const port = configService.get<number>('PORT') || 8000;
-  const hostname = process.env.NODE_ENV === 'development' ? '0.0.0.0' : undefined;
+  const hostname =
+    process.env.NODE_ENV === 'development' ? '0.0.0.0' : undefined;
 
   await app.listen(port, hostname);
 }

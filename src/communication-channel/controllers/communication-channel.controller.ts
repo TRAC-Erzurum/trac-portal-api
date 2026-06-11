@@ -75,7 +75,10 @@ export class CommunicationChannelController {
       options.search = search;
     }
 
-    if (includeInactive === 'true' && req.user?.role === GlobalRole.SUPER_ADMIN) {
+    if (
+      includeInactive === 'true' &&
+      req.user?.role === GlobalRole.SUPER_ADMIN
+    ) {
       options.includeInactive = true;
     }
 

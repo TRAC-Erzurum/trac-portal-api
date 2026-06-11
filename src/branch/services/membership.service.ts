@@ -511,10 +511,10 @@ export class MembershipService {
     if (search) {
       queryBuilder.andWhere(
         '(' +
-          'LOWER(COALESCE(user.fullName, \'\')) LIKE LOWER(:search) OR ' +
-          'LOWER(COALESCE(user.email, \'\')) LIKE LOWER(:search) OR ' +
+          "LOWER(COALESCE(user.fullName, '')) LIKE LOWER(:search) OR " +
+          "LOWER(COALESCE(user.email, '')) LIKE LOWER(:search) OR " +
           'LOWER(operator.callSign) LIKE LOWER(:search) OR ' +
-          'LOWER(COALESCE(operator.fullName, \'\')) LIKE LOWER(:search)' +
+          "LOWER(COALESCE(operator.fullName, '')) LIKE LOWER(:search)" +
           ')',
         { search: `%${search}%` },
       );
@@ -591,7 +591,9 @@ export class MembershipService {
     return n > 0;
   }
 
-  async hasApprovedBranchLeadershipInAnyBranch(userId: string): Promise<boolean> {
+  async hasApprovedBranchLeadershipInAnyBranch(
+    userId: string,
+  ): Promise<boolean> {
     const operator = await this.operatorService.findByUserId(userId);
     if (!operator) {
       return false;
@@ -646,7 +648,9 @@ export class MembershipService {
     return this.hasApprovedHeadquartersLeadership(userId);
   }
 
-  async getUserMemberships(userId: string): Promise<OperatorBranchMembership[]> {
+  async getUserMemberships(
+    userId: string,
+  ): Promise<OperatorBranchMembership[]> {
     const operator = await this.operatorService.findByUserId(userId);
     if (!operator) {
       return [];
@@ -860,7 +864,9 @@ export class MembershipService {
   }
 
   /** Onaylı üyelik sayısı (operatör bazlı; kayıt koşulu için). */
-  async countApprovedMembershipsForOperator(operatorId: string): Promise<number> {
+  async countApprovedMembershipsForOperator(
+    operatorId: string,
+  ): Promise<number> {
     return this.membershipRepository.count({
       where: { operatorId, status: MembershipStatus.APPROVED },
     });

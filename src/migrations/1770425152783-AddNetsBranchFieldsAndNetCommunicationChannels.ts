@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddNetsBranchFieldsAndNetCommunicationChannels1770425152783
-  implements MigrationInterface
-{
+export class AddNetsBranchFieldsAndNetCommunicationChannels1770425152783 implements MigrationInterface {
   name = 'AddNetsBranchFieldsAndNetCommunicationChannels1770425152783';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

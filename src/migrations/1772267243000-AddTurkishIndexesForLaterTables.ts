@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddTurkishIndexesForLaterTables1772267243000
-  implements MigrationInterface
-{
+export class AddTurkishIndexesForLaterTables1772267243000 implements MigrationInterface {
   name = 'AddTurkishIndexesForLaterTables1772267243000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -48,10 +46,18 @@ export class AddTurkishIndexesForLaterTables1772267243000
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop indexes for tables created after migration 1751234567890
     await queryRunner.query(`DROP INDEX IF EXISTS idx_branch_name_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_branch_callsign_turkish;`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_branch_callsign_turkish;`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS idx_net_name_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_channel_description_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_channel_location_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_netscheduler_name_turkish;`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_channel_description_turkish;`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_channel_location_turkish;`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_netscheduler_name_turkish;`,
+    );
   }
 }

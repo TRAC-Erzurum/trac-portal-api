@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AttendeesNetIdOnDeleteCascade1775051711368
-  implements MigrationInterface
-{
+export class AttendeesNetIdOnDeleteCascade1775051711368 implements MigrationInterface {
   name = 'AttendeesNetIdOnDeleteCascade1775051711368';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

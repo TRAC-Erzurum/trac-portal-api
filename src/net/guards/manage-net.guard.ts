@@ -60,10 +60,11 @@ export class ManageNetGuard implements CanActivate {
       return true;
     }
 
-    const canLeadBranch = await this.membershipService.canActAsBranchLeaderOnBranch(
-      user.id,
-      net.branchId,
-    );
+    const canLeadBranch =
+      await this.membershipService.canActAsBranchLeaderOnBranch(
+        user.id,
+        net.branchId,
+      );
     if (canLeadBranch) {
       return true;
     }

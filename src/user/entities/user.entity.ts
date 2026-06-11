@@ -1,11 +1,9 @@
 import { Entity, Column, OneToOne } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import {
-  GlobalRole,
-  type EffectiveRole,
-} from '../../auth/enums/role.enum';
+import { GlobalRole, type EffectiveRole } from '../../auth/enums/role.enum';
 import { Operator } from '../../operator/entities/operator.entity';
 import { BaseEntity } from '../../shared/entities/base.entity';
+
 @Entity('users')
 export class User extends BaseEntity {
   @Column()
@@ -58,7 +56,9 @@ export class User extends BaseEntity {
   phoneNumbers: string[] | null;
 
   @Column({ type: 'jsonb', nullable: true })
-  emergencyContacts: { name: string; callSign?: string; phone: string }[] | null;
+  emergencyContacts:
+    | { name: string; callSign?: string; phone: string }[]
+    | null;
 
   @Column({ type: 'jsonb', nullable: true })
   expertiseAreas: string[] | null;

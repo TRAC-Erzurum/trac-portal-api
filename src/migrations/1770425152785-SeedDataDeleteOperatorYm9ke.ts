@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedDataDeleteOperatorYm9ke1770425152785
-  implements MigrationInterface
-{
+export class SeedDataDeleteOperatorYm9ke1770425152785 implements MigrationInterface {
   name = 'SeedDataDeleteOperatorYm9ke1770425152785';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

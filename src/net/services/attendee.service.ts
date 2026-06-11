@@ -78,7 +78,8 @@ export class AttendeeService {
     attendee.name = (dto.name ?? '').trim() || operator.fullName || null;
     attendee.country = (dto.country ?? '').trim() || operator.country || null;
     attendee.city = (dto.city ?? '').trim() || operator.city || null;
-    attendee.district = (dto.district ?? '').trim() || operator.district || null;
+    attendee.district =
+      (dto.district ?? '').trim() || operator.district || null;
     attendee.readability = dto.readability;
     attendee.signalStrength = dto.signalStrength;
     attendee.operator = operator;
@@ -108,9 +109,8 @@ export class AttendeeService {
     let operator: Operator;
     if (!dto.operatorId) {
       const plainCallSign = extractPlainCallSign(dto.callSign ?? '');
-      const existingOperator = await this.operatorService.findByCallSign(
-        plainCallSign,
-      );
+      const existingOperator =
+        await this.operatorService.findByCallSign(plainCallSign);
       if (existingOperator) {
         operator = existingOperator;
       } else {

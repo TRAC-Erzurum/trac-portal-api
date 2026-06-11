@@ -446,7 +446,7 @@ export class OperatorService {
 
   async linkToUser(operatorId: string, userId: string): Promise<void> {
     await this.operatorRepository.update(operatorId, {
-      user: { id: userId } as User,
+      user: { id: userId },
     });
   }
 

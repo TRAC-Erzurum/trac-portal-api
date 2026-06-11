@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateUserBranchMemberships1770425152780
-  implements MigrationInterface
-{
+export class CreateUserBranchMemberships1770425152780 implements MigrationInterface {
   name = 'CreateUserBranchMemberships1770425152780';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

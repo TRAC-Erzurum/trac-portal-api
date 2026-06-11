@@ -18,7 +18,11 @@ export class QthController {
     @Query('country') country?: string,
   ): Promise<{ lat: number; lng: number } | null> {
     if (!city?.trim()) return null;
-    return this.qthService.getGeocode(city.trim(), district?.trim(), country?.trim());
+    return this.qthService.getGeocode(
+      city.trim(),
+      district?.trim(),
+      country?.trim(),
+    );
   }
 
   @Public()
@@ -57,7 +61,10 @@ export class QthController {
   async getReverse(
     @Query('lat') latStr: string,
     @Query('lon') lonStr: string,
-  ): Promise<{ address?: Record<string, string>; display_name?: string } | null> {
+  ): Promise<{
+    address?: Record<string, string>;
+    display_name?: string;
+  } | null> {
     const lat = Number(latStr);
     const lon = Number(lonStr);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {

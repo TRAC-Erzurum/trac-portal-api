@@ -28,10 +28,6 @@ import { OperatorModule } from '../operator/operator.module';
     CreateBranchGuard,
     PortalOrBranchLeaderGuard,
   ],
-  exports: [
-    ...services,
-    PortalOrBranchLeaderGuard,
-    BranchAdminGuard,
-  ],
+  exports: [...services, PortalOrBranchLeaderGuard, BranchAdminGuard],
 })
 export class BranchModule {}

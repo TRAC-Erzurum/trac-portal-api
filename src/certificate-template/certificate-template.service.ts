@@ -20,8 +20,10 @@ export class CertificateTemplateService {
 
   private static readonly DEFAULT_ELEMENT_BOX_HEIGHT = 8;
 
-  private static readonly DEFAULT_ELEMENT_TEXT_ALIGN: 'left' | 'center' | 'right' =
-    'left';
+  private static readonly DEFAULT_ELEMENT_TEXT_ALIGN:
+    | 'left'
+    | 'center'
+    | 'right' = 'left';
 
   constructor(
     @InjectRepository(CertificateTemplate)
@@ -68,8 +70,7 @@ export class CertificateTemplateService {
       boxHeight:
         el.boxHeight ?? CertificateTemplateService.DEFAULT_ELEMENT_BOX_HEIGHT,
       textAlign:
-        el.textAlign ??
-        CertificateTemplateService.DEFAULT_ELEMENT_TEXT_ALIGN,
+        el.textAlign ?? CertificateTemplateService.DEFAULT_ELEMENT_TEXT_ALIGN,
       fontSize: el.fontSize,
       color: el.color,
     }));
@@ -113,7 +114,9 @@ export class CertificateTemplateService {
     return this.templateRepository.save(template);
   }
 
-  async getNetsUsingTemplate(templateId: string): Promise<{ id: string; name: string }[]> {
+  async getNetsUsingTemplate(
+    templateId: string,
+  ): Promise<{ id: string; name: string }[]> {
     const nets = await this.netRepository.find({
       where: { certificateTemplateId: templateId },
       select: ['id', 'name'],

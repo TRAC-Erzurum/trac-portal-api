@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -28,12 +25,12 @@ export interface ReportShareData {
       isSimplexAdHoc?: boolean;
       simplexFrequency?: string;
       communicationChannel?: {
-        id: string
-        type: string
-        txFrequency?: number | null
-        rxFrequency?: number | null
-        echolinkNode?: string | null
-        echolinkName?: string | null
+        id: string;
+        type: string;
+        txFrequency?: number | null;
+        rxFrequency?: number | null;
+        echolinkNode?: string | null;
+        echolinkName?: string | null;
       };
     }>;
   };
@@ -67,9 +64,7 @@ export class ReportShareService {
    * Clients (e.g. sheet open on net detail) use this to close the share sheet.
    */
   getConsumedTokenStream(): Observable<{ data: { token: string } }> {
-    return this.consumedToken$.pipe(
-      map((token) => ({ data: { token } })),
-    );
+    return this.consumedToken$.pipe(map((token) => ({ data: { token } })));
   }
 
   async createToken(netId: string): Promise<string> {

@@ -42,7 +42,10 @@ export class Net extends BaseEntity {
   @Column({ type: 'uuid', nullable: true })
   certificateTemplateId: string | null;
 
-  @ManyToOne(() => CertificateTemplate, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => CertificateTemplate, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'certificateTemplateId' })
   certificateTemplate: CertificateTemplate | null;
 

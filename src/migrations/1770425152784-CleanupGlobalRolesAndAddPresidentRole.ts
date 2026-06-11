@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CleanupGlobalRolesAndAddPresidentRole1770425152784
-  implements MigrationInterface
-{
+export class CleanupGlobalRolesAndAddPresidentRole1770425152784 implements MigrationInterface {
   name = 'CleanupGlobalRolesAndAddPresidentRole1770425152784';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

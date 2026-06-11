@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class OperatorBranchMemberships1775322905271
-  implements MigrationInterface
-{
+export class OperatorBranchMemberships1775322905271 implements MigrationInterface {
   name = 'OperatorBranchMemberships1775322905271';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

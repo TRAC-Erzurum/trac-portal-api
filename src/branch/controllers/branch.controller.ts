@@ -23,7 +23,7 @@ import { CreateBranchGuard } from '../guards/create-branch.guard';
 
 @Controller('branches')
 export class BranchController {
-  constructor(private readonly branchService: BranchService) { }
+  constructor(private readonly branchService: BranchService) {}
 
   @Post()
   @Roles(GlobalRole.GUEST)
@@ -61,7 +61,10 @@ export class BranchController {
     } = {};
 
     // Only SUPER_ADMIN can use includeInactive
-    if (includeInactive === 'true' && req.user.role === GlobalRole.SUPER_ADMIN) {
+    if (
+      includeInactive === 'true' &&
+      req.user.role === GlobalRole.SUPER_ADMIN
+    ) {
       options.includeInactive = true;
     }
 
@@ -138,7 +141,13 @@ export class BranchController {
     const offset = offsetStr != null ? parseInt(offsetStr, 10) : undefined;
     return this.branchService.getBranchNets(id, {
       search: search?.trim() || undefined,
-      status: status === 'active' || status === 'pending' || status === 'completed' || status === 'cancelled' ? status : undefined,
+      status:
+        status === 'active' ||
+        status === 'pending' ||
+        status === 'completed' ||
+        status === 'cancelled'
+          ? status
+          : undefined,
       limit: Number.isFinite(limit) ? Math.min(limit, 100) : undefined,
       offset: Number.isFinite(offset) ? offset : undefined,
     });

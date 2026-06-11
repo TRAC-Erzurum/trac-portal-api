@@ -8,10 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { EquipmentStatus } from '../entities/equipment-status.entity';
 import { Equipment } from '../entities/equipment.entity';
-import {
-  CreateEquipmentStatusDto,
-  UpdateEquipmentStatusDto,
-} from '../dto';
+import { CreateEquipmentStatusDto, UpdateEquipmentStatusDto } from '../dto';
 
 @Injectable()
 export class EquipmentStatusService {

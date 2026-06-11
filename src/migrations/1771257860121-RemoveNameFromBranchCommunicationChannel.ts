@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RemoveNameFromBranchCommunicationChannel1771257860121
-  implements MigrationInterface
-{
+export class RemoveNameFromBranchCommunicationChannel1771257860121 implements MigrationInterface {
   name = 'RemoveNameFromBranchCommunicationChannel1771257860121';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

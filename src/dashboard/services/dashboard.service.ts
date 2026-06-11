@@ -278,7 +278,10 @@ export class DashboardService {
     };
   }
 
-  async getActiveNets(limit: number = 5, userId?: string): Promise<ActiveNet[]> {
+  async getActiveNets(
+    limit: number = 5,
+    userId?: string,
+  ): Promise<ActiveNet[]> {
     const branchIds = userId ? await this.getBranchIdsForUser(userId) : null;
     if (branchIds !== null && branchIds.length === 0) return [];
 
@@ -330,7 +333,10 @@ export class DashboardService {
     }));
   }
 
-  async getPendingNets(limit: number = 5, userId?: string): Promise<PendingNet[]> {
+  async getPendingNets(
+    limit: number = 5,
+    userId?: string,
+  ): Promise<PendingNet[]> {
     const branchIds = userId ? await this.getBranchIdsForUser(userId) : null;
     if (branchIds !== null && branchIds.length === 0) return [];
 
@@ -372,7 +378,10 @@ export class DashboardService {
     }));
   }
 
-  async getRecentCancelledNets(limit: number = 3, userId?: string): Promise<PendingNet[]> {
+  async getRecentCancelledNets(
+    limit: number = 3,
+    userId?: string,
+  ): Promise<PendingNet[]> {
     const branchIds = userId ? await this.getBranchIdsForUser(userId) : null;
     if (branchIds !== null && branchIds.length === 0) return [];
 
@@ -388,16 +397,16 @@ export class DashboardService {
       qb.andWhere('net.branchId IN (:...branchIds)', { branchIds });
     }
 
-    const nets = await qb
-      .orderBy('net.endedAt', 'DESC')
-      .limit(limit)
-      .getMany();
+    const nets = await qb.orderBy('net.endedAt', 'DESC').limit(limit).getMany();
 
     return nets.map((net) => ({
       id: net.id,
       name: net.name,
       operatorCallSign: net.operator?.callSign || 'Unknown',
-      endedAt: net.endedAt instanceof Date ? net.endedAt.toISOString() : String(net.endedAt ?? ''),
+      endedAt:
+        net.endedAt instanceof Date
+          ? net.endedAt.toISOString()
+          : String(net.endedAt ?? ''),
       certificateTemplateId: net.certificateTemplateId ?? undefined,
       branch: net.branch
         ? {
@@ -415,7 +424,10 @@ export class DashboardService {
     }));
   }
 
-  async getRecentCompletedNets(limit: number = 3, userId?: string): Promise<ActiveNet[]> {
+  async getRecentCompletedNets(
+    limit: number = 3,
+    userId?: string,
+  ): Promise<ActiveNet[]> {
     const branchIds = userId ? await this.getBranchIdsForUser(userId) : null;
     if (branchIds !== null && branchIds.length === 0) return [];
 
@@ -432,10 +444,7 @@ export class DashboardService {
       qb.andWhere('net.branchId IN (:...branchIds)', { branchIds });
     }
 
-    const nets = await qb
-      .orderBy('net.endedAt', 'DESC')
-      .limit(limit)
-      .getMany();
+    const nets = await qb.orderBy('net.endedAt', 'DESC').limit(limit).getMany();
 
     return nets.map((net) => {
       const duration =
@@ -479,7 +488,11 @@ export class DashboardService {
     scope: StatsScope = 'all',
     branchId?: string,
   ): Promise<PersonalNetStats | PersonalNetStatsBranchAware> {
-    const branchIds = await this.resolveBranchIdsForScope(userId, scope, branchId);
+    const branchIds = await this.resolveBranchIdsForScope(
+      userId,
+      scope,
+      branchId,
+    );
     if (branchIds && branchIds.length === 0) {
       return { attendedNets: 0, managedNets: 0, streak: 0 };
     }
@@ -533,7 +546,11 @@ export class DashboardService {
       communityStart = new Date(0);
     }
     const applyPeriod = period !== 'all';
-    const branchIds = await this.resolveBranchIdsForScope(userId, scope, branchId);
+    const branchIds = await this.resolveBranchIdsForScope(
+      userId,
+      scope,
+      branchId,
+    );
     if (branchIds && branchIds.length === 0) {
       // explicit empty set (selected branch has no nets or user has no branches)
       // return branch-aware empty result when scope === 'branch', otherwise global zeros
@@ -544,7 +561,7 @@ export class DashboardService {
         netsCount: 0,
         totalAttendees: 0,
         uniqueParticipants: 0,
-      }))
+      }));
 
       if (scope === 'branch') {
         return {
@@ -595,7 +612,8 @@ export class DashboardService {
           .where('net.startedAt IS NOT NULL')
           .andWhere('net.endedAt IS NOT NULL');
         this.applyBranchFilter(qb, branchIds);
-        if (applyPeriod) qb.andWhere('net.endedAt >= :communityStart', { communityStart });
+        if (applyPeriod)
+          qb.andWhere('net.endedAt >= :communityStart', { communityStart });
         return qb.getRawOne();
       })(),
 
@@ -605,7 +623,8 @@ export class DashboardService {
           .where('net.startedAt IS NOT NULL')
           .andWhere('net.endedAt IS NOT NULL');
         this.applyBranchFilter(qb, branchIds);
-        if (applyPeriod) qb.andWhere('net.endedAt >= :communityStart', { communityStart });
+        if (applyPeriod)
+          qb.andWhere('net.endedAt >= :communityStart', { communityStart });
         return qb.getCount();
       })(),
 
@@ -617,7 +636,8 @@ export class DashboardService {
           .where('net.startedAt IS NOT NULL')
           .andWhere('net.endedAt IS NOT NULL');
         this.applyBranchFilter(qb, branchIds);
-        if (applyPeriod) qb.andWhere('net.endedAt >= :communityStart', { communityStart });
+        if (applyPeriod)
+          qb.andWhere('net.endedAt >= :communityStart', { communityStart });
         return qb.getRawOne();
       })(),
 
@@ -643,7 +663,8 @@ export class DashboardService {
           .orderBy('value', 'DESC')
           .limit(5);
         this.applyBranchFilter(qb, branchIds);
-        if (applyPeriod) qb.andWhere('net.endedAt >= :communityStart', { communityStart });
+        if (applyPeriod)
+          qb.andWhere('net.endedAt >= :communityStart', { communityStart });
         return qb.getRawMany();
       })(),
 
@@ -666,7 +687,8 @@ export class DashboardService {
           .orderBy('value', 'DESC')
           .limit(5);
         this.applyBranchFilter(qb, branchIds);
-        if (applyPeriod) qb.andWhere('net.endedAt >= :communityStart', { communityStart });
+        if (applyPeriod)
+          qb.andWhere('net.endedAt >= :communityStart', { communityStart });
         return qb.getRawMany();
       })(),
 
@@ -686,7 +708,8 @@ export class DashboardService {
           .orderBy('value', 'DESC')
           .limit(5);
         this.applyBranchFilter(qb, branchIds);
-        if (applyPeriod) qb.andWhere('net.endedAt >= :communityStart', { communityStart });
+        if (applyPeriod)
+          qb.andWhere('net.endedAt >= :communityStart', { communityStart });
         return qb.getRawMany();
       })(),
     ]);
@@ -795,7 +818,12 @@ export class DashboardService {
           .where('net.startedAt >= :start', { start })
           .andWhere('net.startedAt <= :end', { end })
           .andWhere('net.endedAt IS NOT NULL')
-          .andWhere(branchIds && branchIds.length > 0 ? 'net.branchId IN (:...branchIds)' : '1=1', { branchIds })
+          .andWhere(
+            branchIds && branchIds.length > 0
+              ? 'net.branchId IN (:...branchIds)'
+              : '1=1',
+            { branchIds },
+          )
           .getCount(),
 
         this.attendeeRepository
@@ -808,7 +836,12 @@ export class DashboardService {
           .where('net.startedAt >= :start', { start })
           .andWhere('net.startedAt <= :end', { end })
           .andWhere('net.endedAt IS NOT NULL')
-            .andWhere(branchIds && branchIds.length > 0 ? 'net.branchId IN (:...branchIds)' : '1=1', { branchIds })
+          .andWhere(
+            branchIds && branchIds.length > 0
+              ? 'net.branchId IN (:...branchIds)'
+              : '1=1',
+            { branchIds },
+          )
           .getRawOne(),
       ]);
 
@@ -904,7 +937,9 @@ export class DashboardService {
     return this.getTopStreak([branchId]);
   }
 
-  async getTopStreak(branchIds: string[] | null = null): Promise<TopStreakEntry[]> {
+  async getTopStreak(
+    branchIds: string[] | null = null,
+  ): Promise<TopStreakEntry[]> {
     const attendances = await this.attendeeRepository
       .createQueryBuilder('attendee')
       .leftJoin('attendee.net', 'net')
@@ -914,7 +949,12 @@ export class DashboardService {
         'operator.callSign as "callSign"',
         'net.endedAt as "netDate"',
       ])
-      .where(branchIds && branchIds.length > 0 ? 'net.branchId IN (:...branchIds)' : '1=1', { branchIds })
+      .where(
+        branchIds && branchIds.length > 0
+          ? 'net.branchId IN (:...branchIds)'
+          : '1=1',
+        { branchIds },
+      )
       .andWhere('net.endedAt IS NOT NULL')
       .orderBy('operator.id', 'ASC')
       .addOrderBy('net.endedAt', 'ASC')
@@ -934,21 +974,20 @@ export class DashboardService {
         });
       }
       if (row.netDate) {
-        byOperator.get(key)!.dates.push(new Date(row.netDate));
+        byOperator.get(key).dates.push(new Date(row.netDate));
       }
     }
 
     const streaks: { operatorId: string; callSign: string; streak: number }[] =
       [];
     for (const [, data] of byOperator) {
-      const sorted = [...data.dates].sort(
-        (a, b) => a.getTime() - b.getTime(),
-      );
+      const sorted = [...data.dates].sort((a, b) => a.getTime() - b.getTime());
       let maxStreak = 1;
       let current = 1;
       for (let i = 1; i < sorted.length; i++) {
         const days =
-          (sorted[i].getTime() - sorted[i - 1].getTime()) / (1000 * 60 * 60 * 24);
+          (sorted[i].getTime() - sorted[i - 1].getTime()) /
+          (1000 * 60 * 60 * 24);
         if (days <= 7) {
           current++;
           maxStreak = Math.max(maxStreak, current);
@@ -1017,10 +1056,7 @@ export class DashboardService {
         .getRawOne(),
     ]);
 
-    const uniqueParticipants = parseInt(
-      String(uniqueResult?.count ?? '0'),
-      10,
-    );
+    const uniqueParticipants = parseInt(String(uniqueResult?.count ?? '0'), 10);
     const avgUniqueParticipantsPerNet =
       completedNets > 0
         ? Math.round((uniqueParticipants / completedNets) * 10) / 10
@@ -1042,7 +1078,15 @@ export class DashboardService {
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    const lastMonthEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
 
     const baseAttended = this.attendeeRepository
       .createQueryBuilder('attendee')
@@ -1058,7 +1102,11 @@ export class DashboardService {
       .andWhere('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NOT NULL');
 
-    const branchIds = await this.resolveBranchIdsForScope(userId, scope, branchId);
+    const branchIds = await this.resolveBranchIdsForScope(
+      userId,
+      scope,
+      branchId,
+    );
     if (branchIds && branchIds.length === 0) {
       return {
         thisMonthParticipated: 0,
@@ -1067,32 +1115,59 @@ export class DashboardService {
         lastMonthManaged: 0,
         monthlySeries: Array.from({ length: 12 }, (_, i) => {
           const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
-          return { year: d.getFullYear(), monthIndex: d.getMonth(), participated: 0, managed: 0 };
+          return {
+            year: d.getFullYear(),
+            monthIndex: d.getMonth(),
+            participated: 0,
+            managed: 0,
+          };
         }),
       };
     }
 
-    const [thisMonthParticipated, lastMonthParticipated, thisMonthManaged, lastMonthManaged] =
-      await Promise.all([
-        this.applyBranchFilter(
-          baseAttended.clone().andWhere('net.endedAt >= :thisMonthStart', { thisMonthStart }),
-          branchIds,
-        ).getCount(),
-        this.applyBranchFilter(
-          baseAttended.clone().andWhere('net.endedAt >= :lastMonthStart', { lastMonthStart }).andWhere('net.endedAt <= :lastMonthEnd', { lastMonthEnd }),
-          branchIds,
-        ).getCount(),
-        this.applyBranchFilter(
-          baseManaged.clone().andWhere('net.endedAt >= :thisMonthStart', { thisMonthStart }),
-          branchIds,
-        ).getCount(),
-        this.applyBranchFilter(
-          baseManaged.clone().andWhere('net.endedAt >= :lastMonthStart', { lastMonthStart }).andWhere('net.endedAt <= :lastMonthEnd', { lastMonthEnd }),
-          branchIds,
-        ).getCount(),
-      ]);
+    const [
+      thisMonthParticipated,
+      lastMonthParticipated,
+      thisMonthManaged,
+      lastMonthManaged,
+    ] = await Promise.all([
+      this.applyBranchFilter(
+        baseAttended
+          .clone()
+          .andWhere('net.endedAt >= :thisMonthStart', { thisMonthStart }),
+        branchIds,
+      ).getCount(),
+      this.applyBranchFilter(
+        baseAttended
+          .clone()
+          .andWhere('net.endedAt >= :lastMonthStart', { lastMonthStart })
+          .andWhere('net.endedAt <= :lastMonthEnd', { lastMonthEnd }),
+        branchIds,
+      ).getCount(),
+      this.applyBranchFilter(
+        baseManaged
+          .clone()
+          .andWhere('net.endedAt >= :thisMonthStart', { thisMonthStart }),
+        branchIds,
+      ).getCount(),
+      this.applyBranchFilter(
+        baseManaged
+          .clone()
+          .andWhere('net.endedAt >= :lastMonthStart', { lastMonthStart })
+          .andWhere('net.endedAt <= :lastMonthEnd', { lastMonthEnd }),
+        branchIds,
+      ).getCount(),
+    ]);
 
-    const monthStart = new Date(now.getFullYear(), now.getMonth() - 11, 1, 0, 0, 0, 0);
+    const monthStart = new Date(
+      now.getFullYear(),
+      now.getMonth() - 11,
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
 
     const participatedMonthlyQb = this.attendeeRepository
       .createQueryBuilder('attendee')
@@ -1156,7 +1231,9 @@ export class DashboardService {
     };
   }
 
-  async getBusiestTime(branchIds: string[] | null = null): Promise<BusiestTimeResponse> {
+  async getBusiestTime(
+    branchIds: string[] | null = null,
+  ): Promise<BusiestTimeResponse> {
     type BusiestTimeRawRow = {
       dayOfWeek: string | number;
       hour: string | number;
@@ -1172,9 +1249,7 @@ export class DashboardService {
       .groupBy('EXTRACT(DOW FROM net.startedAt)::int')
       .addGroupBy('EXTRACT(HOUR FROM net.startedAt)::int')
       .orderBy('EXTRACT(DOW FROM net.startedAt)::int', 'ASC')
-      .addOrderBy('EXTRACT(HOUR FROM net.startedAt)::int', 'ASC')
-      ;
-
+      .addOrderBy('EXTRACT(HOUR FROM net.startedAt)::int', 'ASC');
     this.applyBranchFilter(qb, branchIds);
 
     const rows = await qb.getRawMany<BusiestTimeRawRow>();
@@ -1300,8 +1375,18 @@ export class DashboardService {
   ): Promise<MonthlyTrendEntry[]> {
     const now = new Date();
     const monthNames = [
-      'january', 'february', 'march', 'april', 'may', 'june',
-      'july', 'august', 'september', 'october', 'november', 'december',
+      'january',
+      'february',
+      'march',
+      'april',
+      'may',
+      'june',
+      'july',
+      'august',
+      'september',
+      'october',
+      'november',
+      'december',
     ];
     const entries: MonthlyTrendEntry[] = [];
 
@@ -1325,7 +1410,12 @@ export class DashboardService {
           .where('net.endedAt >= :start', { start })
           .andWhere('net.endedAt <= :endCap', { endCap })
           .andWhere('net.endedAt IS NOT NULL')
-          .andWhere(branchIds && branchIds.length > 0 ? 'net.branchId IN (:...branchIds)' : '1=1', { branchIds })
+          .andWhere(
+            branchIds && branchIds.length > 0
+              ? 'net.branchId IN (:...branchIds)'
+              : '1=1',
+            { branchIds },
+          )
           .getCount(),
         this.attendeeRepository
           .createQueryBuilder('attendee')
@@ -1334,7 +1424,12 @@ export class DashboardService {
           .where('net.endedAt >= :start', { start })
           .andWhere('net.endedAt <= :endCap', { endCap })
           .andWhere('net.endedAt IS NOT NULL')
-          .andWhere(branchIds && branchIds.length > 0 ? 'net.branchId IN (:...branchIds)' : '1=1', { branchIds })
+          .andWhere(
+            branchIds && branchIds.length > 0
+              ? 'net.branchId IN (:...branchIds)'
+              : '1=1',
+            { branchIds },
+          )
           .getRawOne(),
       ]);
 
@@ -1378,13 +1473,19 @@ export class DashboardService {
     const raw = await qb.getRawMany();
     const reversed = raw.reverse();
     return reversed.map((r) => ({
-      endedAt: r.endedAt instanceof Date ? r.endedAt.toISOString() : String(r.endedAt ?? ''),
+      endedAt:
+        r.endedAt instanceof Date
+          ? r.endedAt.toISOString()
+          : String(r.endedAt ?? ''),
       attendeeCount: parseInt(String(r.attendeeCount ?? '0'), 10),
       netName: String(r.netName ?? ''),
     }));
   }
 
-  private async calculateStreak(userId: string, branchIds: string[] | null = null): Promise<number> {
+  private async calculateStreak(
+    userId: string,
+    branchIds: string[] | null = null,
+  ): Promise<number> {
     const attendances = await this.attendeeRepository
       .createQueryBuilder('attendee')
       .leftJoinAndSelect('attendee.net', 'net')
@@ -1392,7 +1493,12 @@ export class DashboardService {
       .leftJoin('operator.user', 'user')
       .where('user.id = :userId', { userId })
       .andWhere('net.endedAt IS NOT NULL')
-      .andWhere(branchIds && branchIds.length > 0 ? 'net.branchId IN (:...branchIds)' : '1=1', { branchIds })
+      .andWhere(
+        branchIds && branchIds.length > 0
+          ? 'net.branchId IN (:...branchIds)'
+          : '1=1',
+        { branchIds },
+      )
       .orderBy('net.endedAt', 'ASC')
       .getMany();
 
@@ -1437,13 +1543,15 @@ export class DashboardService {
   ): Promise<NetComparePreviousResponse | null> {
     const current = await this.netRepository.findOne({
       where: { id: netId },
-      select: ['id', 'branchId', 'startedAt', 'endedAt', 'totalDurationMinutes'],
+      select: [
+        'id',
+        'branchId',
+        'startedAt',
+        'endedAt',
+        'totalDurationMinutes',
+      ],
     });
-    if (
-      !current?.branchId ||
-      !current.startedAt ||
-      !current.endedAt
-    ) {
+    if (!current?.branchId || !current.startedAt || !current.endedAt) {
       return null;
     }
 

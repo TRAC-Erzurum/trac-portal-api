@@ -1,10 +1,4 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  OneToMany,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { CategoryPropertyDefinition } from './category-property-definition.entity';
 import { Equipment } from './equipment.entity';

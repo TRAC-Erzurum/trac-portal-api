@@ -10,7 +10,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial, ILike, In } from 'typeorm';
+import { Repository, DeepPartial, In } from 'typeorm';
 import { User } from '../entities/user.entity';
 import {
   GlobalRole,
@@ -27,6 +27,7 @@ import { extractPlainCallSign } from '../../shared/utils/call-sign.util';
 import * as crypto from 'crypto';
 import { SetPasswordDto } from '../dto/set-password.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
+import { AdminUserListQueryDto } from '../dto/admin-user-list-query.dto';
 import { AuthUser } from '../../auth/types/auth.types';
 import { BranchService } from '../../branch/services/branch.service';
 import { MembershipService } from '../../branch/services/membership.service';
@@ -44,7 +45,7 @@ export class UserService {
     private readonly branchService: BranchService,
     @Inject(forwardRef(() => MembershipService))
     private readonly membershipService: MembershipService,
-  ) { }
+  ) {}
 
   async findByEmail(email: string): Promise<User> {
     return this.userRepository.findOne({
@@ -83,7 +84,9 @@ export class UserService {
   }
 
   private async isApprovedBranchLeader(userId: string): Promise<boolean> {
-    return this.membershipService.hasApprovedBranchLeadershipInAnyBranch(userId);
+    return this.membershipService.hasApprovedBranchLeadershipInAnyBranch(
+      userId,
+    );
   }
 
   private async isBranchLeaderInBranch(
@@ -216,9 +219,8 @@ export class UserService {
     const requesterOperator = await this.operatorService.findByUserId(
       requester.id,
     );
-    const targetOperator = await this.operatorService.findByUserId(
-      targetUserId,
-    );
+    const targetOperator =
+      await this.operatorService.findByUserId(targetUserId);
     if (!requesterOperator || !targetOperator) {
       return false;
     }
@@ -329,11 +331,22 @@ export class UserService {
 
     const operator = await this.operatorService.create(operatorData, createdBy);
 
-    user.operator = operator;
-    user.updatedBy = [...(user.updatedBy || []), createdBy];
-    await this.userRepository.save(user);
+    await this.operatorService.linkToUser(operator.id, userId);
 
-    return user;
+    const hqBranch = await this.branchService.findHeadquarters();
+    if (hqBranch) {
+      const existing = await this.membershipService.findMembership(
+        userId,
+        hqBranch.id,
+      );
+      if (!existing) {
+        await this.membershipService.join(userId, hqBranch.id);
+      }
+    }
+
+    await this.syncRoleColumn(userId);
+
+    return this.findOne(userId);
   }
 
   async getOperatorOfUser(userId: string): Promise<Operator> {
@@ -427,21 +440,27 @@ export class UserService {
 
   async validate(identifier: string, password: string): Promise<User> {
     const normalizedIdentifier = normalizeTurkishText(identifier);
-    let user = await this.userRepository.findOne({
-      where: [
-        { email: ILike(normalizedIdentifier) },
-        { operator: { callSign: ILike(normalizedIdentifier) } },
-      ],
-      relations: { operator: true },
-    });
+    let user = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.operator', 'operator')
+      .where('LOWER(user.email) = :identifier', {
+        identifier: normalizedIdentifier,
+      })
+      .orWhere('LOWER(operator.callSign) = :identifier', {
+        identifier: normalizedIdentifier,
+      })
+      .getOne();
 
     if (!user && normalizedIdentifier.includes('/')) {
       const plainCallSign = extractPlainCallSign(normalizedIdentifier);
       if (plainCallSign) {
-        user = await this.userRepository.findOne({
-          where: { operator: { callSign: ILike(plainCallSign) } },
-          relations: { operator: true },
-        });
+        user = await this.userRepository
+          .createQueryBuilder('user')
+          .leftJoinAndSelect('user.operator', 'operator')
+          .where('LOWER(operator.callSign) = :identifier', {
+            identifier: plainCallSign,
+          })
+          .getOne();
       }
     }
 
@@ -620,5 +639,63 @@ export class UserService {
     const user = await this.findOne(userId);
     user.currentBranchId = branchId;
     await this.userRepository.save(user);
+  }
+
+  async adminList(query: AdminUserListQueryDto): Promise<{
+    data: Array<{
+      id: string;
+      email: string;
+      fullName: string | null;
+      globalRole: GlobalRole;
+      role: EffectiveRole;
+      createdAt: Date;
+      operator: { id: string; callSign: string } | null;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const limitNum = Math.min(query.limit ?? 50, 100);
+    const offsetNum = query.offset ?? 0;
+
+    const qb = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.operator', 'operator');
+
+    if (query.search?.trim()) {
+      const search = `%${query.search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(user.email) LIKE :search OR LOWER(user.fullName) LIKE :search OR LOWER(operator.callSign) LIKE :search)',
+        { search },
+      );
+    }
+
+    if (query.hasOperator === 'true') {
+      qb.andWhere('operator.id IS NOT NULL');
+    } else if (query.hasOperator === 'false') {
+      qb.andWhere('operator.id IS NULL');
+    }
+
+    const total = await qb.getCount();
+
+    const users = await qb
+      .orderBy('user.createdAt', 'DESC')
+      .skip(offsetNum)
+      .take(limitNum)
+      .getMany();
+
+    const data = users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      globalRole: user.globalRole,
+      role: user.role,
+      createdAt: user.createdAt,
+      operator: user.operator
+        ? { id: user.operator.id, callSign: user.operator.callSign }
+        : null,
+    }));
+
+    return { data, total, limit: limitNum, offset: offsetNum };
   }
 }

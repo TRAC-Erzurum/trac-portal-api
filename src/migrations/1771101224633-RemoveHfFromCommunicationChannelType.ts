@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RemoveHfFromCommunicationChannelType1771101224633
-  implements MigrationInterface
-{
+export class RemoveHfFromCommunicationChannelType1771101224633 implements MigrationInterface {
   name = 'RemoveHfFromCommunicationChannelType1771101224633';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

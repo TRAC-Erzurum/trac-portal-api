@@ -21,9 +21,12 @@ export class R2Service {
   constructor(private readonly configService: ConfigService) {
     const endpoint = this.configService.get<string>('r2.endpoint');
     const accessKeyId = this.configService.get<string>('r2.accessKeyId');
-    const secretAccessKey = this.configService.get<string>('r2.secretAccessKey');
+    const secretAccessKey =
+      this.configService.get<string>('r2.secretAccessKey');
     this.bucket = this.configService.get<string>('r2.bucketName') ?? '';
-    this.keyPrefix = this.configService.get<string>('r2.keyPrefix') ?? `trac-portal-${process.env.NODE_ENV ?? 'development'}`;
+    this.keyPrefix =
+      this.configService.get<string>('r2.keyPrefix') ??
+      `trac-portal-${process.env.NODE_ENV ?? 'development'}`;
 
     if (endpoint && accessKeyId && secretAccessKey && this.bucket) {
       this.client = new S3Client({

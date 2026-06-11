@@ -22,7 +22,7 @@ export class AddTurkishNormalizeFunction1751234567890 implements MigrationInterf
 
     // Create an index for the normalize_turkish function on commonly searched fields
     // This improves performance for LIKE queries using the function
-    
+
     // For Operator table - commonly searched fields
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_operator_callsign_turkish 
@@ -57,10 +57,16 @@ export class AddTurkishNormalizeFunction1751234567890 implements MigrationInterf
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop indexes for tables that existed at the time of this migration
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_operator_callsign_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_operator_fullname_turkish;`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_operator_callsign_turkish;`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_operator_fullname_turkish;`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS idx_operator_city_turkish;`);
-    await queryRunner.query(`DROP INDEX IF EXISTS idx_operator_district_turkish;`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS idx_operator_district_turkish;`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS idx_user_fullname_turkish;`);
 
     // Note: Indexes for other tables are dropped in migration 1780000000001

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddGlobalRoleAndHqMembershipsAndCurrentBranchId1770425152781
-  implements MigrationInterface
-{
+export class AddGlobalRoleAndHqMembershipsAndCurrentBranchId1770425152781 implements MigrationInterface {
   name = 'AddGlobalRoleAndHqMembershipsAndCurrentBranchId1770425152781';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

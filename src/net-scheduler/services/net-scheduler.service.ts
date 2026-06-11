@@ -26,7 +26,9 @@ import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.ut
 /** Today in GMT+3 (Europe/Istanbul) as YYYY-MM-DD. Use for "today" in create/update/list/upcoming. */
 function getTodayGMT3(): string {
   const now = new Date();
-  const gmt3 = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+  const gmt3 = new Date(
+    now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }),
+  );
   const y = gmt3.getFullYear();
   const m = String(gmt3.getMonth() + 1).padStart(2, '0');
   const d = String(gmt3.getDate()).padStart(2, '0');
@@ -79,21 +81,52 @@ export class NetSchedulerService {
       scheduler.branchCallSign?.callSign ?? scheduler.branchCallSignId ?? '';
     const operatorCallsign = scheduler.operator?.callSign ?? '';
     const operatorName = scheduler.operator?.fullName ?? '';
-    const time =
-      scheduler.scheduledTime?.slice(0, 5) ?? '20:00'; // HH:mm
+    const time = scheduler.scheduledTime?.slice(0, 5) ?? '20:00'; // HH:mm
     const monthNamesTr = [
-      'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-      'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+      'Ocak',
+      'Şubat',
+      'Mart',
+      'Nisan',
+      'Mayıs',
+      'Haziran',
+      'Temmuz',
+      'Ağustos',
+      'Eylül',
+      'Ekim',
+      'Kasım',
+      'Aralık',
     ];
     const dayNamesTr = [
-      'Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi',
+      'Pazar',
+      'Pazartesi',
+      'Salı',
+      'Çarşamba',
+      'Perşembe',
+      'Cuma',
+      'Cumartesi',
     ];
     const monthNamesEn = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     const dayNamesEn = [
-      'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
     ];
     const monthNames = locale === 'en' ? monthNamesEn : monthNamesTr;
     const dayNames = locale === 'en' ? dayNamesEn : dayNamesTr;
@@ -156,7 +189,7 @@ export class NetSchedulerService {
     limit: number,
   ): Promise<string[]> {
     const result: string[] = [];
-    let current = new Date(afterDateStr + 'T12:00:00Z');
+    const current = new Date(afterDateStr + 'T12:00:00Z');
     const maxIter = 400;
     let iter = 0;
 
@@ -202,7 +235,9 @@ export class NetSchedulerService {
       finalName = `${name} – ${++suffix}`;
     }
 
-    const scheduledAt = new Date(`${dateStr}T${scheduler.scheduledTime.slice(0, 5)}:00+03:00`);
+    const scheduledAt = new Date(
+      `${dateStr}T${scheduler.scheduledTime.slice(0, 5)}:00+03:00`,
+    );
     const channels: NetCommunicationChannelDto[] =
       scheduler.communicationChannels?.map((ch) => ({
         communicationChannelId: ch.communicationChannelId ?? undefined,
@@ -274,7 +309,9 @@ export class NetSchedulerService {
     if (
       !dto.communicationChannels?.length ||
       (!dto.communicationChannels.some((c) => c.communicationChannelId) &&
-        !dto.communicationChannels.some((c) => c.isSimplexAdHoc && c.simplexFrequency))
+        !dto.communicationChannels.some(
+          (c) => c.isSimplexAdHoc && c.simplexFrequency,
+        ))
     ) {
       throw new BadRequestException(
         'error.atLeastOneCommunicationChannelRequired',
@@ -318,7 +355,8 @@ export class NetSchedulerService {
       scheduler.branchCallSignId = dto.branchCallSignId ?? null;
       scheduler.branchCallSign =
         dto.branchCallSignId != null
-          ? branch.callSigns?.find((cs) => cs.id === dto.branchCallSignId) ?? null
+          ? (branch.callSigns?.find((cs) => cs.id === dto.branchCallSignId) ??
+            null)
           : null;
     }
 
@@ -361,7 +399,10 @@ export class NetSchedulerService {
     const scheduler = await this.findOne(id);
     const effectiveRole = await this.userService.getEffectiveRole(userId);
     if (effectiveRole !== GlobalRole.SUPER_ADMIN) {
-      await this.userService.validateBranchMembership(userId, scheduler.branchId);
+      await this.userService.validateBranchMembership(
+        userId,
+        scheduler.branchId,
+      );
     }
 
     if (dto.name != null) scheduler.name = dto.name;
@@ -373,7 +414,8 @@ export class NetSchedulerService {
     }
     if (dto.branchId != null) {
       const branch = await this.branchService.findOne(dto.branchId);
-      if (!branch?.isActive) throw new BadRequestException('error.branchInactive');
+      if (!branch?.isActive)
+        throw new BadRequestException('error.branchInactive');
       scheduler.branchId = dto.branchId;
       scheduler.branch = branch;
     }
@@ -394,7 +436,8 @@ export class NetSchedulerService {
       }
     }
     if (dto.recurrence != null) scheduler.recurrence = dto.recurrence;
-    if (dto.endDate !== undefined) scheduler.endDate = dto.endDate?.slice(0, 10) ?? null;
+    if (dto.endDate !== undefined)
+      scheduler.endDate = dto.endDate?.slice(0, 10) ?? null;
     if (dto.scheduledTime != null)
       scheduler.scheduledTime = dto.scheduledTime.includes(':')
         ? dto.scheduledTime
@@ -442,7 +485,13 @@ export class NetSchedulerService {
   async findOne(id: string): Promise<NetScheduler> {
     const scheduler = await this.schedulerRepository.findOne({
       where: { id },
-      relations: ['branch', 'operator', 'branchCallSign', 'communicationChannels', 'communicationChannels.communicationChannel'],
+      relations: [
+        'branch',
+        'operator',
+        'branchCallSign',
+        'communicationChannels',
+        'communicationChannels.communicationChannel',
+      ],
     });
     if (!scheduler) {
       throw new NotFoundException('error.notFound');
@@ -463,9 +512,15 @@ export class NetSchedulerService {
     | NetScheduler[]
     | { data: NetScheduler[]; total: number; limit: number; offset: number }
   > {
-    const { branchId, branchFilter = 'my-branches', userId, search, limit, offset } = opts;
-    const usePagination =
-      limit !== undefined || offset !== undefined;
+    const {
+      branchId,
+      branchFilter = 'my-branches',
+      userId,
+      search,
+      limit,
+      offset,
+    } = opts;
+    const usePagination = limit !== undefined || offset !== undefined;
     const limitNum = Math.min(limit ?? 50, 100);
     const offsetNum = offset ?? 0;
 

@@ -30,7 +30,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
     const user = await this.userService.findOne(payload.sub);
     const role = await this.userService.getEffectiveRole(payload.sub);
-    
+
     return {
       id: payload.sub,
       email: payload.email,
