@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class UserRoleVarcharEffectiveRole1774980435347
-  implements MigrationInterface
-{
+export class UserRoleVarcharEffectiveRole1774980435347 implements MigrationInterface {
   name = 'UserRoleVarcharEffectiveRole1774980435347';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

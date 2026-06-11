@@ -102,7 +102,10 @@ export class CertificateService implements OnModuleInit {
   }
 
   /** True if user may download any attendee's certificate (super_admin, net operator, or branch admin/president). */
-  async canDownloadAnyCertificate(netId: string, userId: string): Promise<boolean> {
+  async canDownloadAnyCertificate(
+    netId: string,
+    userId: string,
+  ): Promise<boolean> {
     const net = await this.netRepository.findOne({
       where: { id: netId },
       relations: ['operator', 'operator.user', 'branch'],
@@ -145,7 +148,11 @@ export class CertificateService implements OnModuleInit {
     if (attendee.operator?.user?.id === userId) return true;
     const attendeeCallSign = extractPlainCallSign(attendee.callSign ?? '');
     const actorCallSign = extractPlainCallSign(userCallSign ?? '');
-    if (attendeeCallSign && actorCallSign && attendeeCallSign === actorCallSign) {
+    if (
+      attendeeCallSign &&
+      actorCallSign &&
+      attendeeCallSign === actorCallSign
+    ) {
       return true;
     }
     if (
@@ -203,7 +210,10 @@ export class CertificateService implements OnModuleInit {
       order,
       attendees.length,
     );
-    const pdfBuffer = await this.renderPdf(net.certificateTemplate, placeholders);
+    const pdfBuffer = await this.renderPdf(
+      net.certificateTemplate,
+      placeholders,
+    );
     if (res) {
       const basename = this.buildCertificatePdfBasename(net, attendee);
       res.setHeader('Content-Type', 'application/pdf');
@@ -228,9 +238,7 @@ export class CertificateService implements OnModuleInit {
     _totalAttendees: number,
   ): Record<string, string> {
     const netDate = net.endedAt || net.scheduledAt;
-    const dateStr = netDate
-      ? this.formatDateForSerial(netDate)
-      : '';
+    const dateStr = netDate ? this.formatDateForSerial(netDate) : '';
     const ddmmyy = netDate ? this.formatDdMmyy(netDate) : '';
     const orderStr = String(order).padStart(4, '0');
     const branchCallSign =
@@ -249,9 +257,7 @@ export class CertificateService implements OnModuleInit {
     const netOperatorName = net.operator?.fullName ?? '';
     const branchName = net.branch?.name ?? '';
     const netName = net.name ?? '';
-    const netDateFormatted = netDate
-      ? this.formatDateDisplay(netDate)
-      : '';
+    const netDateFormatted = netDate ? this.formatDateDisplay(netDate) : '';
 
     return {
       operator_callsign: operatorCallsign,
@@ -348,7 +354,10 @@ export class CertificateService implements OnModuleInit {
   }
 
   /** Önce katılımcı createdAt; yoksa çevrim startedAt (sadece tarih). */
-  private resolveCertificateFilenameDateStamp(net: Net, attendee: Attendee): string {
+  private resolveCertificateFilenameDateStamp(
+    net: Net,
+    attendee: Attendee,
+  ): string {
     const createdRaw = attendee.createdAt;
     if (createdRaw) {
       const join =
@@ -392,7 +401,10 @@ export class CertificateService implements OnModuleInit {
     const stamp = this.resolveCertificateFilenameDateStamp(net, attendee);
     const a = this.sanitizeCertificateFilenameSegment(callsign, 'cagri');
     const b = this.sanitizeCertificateFilenameSegment(netName, 'Cevrim');
-    const c = this.sanitizeCertificateFilenameSegment(stamp, '01-01-1970-00-00');
+    const c = this.sanitizeCertificateFilenameSegment(
+      stamp,
+      '01-01-1970-00-00',
+    );
     return `${a} - ${b} ${c}`;
   }
 
@@ -432,21 +444,15 @@ export class CertificateService implements OnModuleInit {
     for (const el of template.elements || []) {
       const text =
         el.type === 'placeholder' && el.placeholderKey
-          ? placeholders[el.placeholderKey] ?? el.placeholderKey
+          ? (placeholders[el.placeholderKey] ?? el.placeholderKey)
           : el.type === 'static' && el.content
             ? el.content
             : '';
       if (!text) continue;
       const color = this.parseColor(el.color || '#000000');
-      const boxWidthPercent =
-        el.boxWidth ??
-        DEFAULT_ELEMENT_BOX_WIDTH;
-      const boxHeightPercent =
-        el.boxHeight ??
-        DEFAULT_ELEMENT_BOX_HEIGHT;
-      const textAlign =
-        el.textAlign ??
-        DEFAULT_ELEMENT_TEXT_ALIGN;
+      const boxWidthPercent = el.boxWidth ?? DEFAULT_ELEMENT_BOX_WIDTH;
+      const boxHeightPercent = el.boxHeight ?? DEFAULT_ELEMENT_BOX_HEIGHT;
+      const textAlign = el.textAlign ?? DEFAULT_ELEMENT_TEXT_ALIGN;
 
       // x,y box top-left (%); box size de yüzde olarak saklanır.
       const boxX = (el.x / 100) * width;
@@ -512,7 +518,10 @@ export class CertificateService implements OnModuleInit {
     ) {
       throw new ForbiddenException('error.forbiddenDescription');
     }
-    const netNameSanitized = (net.name || 'net').replace(/[^a-zA-Z0-9-_]/g, '-');
+    const netNameSanitized = (net.name || 'net').replace(
+      /[^a-zA-Z0-9-_]/g,
+      '-',
+    );
     res.set({
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="${netNameSanitized}-certificates.zip"`,

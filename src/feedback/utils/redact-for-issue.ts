@@ -5,10 +5,16 @@ export function redactForIssue(text: string): string {
     return '';
   }
   let out = text;
-  out = out.replace(/\bauthorization\s*:\s*[^\s]+/gi, 'authorization: [REDACTED]');
+  out = out.replace(
+    /\bauthorization\s*:\s*[^\s]+/gi,
+    'authorization: [REDACTED]',
+  );
   out = out.replace(/\bcookie\s*:\s*[^\n]+/gi, 'cookie: [REDACTED]');
   out = out.replace(/\bset-cookie\s*:\s*[^\n]+/gi, 'set-cookie: [REDACTED]');
-  out = out.replace(/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED]');
+  out = out.replace(
+    /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
+    '[REDACTED]',
+  );
   out = out.replace(
     /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
     '[REDACTED]',

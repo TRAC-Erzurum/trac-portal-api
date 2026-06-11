@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddNetSchedulerAndNetFields1771411001716
-  implements MigrationInterface
-{
+export class AddNetSchedulerAndNetFields1771411001716 implements MigrationInterface {
   name = 'AddNetSchedulerAndNetFields1771411001716';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -153,7 +151,9 @@ export class AddNetSchedulerAndNetFields1771411001716
       `ALTER TABLE "net_schedulers" DROP CONSTRAINT IF EXISTS "FK_net_schedulers_branchId"`,
     );
     await queryRunner.query(`DROP TABLE IF EXISTS "net_schedulers"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."net_recurrence_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."net_recurrence_enum"`,
+    );
 
     await queryRunner.query(
       `ALTER TABLE "nets" DROP COLUMN IF EXISTS "totalDurationMinutes"`,

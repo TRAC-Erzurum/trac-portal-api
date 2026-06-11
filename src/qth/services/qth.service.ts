@@ -50,8 +50,7 @@ export class QthService {
     if (cached !== undefined) return cached;
 
     const isTurkey =
-      !countryTrim ||
-      /^(türkiye|turkey|tur|türk)$/i.test(countryTrim);
+      !countryTrim || /^(türkiye|turkey|tur|türk)$/i.test(countryTrim);
 
     // 1) İl + ilçe varsa Nominatim structured (city, county, country) — ilçe konumuna daha iyi uyar
     if (cityTrim && districtTrim) {
@@ -71,7 +70,10 @@ export class QthService {
     const districtFirst =
       districtTrim && cityTrim
         ? `${districtTrim}, ${cityTrim}${countryTrim ? ', ' + countryTrim : ''}`
-        : [cityTrim, districtTrim].filter(Boolean).concat(countryTrim ? [countryTrim] : []).join(', ');
+        : [cityTrim, districtTrim]
+            .filter(Boolean)
+            .concat(countryTrim ? [countryTrim] : [])
+            .join(', ');
 
     const photonResult = await this.geocodeViaPhoton(districtFirst);
     if (photonResult) {
@@ -80,9 +82,7 @@ export class QthService {
     }
 
     // 3) Nominatim serbest metin (ilçe önde)
-    const viewboxParam = isTurkey
-      ? `&viewbox=${TURKEY_VIEWBOX}&bounded=0`
-      : '';
+    const viewboxParam = isTurkey ? `&viewbox=${TURKEY_VIEWBOX}&bounded=0` : '';
     const url = `${NOMINATIM_SEARCH_URL}?q=${encodeURIComponent(districtFirst)}&format=json&limit=1${viewboxParam}`;
     try {
       const res = await fetch(url, {
@@ -232,7 +232,7 @@ export class QthService {
       q: query,
       limit: String(limit),
       lang: 'tr',
-      lat: '39.9',   // Turkey center bias
+      lat: '39.9', // Turkey center bias
       lon: '32.85',
     });
     const url = `${PHOTON_SEARCH_URL}?${params.toString()}`;
@@ -263,9 +263,16 @@ export class QthService {
       return (data.features ?? [])
         .filter((f) => f.geometry?.coordinates?.length === 2)
         .map((f) => {
-          const [lng, lat] = f.geometry!.coordinates!;
+          const [lng, lat] = f.geometry.coordinates;
           const p = f.properties ?? {};
-          const parts = [p.name, p.street, p.district, p.city, p.state, p.country].filter(Boolean);
+          const parts = [
+            p.name,
+            p.street,
+            p.district,
+            p.city,
+            p.state,
+            p.country,
+          ].filter(Boolean);
           // Deduplicate adjacent identical parts (e.g. "Erzurum, Erzurum")
           const deduped = parts.filter((v, i) => i === 0 || v !== parts[i - 1]);
           return {
@@ -335,7 +342,10 @@ export class QthService {
   async getReverseGeocode(
     lat: number,
     lng: number,
-  ): Promise<{ address?: Record<string, string>; display_name?: string } | null> {
+  ): Promise<{
+    address?: Record<string, string>;
+    display_name?: string;
+  } | null> {
     const url = `${NOMINATIM_URL}?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
     const res = await fetch(url, {
       headers: {

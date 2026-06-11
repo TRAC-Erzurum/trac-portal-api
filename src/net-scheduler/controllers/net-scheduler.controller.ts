@@ -22,22 +22,16 @@ export class NetSchedulerController {
 
   @Post()
   @Roles(BranchRole.MEMBER)
-  create(
-    @Body() dto: CreateNetSchedulerDto,
-    @Req() req: RequestWithUser,
-  ) {
-    return this.netSchedulerService.create(
-      dto,
-      req.user.email,
-      req.user.id,
-    );
+  create(@Body() dto: CreateNetSchedulerDto, @Req() req: RequestWithUser) {
+    return this.netSchedulerService.create(dto, req.user.email, req.user.id);
   }
 
   @Get()
   @Roles(BranchRole.MEMBER)
   findAll(
     @Query('branchId') branchId: string | undefined,
-    @Query('branchFilter') branchFilter: 'all' | 'my-branches' | 'branch' | undefined,
+    @Query('branchFilter')
+    branchFilter: 'all' | 'my-branches' | 'branch' | undefined,
     @Query('search') search: string | undefined,
     @Query('limit') limitStr: string | undefined,
     @Query('offset') offsetStr: string | undefined,

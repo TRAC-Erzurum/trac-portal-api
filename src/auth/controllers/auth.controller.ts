@@ -16,10 +16,7 @@ import { CaptchaService, CAPTCHA_SERVICE } from '../services/captcha.interface';
 import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalRole } from '../enums/role.enum';
-import {
-  AuthUser,
-  PendingSsoRegistration,
-} from '../types/auth.types';
+import { AuthUser, PendingSsoRegistration } from '../types/auth.types';
 import { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AllowWithoutCallsign } from '../decorators/allow-without-callsign.decorator';
@@ -82,8 +79,10 @@ export class AuthController {
     const payload = req.user;
 
     if ('pendingSso' in payload && payload.pendingSso) {
-      const pending = payload as PendingSsoRegistration;
-      (req as Request & { session: { pendingSso?: unknown } }).session.pendingSso = {
+      const pending = payload;
+      (
+        req as Request & { session: { pendingSso?: unknown } }
+      ).session.pendingSso = {
         email: pending.email,
         fullName: pending.fullName,
         picture: pending.picture,
@@ -91,12 +90,14 @@ export class AuthController {
       };
       // Explicitly save session before redirecting to ensure data persists
       return new Promise<void>((resolve) => {
-        (req as Request & { session?: { save: (cb: (err?: Error) => void) => void } }).session?.save(
-          () => {
-            res.redirect('/register/complete-sso');
-            resolve();
-          },
-        );
+        (
+          req as Request & {
+            session?: { save: (cb: (err?: Error) => void) => void };
+          }
+        ).session?.save(() => {
+          res.redirect('/register/complete-sso');
+          resolve();
+        });
       });
     }
 

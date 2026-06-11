@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class SeedDataErzurumBranchAndUhfRelay1770425152786
-  implements MigrationInterface
-{
+export class SeedDataErzurumBranchAndUhfRelay1770425152786 implements MigrationInterface {
   name = 'SeedDataErzurumBranchAndUhfRelay1770425152786';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddCertificateTemplateIdToNetSchedulers1771432008780
-  implements MigrationInterface
-{
+export class AddCertificateTemplateIdToNetSchedulers1771432008780 implements MigrationInterface {
   name = 'AddCertificateTemplateIdToNetSchedulers1771432008780';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

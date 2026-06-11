@@ -1,9 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 import { legacyCallSignToPlain } from '../shared/utils/call-sign.util';
 
-export class NormalizeCallSignsAndMergeDuplicateOperators1773403943017
-  implements MigrationInterface
-{
+export class NormalizeCallSignsAndMergeDuplicateOperators1773403943017 implements MigrationInterface {
   name = 'NormalizeCallSignsAndMergeDuplicateOperators1773403943017';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -17,7 +15,10 @@ export class NormalizeCallSignsAndMergeDuplicateOperators1773403943017
     )) as { id: string; callSign: string; userId: string | null }[];
 
     const plainByOpId = new Map<string, string>();
-    const groupByPlain = new Map<string, { id: string; userId: string | null }[]>();
+    const groupByPlain = new Map<
+      string,
+      { id: string; userId: string | null }[]
+    >();
 
     for (const op of operators) {
       const plain = legacyCallSignToPlain(op.callSign);
@@ -173,8 +174,6 @@ export class NormalizeCallSignsAndMergeDuplicateOperators1773403943017
   }
 
   public async down(_queryRunner: QueryRunner): Promise<void> {
-    throw new Error(
-      'Cannot reverse call sign normalization - backup required',
-    );
+    throw new Error('Cannot reverse call sign normalization - backup required');
   }
 }

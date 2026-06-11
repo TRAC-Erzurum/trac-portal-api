@@ -11,17 +11,12 @@ import {
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { EquipmentStatusService } from '../services/equipment-status.service';
-import {
-  CreateEquipmentStatusDto,
-  UpdateEquipmentStatusDto,
-} from '../dto';
+import { CreateEquipmentStatusDto, UpdateEquipmentStatusDto } from '../dto';
 
 @Controller('equipment-statuses')
 @Roles(BranchRole.VOLUNTEER)
 export class EquipmentStatusController {
-  constructor(
-    private readonly statusService: EquipmentStatusService,
-  ) {}
+  constructor(private readonly statusService: EquipmentStatusService) {}
 
   @Get()
   findAll() {

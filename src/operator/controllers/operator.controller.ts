@@ -46,10 +46,7 @@ export class OperatorController {
 
   @Get()
   @Roles(BranchRole.VOLUNTEER)
-  getOperators(
-    @Query() query: OperatorQueryDto,
-    @Req() req: RequestWithUser,
-  ) {
+  getOperators(@Query() query: OperatorQueryDto, @Req() req: RequestWithUser) {
     return this.operatorService.findWithStats(query, req.user?.id);
   }
 

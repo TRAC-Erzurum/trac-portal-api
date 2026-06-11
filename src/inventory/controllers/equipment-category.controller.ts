@@ -77,10 +77,7 @@ export class EquipmentCategoryController {
       storage: memoryStorage(),
       fileFilter: (_req, file, cb) => {
         if (!file.originalname.match(/\.(jpg|jpeg|png|webp)$/i)) {
-          return cb(
-            new BadRequestException('error.invalidFileType'),
-            false,
-          );
+          return cb(new BadRequestException('error.invalidFileType'), false);
         }
         cb(null, true);
       },

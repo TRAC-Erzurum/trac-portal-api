@@ -10,7 +10,9 @@ export class ExcelParserService {
     try {
       const workbook = new Workbook();
       const excelBuffer = Buffer.from(buffer as ArrayBufferLike);
-      const excelLoader = workbook.xlsx as { load(buffer: unknown): Promise<Workbook> };
+      const excelLoader = workbook.xlsx as {
+        load(buffer: unknown): Promise<Workbook>;
+      };
       await excelLoader.load(excelBuffer);
 
       const worksheet = workbook.getWorksheet(1);

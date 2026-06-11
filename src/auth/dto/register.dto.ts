@@ -15,8 +15,8 @@ export class RegisterDto {
   email: string;
 
   @IsString()
-  @IsNotEmpty()
-  callSign: string;
+  @IsOptional()
+  callSign?: string;
 
   @IsBoolean()
   @IsNotEmpty()

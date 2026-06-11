@@ -24,9 +24,7 @@ const TABLES_WITH_AUDIT = [
   'net_scheduler_communication_channels',
 ];
 
-export class RemoveThreeUsersAndReassignAudit1773410947556
-  implements MigrationInterface
-{
+export class RemoveThreeUsersAndReassignAudit1773410947556 implements MigrationInterface {
   name = 'RemoveThreeUsersAndReassignAudit1773410947556';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

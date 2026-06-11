@@ -172,10 +172,7 @@ export class EquipmentService {
   // CRUD
   // ---------------------------------------------------------------------------
 
-  async create(
-    dto: CreateEquipmentDto,
-    email: string,
-  ): Promise<Equipment> {
+  async create(dto: CreateEquipmentDto, email: string): Promise<Equipment> {
     await this.categoryService.findOne(dto.categoryId);
     await this.statusService.findOne(dto.statusId);
 
@@ -343,10 +340,7 @@ export class EquipmentService {
     return this.photoRepository.save(photos);
   }
 
-  async deletePhoto(
-    equipmentId: string,
-    photoId: string,
-  ): Promise<void> {
+  async deletePhoto(equipmentId: string, photoId: string): Promise<void> {
     const photo = await this.photoRepository.findOne({
       where: { id: photoId, equipmentId },
     });
@@ -423,10 +417,7 @@ export class EquipmentService {
     return this.relationRepository.save(relation);
   }
 
-  async removeRelation(
-    equipmentId: string,
-    relationId: string,
-  ): Promise<void> {
+  async removeRelation(equipmentId: string, relationId: string): Promise<void> {
     const relation = await this.relationRepository.findOne({
       where: { id: relationId },
     });
@@ -497,7 +488,9 @@ export class EquipmentService {
             throw new BadRequestException('error.invalidMultiSelectValue');
           }
           if (prop.enumValues) {
-            const invalid = val.value.filter((v: string) => !prop.enumValues!.includes(v));
+            const invalid = val.value.filter(
+              (v: string) => !prop.enumValues.includes(v),
+            );
             if (invalid.length > 0) {
               throw new BadRequestException('error.invalidMultiSelectValue');
             }
@@ -550,10 +543,7 @@ export class EquipmentService {
           break;
 
         case PropertyType.DATE:
-          if (
-            typeof val.value !== 'string' ||
-            isNaN(Date.parse(val.value))
-          ) {
+          if (typeof val.value !== 'string' || isNaN(Date.parse(val.value))) {
             throw new BadRequestException('error.invalidDateValue');
           }
           break;
@@ -590,9 +580,10 @@ export class EquipmentService {
     }
 
     if (query.categoryId) {
-      const categoryIds = await this.categoryService.getCategoryAndDescendantIds(
-        query.categoryId,
-      );
+      const categoryIds =
+        await this.categoryService.getCategoryAndDescendantIds(
+          query.categoryId,
+        );
       qb.andWhere('equipment.categoryId IN (:...categoryIds)', {
         categoryIds,
       });

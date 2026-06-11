@@ -40,10 +40,7 @@ export class CertificateTemplateController {
   }
 
   @Get(':id')
-  async findOne(
-    @Param('branchId') branchId: string,
-    @Param('id') id: string,
-  ) {
+  async findOne(@Param('branchId') branchId: string, @Param('id') id: string) {
     return this.certificateTemplateService.findOne(id, branchId);
   }
 

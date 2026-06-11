@@ -2,9 +2,12 @@
  * Normalize GITHUB_REPO_WEB_URL for health + Octokit owner/repo.
  * Accepts https/http, optional www, .git suffix, trailing slash, and paths after repo (e.g. /tree/main).
  */
-export function parseGithubRepoWebUrl(
-  raw: string | undefined,
-): { owner: string; repo: string; githubRepoUrl: string; githubIssuesUrl: string } | null {
+export function parseGithubRepoWebUrl(raw: string | undefined): {
+  owner: string;
+  repo: string;
+  githubRepoUrl: string;
+  githubIssuesUrl: string;
+} | null {
   if (!raw?.trim()) {
     return null;
   }

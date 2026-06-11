@@ -72,12 +72,17 @@ export function extractPlainCallSign(value: string): string {
   const trimmed = (value ?? '').trim();
   if (trimmed.length === 0) return '';
 
-  const parts = trimmed.split('/').map((p) => normalizeSegment((p ?? '').trim())).filter(Boolean);
+  const parts = trimmed
+    .split('/')
+    .map((p) => normalizeSegment((p ?? '').trim()))
+    .filter(Boolean);
   if (parts.length === 0) return '';
 
   if (parts.length === 1) return parts[0] ?? '';
 
-  const withDigitAndLetter = parts.filter((s) => /[A-Z]/.test(s) && /[0-9]/.test(s));
+  const withDigitAndLetter = parts.filter(
+    (s) => /[A-Z]/.test(s) && /[0-9]/.test(s),
+  );
   if (withDigitAndLetter.length > 0) {
     return withDigitAndLetter[withDigitAndLetter.length - 1] ?? '';
   }
@@ -104,9 +109,6 @@ export function legacyCallSignToPlain(value: string): string {
   const trimmed = (value ?? '').trim();
   if (trimmed.length === 0) return '';
   const noSpaces = trimmed.replace(/\s+/g, '');
-  const withSlash = noSpaces
-    .replace(/-/g, '/')
-    .replace(/\./g, '/')
-    .trim();
+  const withSlash = noSpaces.replace(/-/g, '/').replace(/\./g, '/').trim();
   return extractPlainCallSign(withSlash) || normalizeSegment(noSpaces);
 }

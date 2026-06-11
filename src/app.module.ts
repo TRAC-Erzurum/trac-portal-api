@@ -27,6 +27,7 @@ import { NetSchedulerModule } from './net-scheduler/net-scheduler.module';
 import { CertificateTemplateModule } from './certificate-template/certificate-template.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { FeedbackModule } from './feedback/feedback.module';
+import { DisasterModule } from './disaster/disaster.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { FeedbackModule } from './feedback/feedback.module';
     InventoryModule,
     StorageModule,
     FeedbackModule,
+    DisasterModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

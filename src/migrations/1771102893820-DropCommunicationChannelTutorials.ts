@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class DropCommunicationChannelTutorials1771102893820
-  implements MigrationInterface
-{
+export class DropCommunicationChannelTutorials1771102893820 implements MigrationInterface {
   name = 'DropCommunicationChannelTutorials1771102893820';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

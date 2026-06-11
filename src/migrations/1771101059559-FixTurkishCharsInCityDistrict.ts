@@ -11,10 +11,7 @@ function toTitleCase(str: string): string {
     .toLocaleLowerCase('tr-TR')
     .split(' ')
     .filter((word) => word.length > 0)
-    .map(
-      (word) =>
-        word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1),
-    )
+    .map((word) => word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1))
     .join(' ');
 }
 
@@ -22,9 +19,7 @@ function toTitleCase(str: string): string {
  * Builds wrong -> correct mapping for names that were corrupted by
  * Lodash startCase (deburr strips Turkish chars: ö→o, ş→s, ğ→g, etc.)
  */
-function buildCorrectionMap(
-  names: string[],
-): Record<string, string> {
+function buildCorrectionMap(names: string[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const name of names) {
     if (!name || typeof name !== 'string') continue;
@@ -37,9 +32,7 @@ function buildCorrectionMap(
   return map;
 }
 
-export class FixTurkishCharsInCityDistrict1771101059559
-  implements MigrationInterface
-{
+export class FixTurkishCharsInCityDistrict1771101059559 implements MigrationInterface {
   name = 'FixTurkishCharsInCityDistrict1771101059559';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -50,9 +43,11 @@ export class FixTurkishCharsInCityDistrict1771101059559
       'repository',
       'cities.json',
     );
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const cities: Array<{ name: string; districts: Array<{ name: string }> }> =
-      require(citiesPath);
+
+    const cities: Array<{
+      name: string;
+      districts: Array<{ name: string }>;
+    }> = require(citiesPath);
 
     const cityNames = cities.map((c) => c.name);
     const districtNames = cities.flatMap((c) =>
@@ -80,11 +75,12 @@ export class FixTurkishCharsInCityDistrict1771101059559
       if (entries.length === 0) return;
 
       const cases = entries
-        .map(([wrong, correct]) => `WHEN '${escape(wrong)}' THEN '${escape(correct)}'`)
+        .map(
+          ([wrong, correct]) =>
+            `WHEN '${escape(wrong)}' THEN '${escape(correct)}'`,
+        )
         .join(' ');
-      const inList = entries
-        .map(([wrong]) => `'${escape(wrong)}'`)
-        .join(', ');
+      const inList = entries.map(([wrong]) => `'${escape(wrong)}'`).join(', ');
       await queryRunner.query(`
         UPDATE "${table}"
         SET "${column}" = CASE "${column}" ${cases} END

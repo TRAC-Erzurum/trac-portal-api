@@ -30,9 +30,10 @@ export class PortalOrBranchLeaderGuard implements CanActivate {
       return true;
     }
 
-    const ok = await this.membershipService.hasApprovedBranchLeadershipInAnyBranch(
-      String(user.id),
-    );
+    const ok =
+      await this.membershipService.hasApprovedBranchLeadershipInAnyBranch(
+        String(user.id),
+      );
     if (!ok) {
       throw new ForbiddenException('error.noPermission');
     }

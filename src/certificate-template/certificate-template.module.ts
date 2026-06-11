@@ -7,10 +7,7 @@ import { BranchModule } from '../branch/branch.module';
 import { Net } from '../net/entities/net.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([CertificateTemplate, Net]),
-    BranchModule,
-  ],
+  imports: [TypeOrmModule.forFeature([CertificateTemplate, Net]), BranchModule],
   controllers: [CertificateTemplateController],
   providers: [CertificateTemplateService],
   exports: [CertificateTemplateService],

@@ -8,10 +8,18 @@ export enum ActivityType {
   MEMBERSHIP_REJECTED = 'membership.rejected',
   MEMBERSHIP_REMOVED = 'membership.removed',
   MEMBERSHIP_ROLE_UPDATED = 'membership.role_updated',
+  DISASTER_CREATED = 'disaster.created',
+  DISASTER_ARCHIVED = 'disaster.archived',
+  OBSERVATION_CREATED = 'observation.created',
+  OBSERVATION_UPDATED = 'observation.updated',
+  OBSERVATION_SUPPORTED = 'observation.supported',
+  OBSERVATION_CONTRADICTED = 'observation.contradicted',
 }
 
 export enum EntityType {
   NET = 'net',
   ATTENDEE = 'attendee',
   MEMBERSHIP = 'membership',
+  DISASTER = 'disaster',
+  OBSERVATION = 'observation',
 }

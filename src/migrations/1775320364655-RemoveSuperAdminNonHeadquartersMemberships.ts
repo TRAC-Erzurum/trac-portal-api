@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RemoveSuperAdminNonHeadquartersMemberships1775320364655
-  implements MigrationInterface
-{
+export class RemoveSuperAdminNonHeadquartersMemberships1775320364655 implements MigrationInterface {
   name = 'RemoveSuperAdminNonHeadquartersMemberships1775320364655';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

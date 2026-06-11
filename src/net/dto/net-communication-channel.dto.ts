@@ -1,4 +1,11 @@
-import { IsUUID, IsBoolean, IsString, IsOptional, ValidateIf, IsNotEmpty } from 'class-validator';
+import {
+  IsUUID,
+  IsBoolean,
+  IsString,
+  IsOptional,
+  ValidateIf,
+  IsNotEmpty,
+} from 'class-validator';
 
 export class NetCommunicationChannelDto {
   @IsUUID()

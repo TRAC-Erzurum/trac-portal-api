@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class ReportShareTokensNetIdForeignKey1775052052239
-  implements MigrationInterface
-{
+export class ReportShareTokensNetIdForeignKey1775052052239 implements MigrationInterface {
   name = 'ReportShareTokensNetIdForeignKey1775052052239';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

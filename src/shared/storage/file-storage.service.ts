@@ -31,7 +31,9 @@ export class FileStorageService {
   }
 
   async getWithContentType(logicalPath: string): Promise<GetResult | null> {
-    const isCategoryImage = logicalPath.startsWith('uploads/equipment-categories/');
+    const isCategoryImage = logicalPath.startsWith(
+      'uploads/equipment-categories/',
+    );
     if (isCategoryImage) {
       const local = this.localPath(logicalPath);
       try {

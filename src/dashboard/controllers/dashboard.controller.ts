@@ -63,7 +63,10 @@ export class DashboardController {
     @CurrentUser() user: User,
     @Query('limit', new DefaultValuePipe(3), ParseIntPipe) limit: number,
   ): Promise<ActiveNet[]> {
-    return this.dashboardService.getRecentCompletedNets(Math.min(limit, 10), user.id);
+    return this.dashboardService.getRecentCompletedNets(
+      Math.min(limit, 10),
+      user.id,
+    );
   }
 
   @Get('nets/cancelled')
@@ -71,7 +74,10 @@ export class DashboardController {
     @CurrentUser() user: User,
     @Query('limit', new DefaultValuePipe(3), ParseIntPipe) limit: number,
   ): Promise<PendingNet[]> {
-    return this.dashboardService.getRecentCancelledNets(Math.min(limit, 10), user.id);
+    return this.dashboardService.getRecentCancelledNets(
+      Math.min(limit, 10),
+      user.id,
+    );
   }
 
   @Get('nets/personal')
@@ -80,7 +86,11 @@ export class DashboardController {
     @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
   ): Promise<PersonalNetStats | PersonalNetStatsBranchAware> {
-    return this.dashboardService.getPersonalNetStats(user.id, branchFilter ?? 'all', branchId);
+    return this.dashboardService.getPersonalNetStats(
+      user.id,
+      branchFilter ?? 'all',
+      branchId,
+    );
   }
 
   @Get('community')
@@ -93,7 +103,12 @@ export class DashboardController {
   ): Promise<CommunityStats | CommunityStatsBranchAware> {
     const valid: ParticipationPeriod[] = ['all', '7d', '30d'];
     const p = period && valid.includes(period) ? period : 'all';
-    return this.dashboardService.getCommunityStats(user?.id, branchFilter ?? 'all', branchId, p);
+    return this.dashboardService.getCommunityStats(
+      user?.id,
+      branchFilter ?? 'all',
+      branchId,
+      p,
+    );
   }
 
   @Get('activity')
@@ -136,7 +151,11 @@ export class DashboardController {
     @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
   ): Promise<TopStreakEntry[]> {
-    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(
+      user?.id,
+      branchFilter ?? 'all',
+      branchId,
+    );
     if (branchIds && branchIds.length === 0) return [];
     return this.dashboardService.getTopStreak(branchIds);
   }
@@ -151,7 +170,11 @@ export class DashboardController {
   ): Promise<ParticipationStatsResponse> {
     const valid: ParticipationPeriod[] = ['all', '7d', '30d'];
     const p = valid.includes(period) ? period : 'all';
-    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(
+      user?.id,
+      branchFilter ?? 'all',
+      branchId,
+    );
     return this.dashboardService.getParticipation(p, branchIds);
   }
 
@@ -161,7 +184,11 @@ export class DashboardController {
     @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
   ): Promise<PersonalTrendResponse> {
-    return this.dashboardService.getPersonalTrend(user.id, branchFilter ?? 'all', branchId);
+    return this.dashboardService.getPersonalTrend(
+      user.id,
+      branchFilter ?? 'all',
+      branchId,
+    );
   }
 
   @Get('stats/busiest-time')
@@ -171,7 +198,11 @@ export class DashboardController {
     @Query('branchFilter') branchFilter?: StatsScope,
     @Query('branchId') branchId?: string,
   ): Promise<BusiestTimeResponse> {
-    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(
+      user?.id,
+      branchFilter ?? 'all',
+      branchId,
+    );
     return this.dashboardService.getBusiestTime(branchIds);
   }
 
@@ -188,7 +219,11 @@ export class DashboardController {
     const m = valid.includes(mode as GeographyCountMode)
       ? (mode as GeographyCountMode)
       : 'unique';
-    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(
+      user?.id,
+      branchFilter ?? 'all',
+      branchId,
+    );
     return this.dashboardService.getGeography(m, branchIds);
   }
 
@@ -200,8 +235,15 @@ export class DashboardController {
     @Query('branchId') branchId?: string,
     @Query('months', new DefaultValuePipe(12), ParseIntPipe) months?: number,
   ): Promise<MonthlyTrendEntry[]> {
-    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
-    return this.dashboardService.getMonthlyTrend(Math.min(Math.max(months, 1), 24), branchIds);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(
+      user?.id,
+      branchFilter ?? 'all',
+      branchId,
+    );
+    return this.dashboardService.getMonthlyTrend(
+      Math.min(Math.max(months, 1), 24),
+      branchIds,
+    );
   }
 
   @Get('stats/nets-attendees-trend')
@@ -212,8 +254,15 @@ export class DashboardController {
     @Query('branchId') branchId?: string,
     @Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit?: number,
   ): Promise<NetsAttendeesTrendEntry[]> {
-    const branchIds = await this.dashboardService.resolveBranchIdsForScope(user?.id, branchFilter ?? 'all', branchId);
-    return this.dashboardService.getNetsAttendeesTrend(Math.min(Math.max(limit, 1), 50), branchIds);
+    const branchIds = await this.dashboardService.resolveBranchIdsForScope(
+      user?.id,
+      branchFilter ?? 'all',
+      branchId,
+    );
+    return this.dashboardService.getNetsAttendeesTrend(
+      Math.min(Math.max(limit, 1), 50),
+      branchIds,
+    );
   }
 
   @Get('net/:netId/compare-previous')

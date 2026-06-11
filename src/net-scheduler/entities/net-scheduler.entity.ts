@@ -1,10 +1,4 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  OneToMany,
-} from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { Branch } from '../../branch/entities/branch.entity';
 import { Operator } from '../../operator/entities/operator.entity';
@@ -59,10 +53,8 @@ export class NetScheduler extends BaseEntity {
   @JoinColumn({ name: 'branchCallSignId' })
   branchCallSign: BranchCallSign | null;
 
-  @OneToMany(
-    () => NetSchedulerCommunicationChannel,
-    (ch) => ch.scheduler,
-    { cascade: true },
-  )
+  @OneToMany(() => NetSchedulerCommunicationChannel, (ch) => ch.scheduler, {
+    cascade: true,
+  })
   communicationChannels: NetSchedulerCommunicationChannel[];
 }

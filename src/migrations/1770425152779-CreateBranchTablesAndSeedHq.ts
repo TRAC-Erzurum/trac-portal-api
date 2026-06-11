@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateBranchTablesAndSeedHq1770425152779
-  implements MigrationInterface
-{
+export class CreateBranchTablesAndSeedHq1770425152779 implements MigrationInterface {
   name = 'CreateBranchTablesAndSeedHq1770425152779';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -71,11 +69,15 @@ export class CreateBranchTablesAndSeedHq1770425152779
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DELETE FROM branches WHERE "isHeadquarters" = true`);
+    await queryRunner.query(
+      `DELETE FROM branches WHERE "isHeadquarters" = true`,
+    );
     await queryRunner.query(
       `ALTER TABLE "branch_call_signs" DROP CONSTRAINT IF EXISTS "FK_branch_call_signs_branchId"`,
     );
-    await queryRunner.query(`DROP INDEX IF EXISTS "UQ_branch_call_signs_default"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "UQ_branch_call_signs_default"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "branch_call_signs"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "branches"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "public"."branch_type_enum"`);

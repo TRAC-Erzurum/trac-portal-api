@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddRelevanceSortingIndexes1770661640123
-  implements MigrationInterface
-{
+export class AddRelevanceSortingIndexes1770661640123 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Attendee lookups for net co-attendance scoring
     await queryRunner.query(
@@ -29,7 +27,9 @@ export class AddRelevanceSortingIndexes1770661640123
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_operators_callsign_lower"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_operators_callsign_lower"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_operators_user_id"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_nets_ended_at"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_attendees_net_id"`);

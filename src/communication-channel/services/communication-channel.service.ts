@@ -21,7 +21,7 @@ export class CommunicationChannelService {
     private readonly communicationChannelRepository: Repository<BranchCommunicationChannel>,
     @InjectRepository(RepeaterTalkgroup)
     private readonly talkgroupRepository: Repository<RepeaterTalkgroup>,
-  ) { }
+  ) {}
 
   async create(
     dto: CreateCommunicationChannelDto,
@@ -75,9 +75,8 @@ export class CommunicationChannelService {
     communicationChannel.updatedBy = [];
 
     try {
-      const saved = await this.communicationChannelRepository.save(
-        communicationChannel,
-      );
+      const saved =
+        await this.communicationChannelRepository.save(communicationChannel);
 
       if (dto.talkgroups?.length) {
         const talkgroups = dto.talkgroups.map((tg) => {
@@ -153,7 +152,9 @@ export class CommunicationChannelService {
     }
 
     if (options.hasLocation) {
-      qb.andWhere('channel.latitude IS NOT NULL AND channel.longitude IS NOT NULL');
+      qb.andWhere(
+        'channel.latitude IS NOT NULL AND channel.longitude IS NOT NULL',
+      );
     }
 
     const total = await qb.getCount();
@@ -170,7 +171,10 @@ export class CommunicationChannelService {
       data = entities.map((channel, i) => {
         const row = raw[i];
         if (row?.branch_id != null) {
-          type ChannelWithMinimalBranch = Omit<BranchCommunicationChannel, 'branch'> & {
+          type ChannelWithMinimalBranch = Omit<
+            BranchCommunicationChannel,
+            'branch'
+          > & {
             branch: { id: string; name: string; city?: string };
           };
           (channel as ChannelWithMinimalBranch).branch = {
@@ -228,7 +232,10 @@ export class CommunicationChannelService {
       }
       const row = raw[0];
       if (row?.branch_id != null) {
-        type ChannelWithMinimalBranch = Omit<BranchCommunicationChannel, 'branch'> & {
+        type ChannelWithMinimalBranch = Omit<
+          BranchCommunicationChannel,
+          'branch'
+        > & {
           branch: { id: string; name: string; city?: string };
         };
         (channel as ChannelWithMinimalBranch).branch = {
@@ -332,9 +339,8 @@ export class CommunicationChannelService {
     ];
 
     try {
-      const saved = await this.communicationChannelRepository.save(
-        communicationChannel,
-      );
+      const saved =
+        await this.communicationChannelRepository.save(communicationChannel);
 
       if (dto.talkgroups !== undefined) {
         // Remove existing talkgroups and replace with new ones
@@ -445,5 +451,4 @@ export class CommunicationChannelService {
       throw new InternalServerErrorException('error.internal');
     }
   }
-
 }
