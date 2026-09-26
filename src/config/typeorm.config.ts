@@ -14,4 +14,5 @@ export default new DataSource({
   entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
   migrations: [join(__dirname, '..', 'migrations', '*.{ts,js}')],
   ssl: process.env.DB_SSL === 'true',
+  extra: { options: '-c timezone=UTC' },
 });
