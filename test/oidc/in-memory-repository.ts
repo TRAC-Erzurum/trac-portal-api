@@ -1,0 +1,87 @@
+import { randomUUID } from 'crypto';
+import { FindOperator } from 'typeorm';
+
+type Where<T> = Partial<Record<keyof T, unknown>>;
+
+function matches<T>(row: T, where: Where<T> | undefined): boolean {
+  if (!where) return true;
+  return Object.entries(where).every(([key, expected]) => {
+    const actual = (row as Record<string, unknown>)[key];
+    if (expected instanceof FindOperator) {
+      if (expected.type === 'isNull')
+        return actual === null || actual === undefined;
+      throw new Error(`Unsupported operator ${expected.type}`);
+    }
+    return actual === expected;
+  });
+}
+
+/**
+ * Just enough of TypeORM's Repository for the OIDC services, backed by an
+ * array. Rows are copied on the way in and out, as a database would.
+ */
+export class InMemoryRepository<T extends { id: string }> {
+  rows: T[] = [];
+  private tick = 0;
+
+  create(data: Partial<T>): T {
+    return { ...data } as T;
+  }
+
+  async save(entity: T): Promise<T> {
+    const now = new Date(Date.UTC(2026, 0, 1) + this.tick++);
+    const row = { ...entity } as T & { createdAt?: Date; updatedAt?: Date };
+    if (!row.id) row.id = randomUUID();
+    row.createdAt ??= now;
+    row.updatedAt = now;
+    const index = this.rows.findIndex((r) => r.id === row.id);
+    if (index >= 0) this.rows[index] = row;
+    else this.rows.push(row);
+    return { ...row };
+  }
+
+  async findOne(options: { where: Where<T> }): Promise<T | null> {
+    const row = this.rows.find((r) => matches(r, options.where));
+    return row ? { ...row } : null;
+  }
+
+  async find(
+    options: {
+      where?: Where<T>;
+      order?: Partial<Record<keyof T, 'ASC' | 'DESC'>>;
+    } = {},
+  ): Promise<T[]> {
+    const rows = this.rows
+      .filter((r) => matches(r, options.where))
+      .map((r) => ({ ...r }));
+    const [orderKey, direction] = Object.entries(options.order ?? {})[0] ?? [];
+    if (orderKey) {
+      rows.sort((a, b) => {
+        const av = (a as any)[orderKey];
+        const bv = (b as any)[orderKey];
+        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+        return direction === 'DESC' ? -cmp : cmp;
+      });
+    }
+    return rows;
+  }
+
+  async update(
+    where: Where<T>,
+    patch: Partial<T>,
+  ): Promise<{ affected: number }> {
+    let affected = 0;
+    this.rows = this.rows.map((r) => {
+      if (!matches(r, where)) return r;
+      affected++;
+      return { ...r, ...patch };
+    });
+    return { affected };
+  }
+
+  async delete(where: Where<T>): Promise<{ affected: number }> {
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => !matches(r, where));
+    return { affected: before - this.rows.length };
+  }
+}
