@@ -28,6 +28,7 @@ import { CertificateTemplateModule } from './certificate-template/certificate-te
 import { InventoryModule } from './inventory/inventory.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { DisasterModule } from './disaster/disaster.module';
+import { OidcModule } from './oidc/oidc.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { DisasterModule } from './disaster/disaster.module';
     StorageModule,
     FeedbackModule,
     DisasterModule,
+    OidcModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
