@@ -126,7 +126,7 @@ export async function createOidcTestApp(): Promise<OidcTestApp> {
   const repos = {
     clients: new InMemoryRepository<OidcClient>(),
     keys: new InMemoryRepository<OidcSigningKey>(),
-    consents: new InMemoryRepository<OidcConsent>(),
+    consents: new InMemoryRepository<OidcConsent>(['userId', 'clientId']),
     codes: new InMemoryRepository<OidcAuthorizationCode>(),
     accessTokens: new InMemoryRepository<OidcAccessToken>(),
   };

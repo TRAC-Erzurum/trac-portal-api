@@ -575,6 +575,68 @@ describe('AC7b: concurrent redemption', () => {
   });
 });
 
+describe('concurrent consent approval', () => {
+  it('redirects both of two simultaneous approvals with their own code and keeps one consent', async () => {
+    const client = await registerClient();
+    const user = operator();
+
+    // Force the race: both approvals find no consent before either inserts.
+    const consents = t.repos.consents;
+    const read = consents.findOne.bind(consents);
+    let arrived = 0;
+    let release: () => void = () => undefined;
+    const bothRead = new Promise<void>((resolve) => (release = resolve));
+    consents.findOne = async (options) => {
+      const row = await read(options);
+      if (++arrived === 2) release();
+      await bothRead;
+      return row;
+    };
+
+    const approve = (scope: string, state: string) =>
+      http
+        .post('/api/oidc/consent/approve')
+        .set('Cookie', t.sessionCookie(user))
+        .send(authParams(client, { scope, state }));
+    const results = await Promise.all([
+      approve('openid email', 'tab-1'),
+      approve('openid profile', 'tab-2'),
+    ]);
+
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    const callbacks = results.map((r) => new URL(r.body.redirectTo));
+    expect(callbacks.map((c) => c.origin + c.pathname)).toEqual([
+      REDIRECT_URI,
+      REDIRECT_URI,
+    ]);
+    expect(callbacks.map((c) => c.searchParams.get('state'))).toEqual([
+      'tab-1',
+      'tab-2',
+    ]);
+    const [first, second] = callbacks.map((c) => c.searchParams.get('code'));
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(first).not.toBe(second);
+    await redeem(client, first)
+      .expect(200)
+      .expect((r) => expect(r.body.scope).toBe('openid email'));
+    await redeem(client, second)
+      .expect(200)
+      .expect((r) => expect(r.body.scope).toBe('openid profile'));
+
+    expect(consents.rows).toHaveLength(1);
+    expect(consents.rows[0]).toMatchObject({
+      userId: user.id,
+      clientId: client.id,
+    });
+    expect(consents.rows[0].scope.split(' ').sort()).toEqual([
+      'email',
+      'openid',
+      'profile',
+    ]);
+  });
+});
+
 describe('AC8: key rotation keeps old ID tokens verifiable', () => {
   it('signs new tokens with the new key while the old key stays in JWKS for 7 days', async () => {
     const client = await registerClient();
