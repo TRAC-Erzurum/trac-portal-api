@@ -296,31 +296,46 @@ export class OidcService {
       return { redirectTo: result.redirectTo };
     }
     const { request } = result;
-    const existing = await this.consentRepository.findOne({
-      where: { userId, clientId: request.client.id },
-    });
-    const scope = [
+    await this.rememberConsent(userId, request);
+    return { redirectTo: await this.issueCode(request, userId) };
+  }
+
+  /**
+   * Upsert on (userId, clientId), merging scopes. Two approvals at the same
+   * moment can both find no row; the insert that loses on the unique key
+   * falls back to updating the row the other one created.
+   */
+  private async rememberConsent(
+    userId: string,
+    request: ValidatedAuthorizationRequest,
+  ): Promise<void> {
+    const where = { userId, clientId: request.client.id };
+    let existing = await this.consentRepository.findOne({ where });
+    if (!existing) {
+      try {
+        await this.consentRepository.save(
+          this.consentRepository.create({
+            ...where,
+            scope: request.scopes.join(' '),
+            createdBy: userId,
+            updatedBy: [],
+          }),
+        );
+        return;
+      } catch (error) {
+        if ((error as { code?: string }).code !== '23505') throw error;
+      }
+      existing = await this.consentRepository.findOne({ where });
+      if (!existing) throw new InternalServerErrorException('error.internal');
+    }
+    existing.scope = [
       ...new Set([
-        ...(existing?.scope.split(' ').filter(Boolean) ?? []),
+        ...existing.scope.split(' ').filter(Boolean),
         ...request.scopes,
       ]),
     ].join(' ');
-    if (existing) {
-      existing.scope = scope;
-      existing.updatedBy = [...(existing.updatedBy ?? []), userId];
-      await this.consentRepository.save(existing);
-    } else {
-      await this.consentRepository.save(
-        this.consentRepository.create({
-          userId,
-          clientId: request.client.id,
-          scope,
-          createdBy: userId,
-          updatedBy: [],
-        }),
-      );
-    }
-    return { redirectTo: await this.issueCode(request, userId) };
+    existing.updatedBy = [...(existing.updatedBy ?? []), userId];
+    await this.consentRepository.save(existing);
   }
 
   async deny(params: AuthorizationRequestDto): Promise<{ redirectTo: string }> {

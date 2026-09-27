@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { FindOperator } from 'typeorm';
+import { FindOperator, QueryFailedError } from 'typeorm';
 
 type Where<T> = Partial<Record<keyof T, unknown>>;
 
@@ -18,11 +18,14 @@ function matches<T>(row: T, where: Where<T> | undefined): boolean {
 
 /**
  * Just enough of TypeORM's Repository for the OIDC services, backed by an
- * array. Rows are copied on the way in and out, as a database would.
+ * array. Rows are copied on the way in and out, as a database would, and a
+ * unique key is enforced the way Postgres does (QueryFailedError, code 23505).
  */
 export class InMemoryRepository<T extends { id: string }> {
   rows: T[] = [];
   private tick = 0;
+
+  constructor(private readonly uniqueKey: (keyof T)[] = []) {}
 
   create(data: Partial<T>): T {
     return { ...data } as T;
@@ -32,6 +35,18 @@ export class InMemoryRepository<T extends { id: string }> {
     const now = new Date(Date.UTC(2026, 0, 1) + this.tick++);
     const row = { ...entity } as T & { createdAt?: Date; updatedAt?: Date };
     if (!row.id) row.id = randomUUID();
+    const clash =
+      this.uniqueKey.length > 0 &&
+      this.rows.some(
+        (r) => r.id !== row.id && this.uniqueKey.every((k) => r[k] === row[k]),
+      );
+    if (clash) {
+      throw new QueryFailedError('INSERT', [], {
+        name: 'error',
+        message: 'duplicate key value violates unique constraint',
+        code: '23505',
+      } as Error);
+    }
     row.createdAt ??= now;
     row.updatedAt = now;
     const index = this.rows.findIndex((r) => r.id === row.id);
