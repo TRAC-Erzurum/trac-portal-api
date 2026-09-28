@@ -15,6 +15,7 @@ import {
   ActivityType,
   EntityType,
 } from '../../activity/enums/activity-type.enum';
+import { PublicationService } from '../../publishing/services/publication.service';
 import { Observation } from '../entities/observation.entity';
 import { ObservationPhoto } from '../entities/observation-photo.entity';
 import { CreateObservationDto } from '../dto/create-observation.dto';
@@ -35,6 +36,7 @@ export class ObservationService {
     private readonly disasterService: DisasterService,
     private readonly scoringService: ObservationScoringService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly publicationService: PublicationService,
   ) {}
 
   private readonly MAX_PHOTOS = 5;
@@ -254,6 +256,7 @@ export class ObservationService {
     });
 
     const saved = await this.observationRepository.save(observation);
+    await this.publicationService.enqueueObservation(saved);
     await this.scoringService.recompute(saved.id);
     const refreshed = await this.observationRepository.findOne({
       where: { id: saved.id },

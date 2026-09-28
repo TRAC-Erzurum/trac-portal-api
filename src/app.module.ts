@@ -29,6 +29,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { DisasterModule } from './disaster/disaster.module';
 import { OidcModule } from './oidc/oidc.module';
+import { PublishingModule } from './publishing/publishing.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { OidcModule } from './oidc/oidc.module';
     FeedbackModule,
     DisasterModule,
     OidcModule,
+    PublishingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
