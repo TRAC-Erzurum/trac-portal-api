@@ -54,6 +54,19 @@ export class UserService {
     });
   }
 
+  /** Exact match first; otherwise the address in any letter case. */
+  async findByEmailIgnoringCase(email: string): Promise<User | null> {
+    const exact = await this.findByEmail(email);
+    if (exact) return exact;
+    return this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.operator', 'operator')
+      .where('LOWER(user.email) = :identifier', {
+        identifier: email.toLowerCase(),
+      })
+      .getOne();
+  }
+
   async create(user: DeepPartial<User>, createdBy: string): Promise<User> {
     const userCount = await this.userRepository.count();
 

@@ -2,7 +2,8 @@ import { type EffectiveRole, GlobalRole } from '../enums/role.enum';
 
 export interface GoogleProfile {
   id: string;
-  emails: Array<{ value: string }>;
+  /** `verified` is Google's email_verified for the address. */
+  emails: Array<{ value: string; verified?: boolean }>;
   name: {
     givenName: string;
     familyName: string;

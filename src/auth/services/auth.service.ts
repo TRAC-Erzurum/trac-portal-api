@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -83,10 +84,15 @@ export class AuthService {
   ): Promise<AuthUser | PendingSsoRegistration | PendingGoogleLink> {
     const email = profile.emails[0].value;
 
-    const existingUser = await this.userService.findByEmail(email);
+    // Case-insensitive, like password login: an account registered as
+    // Owner@Example.org must not escape the confirmation below.
+    const existingUser = await this.userService.findByEmailIgnoringCase(email);
     if (existingUser) {
       if (!existingUser.providerId) {
         if (existingUser.password) {
+          if (profile.emails[0].verified !== true) {
+            throw new ForbiddenException('error.googleEmailNotVerified');
+          }
           // Someone may have registered this address without owning it and
           // still know the password: nothing of the account until confirmed.
           return {
@@ -213,17 +219,14 @@ export class AuthService {
     return this.generateToken(user);
   }
 
-  generateToken(
-    user: AuthUser,
-    issuedAt: number = toSeconds(this.clock()),
-  ): { access_token: string } {
+  generateToken(user: AuthUser): { access_token: string } {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       provider: user.provider,
       role: user.role,
       callSign: user.callSign,
-      iat: issuedAt,
+      iat: toSeconds(this.clock()),
     };
 
     return { access_token: this.jwtService.sign(payload) };
@@ -273,14 +276,11 @@ export class AuthService {
     newPassword: string,
   ): Promise<{ access_token: string; user: AuthUser }> {
     const { user, providerId } = await this.resolveGoogleLink(token);
-    // Whole seconds, because JWT `iat` is whole seconds: tokens issued up to
-    // and including this second are refused, the new session is not.
-    const validAfterSeconds = toSeconds(this.clock()) + 1;
     const replaced = await this.userService.replacePasswordAndLinkGoogle(
       user.id,
       providerId,
       newPassword,
-      new Date(validAfterSeconds * 1000),
+      this.clock(),
     );
     if (!replaced) {
       throw new NotFoundException('error.notFound');
@@ -302,7 +302,7 @@ export class AuthService {
     );
     const authUser = await this.toAuthUser(user.id);
     return {
-      ...this.generateToken(authUser, validAfterSeconds),
+      ...this.generateToken(authUser),
       user: authUser,
     };
   }

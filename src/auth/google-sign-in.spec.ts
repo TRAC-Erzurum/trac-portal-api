@@ -26,11 +26,11 @@ afterEach(async () => {
   await t.app.close();
 });
 
-function googleProfile(email = OWNER_EMAIL, id = GOOGLE_ID) {
+function googleProfile(email = OWNER_EMAIL, id = GOOGLE_ID, verified = true) {
   return Buffer.from(
     JSON.stringify({
       id,
-      emails: [{ value: email }],
+      emails: [{ value: email, verified }],
       name: { givenName: 'Ayşe', familyName: 'Yılmaz' },
       photos: [{ value: 'https://lh3.example/photo.jpg' }],
     }),
@@ -38,10 +38,10 @@ function googleProfile(email = OWNER_EMAIL, id = GOOGLE_ID) {
 }
 
 /** Someone registers a local account with an address they do not own. */
-async function preRegisteredLocalAccount(): Promise<User> {
+async function preRegisteredLocalAccount(email = OWNER_EMAIL): Promise<User> {
   return t.users.create(
     {
-      email: OWNER_EMAIL,
+      email,
       password: SQUATTER_PASSWORD,
       salt: crypto.randomBytes(16).toString('hex'),
       provider: 'local',
@@ -147,6 +147,37 @@ describe('nothing about a pre-registered account is reachable through Google bef
     await passwordLogin(SQUATTER_PASSWORD).expect(201);
   });
 
+  it('stops at the confirmation when the address was registered in other letter case', async () => {
+    const account = await preRegisteredLocalAccount('Owner@Example.org');
+    const squatterSession = t.sessionCookie(account, t.clock.now);
+    advance(5000);
+
+    const res = await googleSignIn().expect(302);
+
+    expect(res.headers.location).toBe(LINK_PAGE);
+    expect(cookieNamed(res, 'auth_token')).toBeUndefined();
+    const link = cookieNamed(res, 'google_link');
+    await http
+      .post('/api/auth/google-link/set-password')
+      .set('Cookie', link)
+      .send({ newPassword: OWNER_NEW_PASSWORD })
+      .expect(201);
+    await check(squatterSession).expect(401);
+    expect((await storedUser(account.id)).providerId).toBe(GOOGLE_ID);
+  });
+
+  it('refuses a Google sign-in whose address Google has not verified', async () => {
+    const account = await preRegisteredLocalAccount();
+
+    const res = await googleSignIn(
+      googleProfile(OWNER_EMAIL, GOOGLE_ID, false),
+    ).expect(403);
+
+    expect(cookieNamed(res, 'google_link')).toBeUndefined();
+    expect(cookieNamed(res, 'auth_token')).toBeUndefined();
+    expect((await storedUser(account.id)).providerId).toBeFalsy();
+  });
+
   it('expires the confirmation after 10 minutes', async () => {
     await preRegisteredLocalAccount();
     const link = await startConfirmation();
@@ -240,6 +271,20 @@ describe('the Google owner sets a new password', () => {
       await sessionFromPasswordLogin(OWNER_NEW_PASSWORD);
     await check(newPasswordSession).expect(200);
     expect((await storedUser(account.id)).providerId).toBe(GOOGLE_ID);
+  });
+
+  it('keeps sessions issued in the same second as the new password', async () => {
+    await preRegisteredLocalAccount();
+    const link = await startConfirmation();
+    await http
+      .post('/api/auth/google-link/set-password')
+      .set('Cookie', link)
+      .send({ newPassword: OWNER_NEW_PASSWORD })
+      .expect(201);
+
+    const google = await googleSignIn().expect(302);
+    await check(cookieNamed(google, 'auth_token')).expect(200);
+    await check(await sessionFromPasswordLogin(OWNER_NEW_PASSWORD)).expect(200);
   });
 
   it('records in the activity log that the password was replaced through a verified Google sign-in', async () => {
