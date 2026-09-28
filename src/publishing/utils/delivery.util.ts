@@ -32,7 +32,9 @@ export function classifyResponse(status: number | null): DeliveryOutcome {
   if (status === null) return 'retry';
   if (status === 200 || status === 201) return 'delivered';
   if (status === 401) return 'authentication-failed';
-  if (status === 409 || status >= 500) return 'retry';
+  // 409: not linked yet / resolve target not arrived. 429: the target is
+  // overloaded, which says nothing about the record itself.
+  if (status === 409 || status === 429 || status >= 500) return 'retry';
   // 400, 422 and anything else the contract does not name as retryable.
   return 'failed';
 }

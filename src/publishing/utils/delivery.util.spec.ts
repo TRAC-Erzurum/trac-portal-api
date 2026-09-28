@@ -1,4 +1,4 @@
-import { retryDelayMs, signDelivery } from './delivery.util';
+import { classifyResponse, retryDelayMs, signDelivery } from './delivery.util';
 
 describe('signDelivery', () => {
   it('is HMAC-SHA256 over `${timestamp}.${rawBody}` in the sha256=<hex> form', () => {
@@ -7,6 +7,26 @@ describe('signDelivery', () => {
     expect(signDelivery('secret', 1790000000, '{"a":1}')).toBe(
       'sha256=da8fe498621aaab99d5b11c51346b13d1a2bf2914b865b8d3edd3531cab25a3e',
     );
+  });
+});
+
+describe('classifyResponse', () => {
+  it.each([
+    [201, 'delivered'],
+    [200, 'delivered'],
+    [409, 'retry'],
+    [429, 'retry'],
+    [500, 'retry'],
+    [503, 'retry'],
+    [null, 'retry'],
+    [401, 'authentication-failed'],
+    [400, 'failed'],
+    [422, 'failed'],
+    [302, 'failed'],
+    [403, 'failed'],
+    [404, 'failed'],
+  ])('%s -> %s', (status, expected) => {
+    expect(classifyResponse(status)).toBe(expected);
   });
 });
 

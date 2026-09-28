@@ -231,6 +231,22 @@ describe('an observation created in a disaster with publishing on', () => {
   });
 });
 
+describe('creating an observation in a disaster with publishing on', () => {
+  it('stores neither the observation nor its queue row when queueing fails', async () => {
+    const { disaster } = await publishingDisaster();
+    t.repos.queue.save = () => Promise.reject(new Error('queue insert failed'));
+
+    const res = await http
+      .post(`/api/disaster/${disaster.id}/observations`)
+      .set('Cookie', as(fieldOperator))
+      .send({ type: 'COLLAPSED_BUILDING', lat: 39.9, lng: 41.27 });
+
+    expect(res.status).toBe(500);
+    expect(t.repos.observations.rows).toHaveLength(0);
+    expect(t.repos.queue.rows).toHaveLength(0);
+  });
+});
+
 describe('a disaster with publishing off', () => {
   it('never sends an observation, even after publishing is turned on later', async () => {
     const targetId = await registerTarget();
@@ -430,6 +446,26 @@ describe('a record the target refuses', () => {
     advance(MINUTE);
     await deliver();
     expect(target.records.has(waiting)).toBe(true);
+  });
+
+  it('is retried later when the target is overloaded (429), without holding the others', async () => {
+    const { disaster } = await publishingDisaster();
+    target.tooManyRequests = 1;
+    const busy = await observe(disaster.id);
+    const next = await observe(disaster.id);
+
+    await deliver();
+    expect(target.requests.map((r) => r.status)).toEqual([429, 201]);
+    const row = await queueRow(busy);
+    expect(row.status).toBe(PublicationStatus.PENDING);
+    expect(row.attempts).toBe(1);
+    expect(row.nextAttemptAt).toEqual(new Date(t.clock.now.getTime() + MINUTE));
+    expect((await queueRow(next)).status).toBe(PublicationStatus.DELIVERED);
+
+    advance(MINUTE);
+    await deliver();
+    expect(target.records.has(busy)).toBe(true);
+    expect((await queueRow(busy)).status).toBe(PublicationStatus.DELIVERED);
   });
 
   it('is marked failed for good on 400 and 422, without holding the others', async () => {

@@ -255,8 +255,16 @@ export class ObservationService {
       updatedBy: [],
     });
 
-    const saved = await this.observationRepository.save(observation);
-    await this.publicationService.enqueueObservation(saved);
+    // The observation and its publication queue row commit together.
+    const saved = await this.observationRepository.manager.transaction(
+      async (manager) => {
+        const inserted = await manager
+          .getRepository(Observation)
+          .save(observation);
+        await this.publicationService.enqueueObservation(inserted, manager);
+        return inserted;
+      },
+    );
     await this.scoringService.recompute(saved.id);
     const refreshed = await this.observationRepository.findOne({
       where: { id: saved.id },

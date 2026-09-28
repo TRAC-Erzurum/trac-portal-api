@@ -54,8 +54,45 @@ const JWT_SECRET = 'test-session-secret';
 export class CountingRepository<
   T extends { id: string },
 > extends InMemoryRepository<T> {
+  /** Set by the test app: the shared in-memory EntityManager. */
+  manager: unknown;
+
   async count(options: { where?: Partial<T> } = {}): Promise<number> {
     return (await this.find({ where: options.where })).length;
+  }
+}
+
+/**
+ * Stand-in for TypeORM's EntityManager over the in-memory repositories.
+ * `transaction` restores every repository's rows when the work throws, as a
+ * database rollback would.
+ */
+class InMemoryEntityManager {
+  constructor(
+    private readonly repositories: Map<unknown, InMemoryRepository<any>>,
+  ) {}
+
+  getRepository(entity: unknown): InMemoryRepository<any> {
+    const repository = this.repositories.get(entity);
+    if (!repository) throw new Error('No in-memory repository for entity');
+    return repository;
+  }
+
+  async transaction<R>(
+    work: (manager: InMemoryEntityManager) => Promise<R>,
+  ): Promise<R> {
+    const snapshot = [...this.repositories.values()].map(
+      (repository): [InMemoryRepository<any>, any[]] => [
+        repository,
+        [...repository.rows],
+      ],
+    );
+    try {
+      return await work(this);
+    } catch (error) {
+      for (const [repository, rows] of snapshot) repository.rows = rows;
+      throw error;
+    }
   }
 }
 
@@ -134,6 +171,17 @@ export async function createPublishingTestApp(): Promise<PublishingTestApp> {
       'targetId',
     ]),
   };
+
+  const manager = new InMemoryEntityManager(
+    new Map<unknown, InMemoryRepository<any>>([
+      [Disaster, repos.disasters],
+      [DisasterMembership, repos.memberships],
+      [Observation, repos.observations],
+      [PublishTarget, repos.targets],
+      [PublicationQueueItem, repos.queue],
+    ]),
+  );
+  for (const repository of Object.values(repos)) repository.manager = manager;
 
   const moduleRef = await Test.createTestingModule({
     imports: [

@@ -53,6 +53,8 @@ export class FakeTarget {
   readonly invalidExternalIds = new Set<string>();
   /** When true the target drops every connection (network failure). */
   unreachable = false;
+  /** The next this-many authentic requests are answered 429 (overloaded). */
+  tooManyRequests = 0;
   /** Runs after each request is answered (to act "while" a batch is in flight). */
   afterResponse: (() => Promise<void>) | null = null;
   private server!: Server;
@@ -149,6 +151,10 @@ export class FakeTarget {
     if (method !== 'POST') return [405, { error: 'method' }];
     if (sourceId !== this.sourceId || !authentic)
       return [401, { error: 'authentication failed' }];
+    if (this.tooManyRequests > 0) {
+      this.tooManyRequests--;
+      return [429, { error: 'too many requests' }];
+    }
     if (!body || typeof body !== 'object') return [400, { error: 'json' }];
     const str = (v: unknown) =>
       typeof v === 'string' && v.length > 0 && v.length <= 100;

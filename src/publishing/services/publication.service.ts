@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Disaster } from '../../disaster/entities/disaster.entity';
 import { Observation } from '../../disaster/entities/observation.entity';
 import { UserService } from '../../user/services/user.service';
@@ -127,9 +127,24 @@ export class PublicationService {
    * Queues a just-created observation for its disaster's target, when that
    * disaster's publishing is on. Observations created while it is off are
    * never queued.
+   *
+   * `manager` is the transaction the observation was inserted in: the queue
+   * row must commit or roll back with it, or a failure between the two would
+   * leave an observation that silently never publishes.
    */
-  async enqueueObservation(observation: Observation): Promise<void> {
-    const disaster = await this.findDisaster(observation.disasterId);
+  async enqueueObservation(
+    observation: Observation,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const disasterRepository =
+      manager?.getRepository(Disaster) ?? this.disasterRepository;
+    const queueRepository =
+      manager?.getRepository(PublicationQueueItem) ?? this.queueRepository;
+
+    const disaster = await disasterRepository.findOne({
+      where: { id: observation.disasterId },
+    });
+    if (!disaster) throw new NotFoundException('error.notFound');
     const targetId = disaster.publishTargetId;
     if (!disaster.publishingEnabled || !targetId) return;
 
@@ -140,7 +155,7 @@ export class PublicationService {
       const parentId = observation.parentObservationId;
       if (!parentId) return;
       // A resolve for a record the target will never have could never succeed.
-      const parentRow = await this.queueRepository.findOne({
+      const parentRow = await queueRepository.findOne({
         where: { observationId: parentId, targetId },
       });
       if (!parentRow || parentRow.status === PublicationStatus.FAILED) return;
@@ -152,8 +167,8 @@ export class PublicationService {
     const reporter = await this.userService.findOne(
       observation.createdByUserId,
     );
-    await this.queueRepository.save(
-      this.queueRepository.create({
+    await queueRepository.save(
+      queueRepository.create({
         observationId: observation.id,
         disasterId: observation.disasterId,
         targetId,
