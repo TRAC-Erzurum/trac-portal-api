@@ -105,6 +105,34 @@ export class FakeUserService {
   }
 }
 
+/**
+ * What OidcService's consent scope merge statement does in Postgres: append
+ * the requested scopes the row lacks and the approving user to updatedBy, and
+ * return the updated row's id the way TypeORM returns an UPDATE: [rows, count].
+ */
+function mergeConsentScopes(
+  repository: InMemoryRepository<OidcConsent>,
+  sql: string,
+  [scopes, updatedBy, userId, clientId]: unknown[],
+): [{ id: string }[], number] {
+  if (!/^\s*UPDATE "oidc_consents"/.test(sql)) {
+    throw new Error(`Unexpected raw query: ${sql}`);
+  }
+  const row = repository.rows.find(
+    (r) => r.userId === userId && r.clientId === clientId,
+  );
+  if (!row) return [[], 0];
+  row.scope = [
+    ...new Set([
+      ...row.scope.split(' ').filter(Boolean),
+      ...(scopes as string[]).filter(Boolean),
+    ]),
+  ].join(' ');
+  row.updatedBy = [...(row.updatedBy ?? []), updatedBy as string];
+  row.updatedAt = new Date();
+  return [[{ id: row.id }], 1];
+}
+
 export interface OidcTestApp {
   app: INestApplication;
   users: FakeUserService;
@@ -126,7 +154,10 @@ export async function createOidcTestApp(): Promise<OidcTestApp> {
   const repos = {
     clients: new InMemoryRepository<OidcClient>(),
     keys: new InMemoryRepository<OidcSigningKey>(),
-    consents: new InMemoryRepository<OidcConsent>(['userId', 'clientId']),
+    consents: new InMemoryRepository<OidcConsent>(
+      ['userId', 'clientId'],
+      mergeConsentScopes,
+    ),
     codes: new InMemoryRepository<OidcAuthorizationCode>(),
     accessTokens: new InMemoryRepository<OidcAccessToken>(),
   };
