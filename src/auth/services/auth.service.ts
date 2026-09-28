@@ -12,7 +12,7 @@ import {
   JwtPayload,
   PendingSsoRegistration,
 } from '../types/auth.types';
-import { UserService } from 'src/user/services/user.service';
+import { UserService } from '../../user/services/user.service';
 import { GoogleProfile } from '../types/auth.types';
 import { RegisterDto } from '../dto/register.dto';
 import { CompleteSsoRegistrationDto } from '../dto/complete-sso-registration.dto';
