@@ -439,6 +439,16 @@ describe('AC4: email_verified follows how the account was created', () => {
     expect(l.userinfo.email_verified).toBe(false);
     expect(l.idToken.email_verified).toBe(false);
   });
+
+  it('reports true for a password account once a Google sign-in is recorded on it', async () => {
+    const client = await registerClient();
+    const linked = operator({ provider: 'local', providerId: 'google-sub-42' });
+
+    const { userinfo, idToken } = await fullFlow(linked, client);
+
+    expect(userinfo.email_verified).toBe(true);
+    expect(idToken.email_verified).toBe(true);
+  });
 });
 
 describe('AC5: verified needs an approved membership and a call sign', () => {
