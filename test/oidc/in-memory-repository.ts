@@ -25,7 +25,23 @@ export class InMemoryRepository<T extends { id: string }> {
   rows: T[] = [];
   private tick = 0;
 
-  constructor(private readonly uniqueKey: (keyof T)[] = []) {}
+  constructor(
+    private readonly uniqueKey: (keyof T)[] = [],
+    /**
+     * Stands in for the raw SQL a service sends through `query`. It runs
+     * without yielding, so it is atomic the way one statement is in Postgres.
+     */
+    private readonly rawQuery?: (
+      repository: InMemoryRepository<T>,
+      sql: string,
+      parameters: unknown[],
+    ) => unknown,
+  ) {}
+
+  async query(sql: string, parameters: unknown[] = []): Promise<unknown> {
+    if (!this.rawQuery) throw new Error(`Unexpected raw query: ${sql}`);
+    return this.rawQuery(this, sql, parameters);
+  }
 
   create(data: Partial<T>): T {
     return { ...data } as T;

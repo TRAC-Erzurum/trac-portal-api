@@ -52,6 +52,33 @@ export type AuthorizationValidation =
   | { kind: 'redirect_error'; redirectTo: string }
   | { kind: 'valid'; request: ValidatedAuthorizationRequest };
 
+/**
+ * Appends the requested scopes ($1) the stored consent lacks, keeping the
+ * stored order, and records the approving user ($2). Postgres re-evaluates
+ * the SET on the latest row version when a concurrent UPDATE got there first.
+ */
+const MERGE_CONSENT_SCOPES = `
+  UPDATE "oidc_consents"
+  SET "scope" = (
+        SELECT string_agg(merged.s, ' ' ORDER BY merged.first)
+        FROM (
+          SELECT u.s, min(u.n) AS first
+          FROM unnest(
+            string_to_array("oidc_consents"."scope", ' ') || $1::text[]
+          ) WITH ORDINALITY AS u(s, n)
+          WHERE u.s <> ''
+          GROUP BY u.s
+        ) merged
+      ),
+      "updatedBy" = array_append(
+        coalesce("oidc_consents"."updatedBy", '{}'),
+        $2::varchar
+      ),
+      "updatedAt" = now()
+  WHERE "userId" = $3 AND "clientId" = $4
+  RETURNING "id"
+`;
+
 export type ConsentContext =
   | { consentRequired: true; clientName: string; claims: string[] }
   | { consentRequired: false; redirectTo: string };
@@ -303,14 +330,16 @@ export class OidcService {
   /**
    * Upsert on (userId, clientId), merging scopes. Two approvals at the same
    * moment can both find no row; the insert that loses on the unique key
-   * falls back to updating the row the other one created.
+   * falls back to updating the row the other one created. The scope merge
+   * itself is one UPDATE, so approvals updating the same row cannot
+   * overwrite each other's scopes.
    */
   private async rememberConsent(
     userId: string,
     request: ValidatedAuthorizationRequest,
   ): Promise<void> {
     const where = { userId, clientId: request.client.id };
-    let existing = await this.consentRepository.findOne({ where });
+    const existing = await this.consentRepository.findOne({ where });
     if (!existing) {
       try {
         await this.consentRepository.save(
@@ -325,17 +354,19 @@ export class OidcService {
       } catch (error) {
         if ((error as { code?: string }).code !== '23505') throw error;
       }
-      existing = await this.consentRepository.findOne({ where });
-      if (!existing) throw new InternalServerErrorException('error.internal');
     }
-    existing.scope = [
-      ...new Set([
-        ...existing.scope.split(' ').filter(Boolean),
-        ...request.scopes,
-      ]),
-    ].join(' ');
-    existing.updatedBy = [...(existing.updatedBy ?? []), userId];
-    await this.consentRepository.save(existing);
+    // TypeORM's Postgres driver answers an UPDATE with [rows, rowCount].
+    const [updated] = await this.consentRepository.query<
+      [{ id: string }[], number]
+    >(MERGE_CONSENT_SCOPES, [
+      request.scopes,
+      userId,
+      userId,
+      request.client.id,
+    ]);
+    if (updated.length === 0) {
+      throw new InternalServerErrorException('error.internal');
+    }
   }
 
   async deny(params: AuthorizationRequestDto): Promise<{ redirectTo: string }> {

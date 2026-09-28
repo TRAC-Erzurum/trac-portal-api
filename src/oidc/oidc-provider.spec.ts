@@ -637,6 +637,83 @@ describe('concurrent consent approval', () => {
   });
 });
 
+describe('approving more scopes for a client the user already consented to', () => {
+  async function consentContext(
+    user: User,
+    client: RegisteredClient,
+    scope: string,
+  ) {
+    const res = await http
+      .post('/api/oidc/consent/context')
+      .set('Cookie', t.sessionCookie(user))
+      .send(authParams(client, { scope }))
+      .expect(200);
+    return res.body.consentRequired as boolean;
+  }
+
+  it('adds the newly approved scopes to the ones already granted', async () => {
+    const client = await registerClient();
+    const user = operator();
+    await authorizeAndApprove(
+      user,
+      authParams(client, { scope: 'openid email' }),
+    );
+    await authorizeAndApprove(
+      user,
+      authParams(client, { scope: 'openid profile' }),
+    );
+
+    expect(t.repos.consents.rows).toHaveLength(1);
+    expect(t.repos.consents.rows[0].scope).toBe('openid email profile');
+    expect(t.repos.consents.rows[0].updatedBy).toEqual([user.id]);
+    expect(await consentContext(user, client, 'openid email profile')).toBe(
+      false,
+    );
+  });
+
+  it('keeps both scopes when two approvals update the same consent at once', async () => {
+    const client = await registerClient();
+    const user = operator();
+    await authorizeAndApprove(user, authParams(client, { scope: 'openid' }));
+
+    // Force the race: both approvals read the existing consent before either writes.
+    const consents = t.repos.consents;
+    const read = consents.findOne.bind(consents);
+    let arrived = 0;
+    let release: () => void = () => undefined;
+    const bothRead = new Promise<void>((resolve) => (release = resolve));
+    consents.findOne = async (options) => {
+      const row = await read(options);
+      if (++arrived === 2) release();
+      await bothRead;
+      return row;
+    };
+
+    const approve = (scope: string, state: string) =>
+      http
+        .post('/api/oidc/consent/approve')
+        .set('Cookie', t.sessionCookie(user))
+        .send(authParams(client, { scope, state }));
+    const results = await Promise.all([
+      approve('openid email', 'tab-1'),
+      approve('openid profile', 'tab-2'),
+    ]);
+    consents.findOne = read;
+
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    expect(consents.rows).toHaveLength(1);
+    expect(consents.rows[0].scope.split(' ').sort()).toEqual([
+      'email',
+      'openid',
+      'profile',
+    ]);
+    expect(consents.rows[0].updatedBy).toEqual([user.id, user.id]);
+    expect(await consentContext(user, client, 'openid email profile')).toBe(
+      false,
+    );
+  });
+});
+
 describe('AC8: key rotation keeps old ID tokens verifiable', () => {
   it('signs new tokens with the new key while the old key stays in JWKS for 7 days', async () => {
     const client = await registerClient();
