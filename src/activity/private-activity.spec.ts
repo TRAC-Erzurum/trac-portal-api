@@ -47,10 +47,7 @@ function queryableActivities(rows: Activity[]) {
 }
 
 describe('a password replaced through Google stays out of the shared activity feeds', () => {
-  const rows = [
-    activity('net.started', 'u-1'),
-    activity(TAKEOVER, 'u-2'),
-  ];
+  const rows = [activity('net.started', 'u-1'), activity(TAKEOVER, 'u-2')];
 
   it('is left out of the public dashboard feed but shown in the account owner’s own feed', async () => {
     const service = new DashboardService(

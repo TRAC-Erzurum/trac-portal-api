@@ -10,7 +10,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial, In } from 'typeorm';
+import { Repository, DeepPartial, In, IsNull } from 'typeorm';
 import { User } from '../entities/user.entity';
 import {
   GlobalRole,
@@ -597,6 +597,58 @@ export class UserService {
     user.isTemporaryPassword = true;
 
     await this.userRepository.save(user);
+  }
+
+  /** Whether `password` is the account's current password. */
+  async passwordMatches(userId: string, password: string): Promise<boolean> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user?.password || typeof password !== 'string') return false;
+    const hashed = crypto
+      .createHash('sha256')
+      .update(`${password}${user.salt}`)
+      .digest('hex');
+    return hashed === user.password;
+  }
+
+  /**
+   * Records the Google identity on an account that has none. Returns false
+   * when the account already has one (or is gone), so a confirmation can only
+   * be used once.
+   */
+  async linkGoogleIdentity(
+    userId: string,
+    providerId: string,
+    changes: DeepPartial<User> = {},
+  ): Promise<boolean> {
+    const { affected } = await this.userRepository.update(
+      { id: userId, providerId: IsNull() },
+      { ...changes, providerId },
+    );
+    return affected === 1;
+  }
+
+  /**
+   * The verified Google owner replaces the password of an account that has no
+   * Google identity yet: new password, Google identity recorded, and every
+   * session issued before `sessionsValidAfter` refused.
+   */
+  async replacePasswordAndLinkGoogle(
+    userId: string,
+    providerId: string,
+    newPassword: string,
+    sessionsValidAfter: Date,
+  ): Promise<boolean> {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const password = crypto
+      .createHash('sha256')
+      .update(`${newPassword}${salt}`)
+      .digest('hex');
+    return this.linkGoogleIdentity(userId, providerId, {
+      salt,
+      password,
+      isTemporaryPassword: false,
+      sessionsValidAfter,
+    });
   }
 
   async clearTemporaryPassword(userId: string): Promise<void> {

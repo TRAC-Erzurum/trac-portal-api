@@ -13,11 +13,11 @@ export class InMemoryUserRepository extends InMemoryRepository<User> {
   }
 
   async exists(options: { where: Partial<User> }): Promise<boolean> {
-    return (await this.findOne(options as never)) !== null;
+    return (await this.findOne(options)) !== null;
   }
 
   async findOneOrFail(options: { where: Partial<User> }): Promise<User> {
-    const row = await this.findOne(options as never);
+    const row = await this.findOne(options);
     if (!row) throw new EntityNotFoundError(User, options);
     return row;
   }

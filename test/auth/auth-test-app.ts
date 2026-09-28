@@ -59,8 +59,9 @@ class HeaderProfileStrategy extends PassportBaseStrategy {
   authenticate(req: Request) {
     const raw = req.headers[GOOGLE_PROFILE_HEADER];
     if (typeof raw !== 'string') return this.fail(401);
-    this.verify(JSON.parse(Buffer.from(raw, 'base64').toString()), (err, user) =>
-      err ? this.error(err as Error) : this.success(user),
+    this.verify(
+      JSON.parse(Buffer.from(raw, 'base64').toString()) as GoogleProfile,
+      (err, user) => (err ? this.error(err) : this.success(user)),
     );
   }
 }
@@ -136,7 +137,10 @@ export async function createAuthTestApp(): Promise<AuthTestApp> {
         useValue: { find: async () => [] },
       },
       { provide: getRepositoryToken(PasswordResetRequest), useValue: {} },
-      { provide: OperatorService, useValue: { findByUserId: async () => null } },
+      {
+        provide: OperatorService,
+        useValue: { findByUserId: async () => null },
+      },
       { provide: BranchService, useValue: {} },
       { provide: MembershipService, useValue: {} },
       { provide: APP_GUARD, useClass: ThrottlerGuard },

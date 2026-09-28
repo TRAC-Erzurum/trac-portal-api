@@ -7,7 +7,8 @@ function satisfies(actual: unknown, expected: unknown): boolean {
   if (expected instanceof FindOperator) {
     if (expected.type === 'isNull')
       return actual === null || actual === undefined;
-    if (expected.type === 'not') return !satisfies(actual, expected.child ?? expected.value);
+    if (expected.type === 'not')
+      return !satisfies(actual, expected.child ?? expected.value);
     if (expected.type === 'in')
       return (expected.value as unknown[]).includes(actual);
     throw new Error(`Unsupported operator ${expected.type}`);

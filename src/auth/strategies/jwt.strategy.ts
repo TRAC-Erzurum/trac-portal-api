@@ -29,6 +29,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
     const user = await this.userService.findOne(payload.sub);
+    if (
+      user.sessionsValidAfter &&
+      (payload.iat ?? 0) < Math.floor(user.sessionsValidAfter.getTime() / 1000)
+    ) {
+      throw new UnauthorizedException('Session revoked');
+    }
     const role = await this.userService.getEffectiveRole(payload.sub);
 
     return {

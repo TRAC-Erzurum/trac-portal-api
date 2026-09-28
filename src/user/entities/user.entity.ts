@@ -46,6 +46,14 @@ export class User extends BaseEntity {
   @Exclude()
   isTemporaryPassword: boolean;
 
+  /**
+   * Sessions (auth_token JWTs) issued before this moment are refused. Set when
+   * a verified Google sign-in replaces the password of a pre-registered account.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  @Exclude()
+  sessionsValidAfter: Date | null;
+
   @Column({ nullable: true, type: 'uuid' })
   currentBranchId: string | null;
 

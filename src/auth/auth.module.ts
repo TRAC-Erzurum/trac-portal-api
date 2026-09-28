@@ -14,6 +14,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { OperatorModule } from '../operator/operator.module';
 import { BranchModule } from '../branch/branch.module';
 import { PasswordResetRequest } from './entities/password-reset-request.entity';
+import { AUTH_CLOCK, AuthClock } from './auth.constants';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { PasswordResetRequest } from './entities/password-reset-request.entity';
   controllers: [AuthController],
   providers: [
     AuthService,
+    { provide: AUTH_CLOCK, useValue: (() => new Date()) as AuthClock },
     { provide: CAPTCHA_SERVICE, useClass: TurnstileService },
     JwtStrategy,
     GoogleStrategy,
