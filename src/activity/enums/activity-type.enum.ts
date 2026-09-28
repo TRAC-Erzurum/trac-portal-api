@@ -14,6 +14,7 @@ export enum ActivityType {
   OBSERVATION_UPDATED = 'observation.updated',
   OBSERVATION_SUPPORTED = 'observation.supported',
   OBSERVATION_CONTRADICTED = 'observation.contradicted',
+  ACCOUNT_GOOGLE_PASSWORD_REPLACED = 'account.google_password_replaced',
 }
 
 export enum EntityType {
@@ -22,4 +23,10 @@ export enum EntityType {
   MEMBERSHIP = 'membership',
   DISASTER = 'disaster',
   OBSERVATION = 'observation',
+  USER = 'user',
 }
+
+/** Security events about one account: only in that account's own feed. */
+export const PRIVATE_ACTIVITY_TYPES: ActivityType[] = [
+  ActivityType.ACCOUNT_GOOGLE_PASSWORD_REPLACED,
+];

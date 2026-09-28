@@ -3,17 +3,24 @@ import { FindOperator, QueryFailedError } from 'typeorm';
 
 type Where<T> = Partial<Record<keyof T, unknown>>;
 
+function satisfies(actual: unknown, expected: unknown): boolean {
+  if (expected instanceof FindOperator) {
+    if (expected.type === 'isNull')
+      return actual === null || actual === undefined;
+    if (expected.type === 'not')
+      return !satisfies(actual, expected.child ?? expected.value);
+    if (expected.type === 'in')
+      return (expected.value as unknown[]).includes(actual);
+    throw new Error(`Unsupported operator ${expected.type}`);
+  }
+  return actual === expected;
+}
+
 function matches<T>(row: T, where: Where<T> | undefined): boolean {
   if (!where) return true;
-  return Object.entries(where).every(([key, expected]) => {
-    const actual = (row as Record<string, unknown>)[key];
-    if (expected instanceof FindOperator) {
-      if (expected.type === 'isNull')
-        return actual === null || actual === undefined;
-      throw new Error(`Unsupported operator ${expected.type}`);
-    }
-    return actual === expected;
-  });
+  return Object.entries(where).every(([key, expected]) =>
+    satisfies((row as Record<string, unknown>)[key], expected),
+  );
 }
 
 /**

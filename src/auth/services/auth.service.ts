@@ -1,18 +1,39 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  Inject,
   Injectable,
   Logger,
+  NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import {
   AuthUser,
   JwtPayload,
+  PendingGoogleLink,
   PendingSsoRegistration,
 } from '../types/auth.types';
-import { UserService } from 'src/user/services/user.service';
+import { User } from '../../user/entities/user.entity';
+import {
+  AUTH_CLOCK,
+  AuthClock,
+  GOOGLE_LINK_TTL_SECONDS,
+} from '../auth.constants';
+import {
+  ACTIVITY_EVENT,
+  ActivityEvent,
+} from '../../activity/events/activity.events';
+import {
+  ActivityType,
+  EntityType,
+} from '../../activity/enums/activity-type.enum';
+import { UserService } from '../../user/services/user.service';
 import { GoogleProfile } from '../types/auth.types';
 import { RegisterDto } from '../dto/register.dto';
 import { CompleteSsoRegistrationDto } from '../dto/complete-sso-registration.dto';
@@ -30,6 +51,17 @@ import {
   normalizePlainCallSign,
 } from '../../shared/utils/call-sign.util';
 
+const GOOGLE_LINK_PURPOSE = 'google-link';
+
+interface GoogleLinkClaims {
+  sub: string;
+  email: string;
+  gid: string;
+  purpose: typeof GOOGLE_LINK_PURPOSE;
+}
+
+const toSeconds = (date: Date) => Math.floor(date.getTime() / 1000);
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -42,15 +74,36 @@ export class AuthService {
     private readonly membershipService: MembershipService,
     @InjectRepository(PasswordResetRequest)
     private readonly passwordResetRequestRepository: Repository<PasswordResetRequest>,
+    private readonly configService: ConfigService,
+    private readonly eventEmitter: EventEmitter2,
+    @Inject(AUTH_CLOCK) private readonly clock: AuthClock,
   ) {}
 
   async validateOAuthUser(
     profile: GoogleProfile,
-  ): Promise<AuthUser | PendingSsoRegistration> {
+  ): Promise<AuthUser | PendingSsoRegistration | PendingGoogleLink> {
     const email = profile.emails[0].value;
 
-    const existingUser = await this.userService.findByEmail(email);
+    // Case-insensitive, like password login: an account registered as
+    // Owner@Example.org must not escape the confirmation below.
+    const existingUser = await this.userService.findByEmailIgnoringCase(email);
     if (existingUser) {
+      if (!existingUser.providerId) {
+        if (existingUser.password) {
+          if (profile.emails[0].verified !== true) {
+            throw new ForbiddenException('error.googleEmailNotVerified');
+          }
+          // Someone may have registered this address without owning it and
+          // still know the password: nothing of the account until confirmed.
+          return {
+            pendingGoogleLink: true,
+            userId: existingUser.id,
+            email: existingUser.email,
+            providerId: profile.id,
+          };
+        }
+        await this.userService.linkGoogleIdentity(existingUser.id, profile.id);
+      }
       const role = await this.userService.getEffectiveRole(existingUser.id);
       return {
         id: existingUser.id,
@@ -173,9 +226,131 @@ export class AuthService {
       provider: user.provider,
       role: user.role,
       callSign: user.callSign,
+      iat: toSeconds(this.clock()),
     };
 
     return { access_token: this.jwtService.sign(payload) };
+  }
+
+  /** Signed, short-lived proof that this browser just signed in with Google. */
+  createGoogleLinkToken(pending: PendingGoogleLink): string {
+    const claims: GoogleLinkClaims = {
+      sub: pending.userId,
+      email: pending.email,
+      gid: pending.providerId,
+      purpose: GOOGLE_LINK_PURPOSE,
+    };
+    return this.jwtService.sign(
+      { ...claims, iat: toSeconds(this.clock()) },
+      { secret: this.googleLinkSecret(), expiresIn: GOOGLE_LINK_TTL_SECONDS },
+    );
+  }
+
+  /** The address Google proved, for the confirmation screen; nothing else. */
+  async getGoogleLink(token: string | undefined): Promise<{ email: string }> {
+    const { user } = await this.resolveGoogleLink(token);
+    return { email: user.email };
+  }
+
+  /** Choice (a): the current password proves the person registered the account. */
+  async confirmGoogleLinkWithPassword(
+    token: string | undefined,
+    password: string,
+  ): Promise<AuthUser> {
+    const { user, providerId } = await this.resolveGoogleLink(token);
+    if (!(await this.userService.passwordMatches(user.id, password))) {
+      throw new UnauthorizedException('error.invalidCredentials');
+    }
+    if (!(await this.userService.linkGoogleIdentity(user.id, providerId))) {
+      throw new NotFoundException('error.notFound');
+    }
+    return this.toAuthUser(user.id);
+  }
+
+  /**
+   * Choice (b): the verified email owner takes the account. The old password
+   * and every session issued before now stop working.
+   */
+  async confirmGoogleLinkWithNewPassword(
+    token: string | undefined,
+    newPassword: string,
+  ): Promise<{ access_token: string; user: AuthUser }> {
+    const { user, providerId } = await this.resolveGoogleLink(token);
+    const replaced = await this.userService.replacePasswordAndLinkGoogle(
+      user.id,
+      providerId,
+      newPassword,
+      this.clock(),
+    );
+    if (!replaced) {
+      throw new NotFoundException('error.notFound');
+    }
+    const callSign = user.operator?.callSign ?? null;
+    this.eventEmitter.emit(
+      ACTIVITY_EVENT,
+      new ActivityEvent(
+        ActivityType.ACCOUNT_GOOGLE_PASSWORD_REPLACED,
+        EntityType.USER,
+        user.id,
+        user.id,
+        callSign,
+        callSign,
+      ),
+    );
+    this.logger.log(
+      `Password of user ${user.id} replaced through a verified Google sign-in`,
+    );
+    const authUser = await this.toAuthUser(user.id);
+    return {
+      ...this.generateToken(authUser),
+      user: authUser,
+    };
+  }
+
+  private googleLinkSecret(): string {
+    return `${this.configService.get<string>('JWT_SECRET')}:${GOOGLE_LINK_PURPOSE}`;
+  }
+
+  /**
+   * The account a confirmation cookie points at, while the confirmation is
+   * still open: signed, unexpired, same address, no Google identity yet.
+   */
+  private async resolveGoogleLink(
+    token: string | undefined,
+  ): Promise<{ user: User; providerId: string }> {
+    let claims: GoogleLinkClaims;
+    try {
+      claims = this.jwtService.verify<GoogleLinkClaims>(token ?? '', {
+        secret: this.googleLinkSecret(),
+        clockTimestamp: toSeconds(this.clock()),
+      });
+    } catch {
+      throw new NotFoundException('error.notFound');
+    }
+    if (claims.purpose !== GOOGLE_LINK_PURPOSE || !claims.gid) {
+      throw new NotFoundException('error.notFound');
+    }
+    const user = await this.userService.findByEmail(claims.email);
+    if (!user || user.id !== claims.sub || user.providerId) {
+      throw new NotFoundException('error.notFound');
+    }
+    return { user, providerId: claims.gid };
+  }
+
+  private async toAuthUser(userId: string): Promise<AuthUser> {
+    const user = await this.userService.findOne(userId);
+    const role = await this.userService.getEffectiveRole(user.id);
+    return {
+      id: user.id,
+      email: user.email,
+      role,
+      callSign: user.operator?.callSign,
+      provider: user.provider,
+      providerId: user.providerId,
+      fullName: user.fullName,
+      picture: user.picture,
+      isTemporaryPassword: user.isTemporaryPassword,
+    };
   }
 
   async register(dto: RegisterDto) {

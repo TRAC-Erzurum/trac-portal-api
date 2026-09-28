@@ -2,7 +2,8 @@ import { type EffectiveRole, GlobalRole } from '../enums/role.enum';
 
 export interface GoogleProfile {
   id: string;
-  emails: Array<{ value: string }>;
+  /** `verified` is Google's email_verified for the address. */
+  emails: Array<{ value: string; verified?: boolean }>;
   name: {
     givenName: string;
     familyName: string;
@@ -16,6 +17,18 @@ export interface PendingSsoRegistration {
   email: string;
   fullName: string;
   picture: string | null;
+  providerId: string | null;
+}
+
+/**
+ * Google sign-in matched an account that has a password but no Google
+ * identity: no session until the confirmation step (confirm the password or
+ * set a new one) completes.
+ */
+export interface PendingGoogleLink {
+  pendingGoogleLink: true;
+  userId: string;
+  email: string;
   providerId: string;
 }
 
@@ -40,4 +53,6 @@ export interface JwtPayload {
   provider: string;
   role: EffectiveRole;
   callSign?: string;
+  /** Issued-at, seconds since the epoch; compared with `User.sessionsValidAfter`. */
+  iat?: number;
 }

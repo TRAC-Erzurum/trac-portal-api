@@ -38,6 +38,8 @@ const JWT_SECRET = 'test-session-secret';
 export interface TestUserSpec {
   email: string;
   provider: 'google' | 'local';
+  /** Recorded Google identity; Google-created accounts always carry one. */
+  providerId?: string | null;
   fullName?: string;
   callSign?: string | null;
   memberships?: { status: MembershipStatus; role: BranchRole }[];
@@ -74,6 +76,12 @@ export class FakeUserService {
       id,
       email: spec.email,
       provider: spec.provider,
+      providerId:
+        spec.providerId !== undefined
+          ? spec.providerId
+          : spec.provider === 'google'
+            ? `google-${id}`
+            : null,
       fullName: spec.fullName ?? null,
       globalRole: spec.globalRole ?? GlobalRole.GUEST,
       role: GlobalRole.GUEST,

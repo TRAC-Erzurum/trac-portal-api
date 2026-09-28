@@ -7,6 +7,7 @@ import { Operator } from '../../operator/entities/operator.entity';
 import { Activity } from '../../activity/entities/activity.entity';
 import { OperatorBranchMembership } from '../../branch/entities/operator-branch-membership.entity';
 import { MembershipStatus } from '../../branch/enums/membership-status.enum';
+import { PRIVATE_ACTIVITY_TYPES } from '../../activity/enums/activity-type.enum';
 export interface StatusResponse {
   activeNetsCount: number;
   hasActiveNets: boolean;
@@ -878,6 +879,10 @@ export class DashboardService {
           'activity.targetCallSign IN (SELECT "callSign" FROM operators WHERE "userId" = :userId)',
         { userId: String(userId) },
       );
+    } else {
+      query.andWhere('activity.type NOT IN (:...privateTypes)', {
+        privateTypes: PRIVATE_ACTIVITY_TYPES,
+      });
     }
 
     return query.getMany();

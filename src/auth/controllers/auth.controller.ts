@@ -16,7 +16,20 @@ import { CaptchaService, CAPTCHA_SERVICE } from '../services/captcha.interface';
 import { Public } from '../decorators/public.decorator';
 import { Roles } from '../decorators/roles.decorator';
 import { GlobalRole } from '../enums/role.enum';
-import { AuthUser, PendingSsoRegistration } from '../types/auth.types';
+import {
+  AuthUser,
+  PendingGoogleLink,
+  PendingSsoRegistration,
+} from '../types/auth.types';
+import {
+  GOOGLE_LINK_COOKIE,
+  GOOGLE_LINK_PAGE,
+  GOOGLE_LINK_TTL_SECONDS,
+} from '../auth.constants';
+import {
+  ConfirmGoogleLinkPasswordDto,
+  SetGoogleLinkPasswordDto,
+} from '../dto/google-link.dto';
 import { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AllowWithoutCallsign } from '../decorators/allow-without-callsign.decorator';
@@ -32,7 +45,7 @@ import { UserService } from '../../user/services/user.service';
 import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
 
 interface RequestWithUser extends Request {
-  user: AuthUser | PendingSsoRegistration;
+  user: AuthUser | PendingSsoRegistration | PendingGoogleLink;
 }
 
 @Controller('auth')
@@ -78,6 +91,19 @@ export class AuthController {
   ): Promise<void> {
     const payload = req.user;
 
+    if ('pendingGoogleLink' in payload && payload.pendingGoogleLink) {
+      res.cookie(
+        GOOGLE_LINK_COOKIE,
+        this.authService.createGoogleLinkToken(payload),
+        {
+          ...this.getCookieOptions(),
+          maxAge: GOOGLE_LINK_TTL_SECONDS * 1000,
+        },
+      );
+      res.redirect(GOOGLE_LINK_PAGE);
+      return;
+    }
+
     if ('pendingSso' in payload && payload.pendingSso) {
       const pending = payload;
       (
@@ -104,6 +130,58 @@ export class AuthController {
     const { access_token } = this.authService.login(payload as AuthUser);
     res.cookie('auth_token', access_token, this.getCookieOptions());
     res.redirect('/');
+  }
+
+  @Public()
+  @Get('google-link')
+  async getGoogleLink(@Req() req: Request): Promise<{ email: string }> {
+    return this.authService.getGoogleLink(this.googleLinkToken(req));
+  }
+
+  @Public()
+  @Post('google-link/confirm-password')
+  async confirmGoogleLinkWithPassword(
+    @Body() dto: ConfirmGoogleLinkPasswordDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Ip() ip: string,
+  ) {
+    await this.captchaService.verify(dto.captchaToken, ip);
+    const authUser = await this.authService.confirmGoogleLinkWithPassword(
+      this.googleLinkToken(req),
+      dto.password,
+    );
+    this.clearGoogleLinkCookie(res);
+    const { access_token } = this.authService.login(authUser);
+    res.cookie('auth_token', access_token, this.getCookieOptions());
+    return { isTemporaryPassword: authUser.isTemporaryPassword };
+  }
+
+  @Public()
+  @Post('google-link/set-password')
+  async confirmGoogleLinkWithNewPassword(
+    @Body() dto: SetGoogleLinkPasswordDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { access_token } =
+      await this.authService.confirmGoogleLinkWithNewPassword(
+        this.googleLinkToken(req),
+        dto.newPassword,
+      );
+    this.clearGoogleLinkCookie(res);
+    res.cookie('auth_token', access_token, this.getCookieOptions());
+    return { isTemporaryPassword: false };
+  }
+
+  private googleLinkToken(req: Request): string | undefined {
+    const token: unknown = req.cookies?.[GOOGLE_LINK_COOKIE];
+    return typeof token === 'string' ? token : undefined;
+  }
+
+  private clearGoogleLinkCookie(res: Response) {
+    const { maxAge: _maxAge, ...clearOptions } = this.getCookieOptions();
+    res.clearCookie(GOOGLE_LINK_COOKIE, clearOptions);
   }
 
   @Get('check')
@@ -186,7 +264,7 @@ export class AuthController {
       email: String(data.email),
       fullName: data.fullName ? String(data.fullName) : String(data.email),
       picture: data.picture != null ? String(data.picture) : null,
-      providerId: data.providerId ? String(data.providerId) : '',
+      providerId: data.providerId ? String(data.providerId) : null,
     };
 
     const authUser = await this.authService.completeSsoRegistration(

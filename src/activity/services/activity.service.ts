@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { Activity } from '../entities/activity.entity';
 import { Operator } from '../../operator/entities/operator.entity';
-import { ActivityType, EntityType } from '../enums/activity-type.enum';
+import {
+  ActivityType,
+  EntityType,
+  PRIVATE_ACTIVITY_TYPES,
+} from '../enums/activity-type.enum';
 
 export interface CreateActivityDto {
   type: ActivityType;
@@ -77,6 +81,7 @@ export class ActivityService {
 
   async findRecentGlobal(limit: number = 10): Promise<ActivityFeedItem[]> {
     const activities = await this.activityRepository.find({
+      where: { type: Not(In(PRIVATE_ACTIVITY_TYPES)) },
       order: { createdAt: 'DESC' },
       take: limit,
     });

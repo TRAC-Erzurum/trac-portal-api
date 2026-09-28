@@ -16,9 +16,12 @@ export interface OidcUserClaims {
   verified?: boolean;
 }
 
-/** Accounts created through Google carry a Google-verified address; local ones do not. */
-export function isEmailVerified(user: Pick<User, 'provider'>): boolean {
-  return user.provider === 'google';
+/**
+ * Verified once a Google identity is recorded on the account: Google proved
+ * the address. Password-only accounts never verified theirs.
+ */
+export function isEmailVerified(user: Pick<User, 'providerId'>): boolean {
+  return !!user.providerId;
 }
 
 /** Verified means an approved branch membership together with a call sign. */
