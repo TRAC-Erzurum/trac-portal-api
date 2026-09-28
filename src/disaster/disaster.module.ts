@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BranchModule } from '../branch/branch.module';
+import { PublishingModule } from '../publishing/publishing.module';
 import { User } from '../user/entities/user.entity';
 import { UserModule } from '../user/user.module';
 import { controllers } from './controllers';
@@ -13,6 +14,7 @@ import { services } from './services';
     TypeOrmModule.forFeature([...entities, User]),
     BranchModule,
     UserModule,
+    PublishingModule,
   ],
   controllers: [...controllers],
   providers: [...services, DisasterAdminGuard],

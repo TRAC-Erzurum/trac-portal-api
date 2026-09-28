@@ -14,6 +14,8 @@ import { AllowWithoutCallsign } from '../../auth/decorators/allow-without-callsi
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { GlobalRole } from '../../auth/enums/role.enum';
 import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
+import { UpdateDisasterPublishingDto } from '../../publishing/dto';
+import { PublicationService } from '../../publishing/services/publication.service';
 import { RequestWithUser } from '../../shared/types/request.types';
 import {
   AssignMemberDto,
@@ -36,6 +38,7 @@ export class DisasterController {
     private readonly disasterService: DisasterService,
     private readonly membershipService: DisasterMembershipService,
     private readonly observationService: ObservationService,
+    private readonly publicationService: PublicationService,
   ) {}
 
   @Get()
@@ -85,6 +88,28 @@ export class DisasterController {
   @AllowWithoutCallsign()
   reactivate(@Param('id') id: string, @Req() req: RequestWithUser) {
     return this.disasterService.reactivate(id, req.user.email);
+  }
+
+  @Get(':id/publishing')
+  @UseGuards(DisasterAdminGuard)
+  @AllowWithoutCallsign()
+  getPublishing(@Param('id') id: string) {
+    return this.publicationService.getDisasterPublishing(id);
+  }
+
+  @Patch(':id/publishing')
+  @UseGuards(DisasterAdminGuard)
+  @AllowWithoutCallsign()
+  updatePublishing(
+    @Param('id') id: string,
+    @Body() dto: UpdateDisasterPublishingDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.publicationService.updateDisasterPublishing(
+      id,
+      dto,
+      req.user.email,
+    );
   }
 
   @Get(':id/members')
