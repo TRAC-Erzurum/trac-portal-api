@@ -1,10 +1,16 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { performance } from 'perf_hooks';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Disaster } from '../../disaster/entities/disaster.entity';
 import { PublicationQueueItem } from '../entities/publication-queue-item.entity';
 import { PublishTarget } from '../entities/publish-target.entity';
 import { PublicationStatus } from '../enums/publication-status.enum';
+import {
+  EventLevel,
+  EventLogger,
+  safeId,
+} from '../../shared/logging/event-logger';
 import {
   CLAIM_LEASE_MS,
   DELIVERY_BATCH_SIZE,
@@ -15,6 +21,7 @@ import {
 import { TargetRecord } from '../types/target-record.types';
 import {
   classifyResponse,
+  DeliveryOutcome,
   retryDelayMs,
   signDelivery,
 } from '../utils/delivery.util';
@@ -34,12 +41,22 @@ interface SendResult {
   /** `null` for a network failure or timeout. */
   status: number | null;
   detail: string;
+  /** Network error code when there was no response. */
+  error?: string;
+  durationMs: number;
 }
+
+const ATTEMPT_LEVEL: Record<DeliveryOutcome, EventLevel> = {
+  delivered: 'info',
+  retry: 'warn',
+  failed: 'error',
+  'authentication-failed': 'error',
+};
 
 /** Sends due queue rows to their targets, signed, one record per request. */
 @Injectable()
 export class PublicationDeliveryService {
-  private readonly logger = new Logger(PublicationDeliveryService.name);
+  private readonly logger = new EventLogger(PublicationDeliveryService.name);
 
   constructor(
     @InjectRepository(Disaster)
@@ -107,32 +124,47 @@ export class PublicationDeliveryService {
       }
       if (await this.resolvesFailedRecord(row)) {
         await this.finish(row, PublicationStatus.FAILED, 'parent failed');
+        this.logAttempt(row, 'failed', {
+          status: null,
+          error: 'parent_failed',
+          nextAttemptAt: null,
+        });
         summary.failed++;
         continue;
       }
 
       const result = await this.send(target, row.payload);
       const at = this.clock();
-      switch (classifyResponse(result.status)) {
+      const outcome = classifyResponse(result.status);
+      const attempt = {
+        status: result.status,
+        error: result.error,
+        durationMs: result.durationMs,
+      };
+      switch (outcome) {
         case 'delivered':
           await this.finish(row, PublicationStatus.DELIVERED, result.detail);
+          this.logAttempt(row, outcome, { ...attempt, nextAttemptAt: null });
           summary.delivered++;
           break;
         case 'failed':
           await this.finish(row, PublicationStatus.FAILED, result.detail);
+          this.logAttempt(row, outcome, { ...attempt, nextAttemptAt: null });
           summary.failed++;
           break;
         case 'retry': {
           const attempts = row.attempts + 1;
+          const nextAttemptAt = new Date(at.getTime() + retryDelayMs(attempts));
           await this.queueRepository.update(
             { id: row.id },
             {
               attempts,
               lastAttemptAt: at,
               lastResult: result.detail,
-              nextAttemptAt: new Date(at.getTime() + retryDelayMs(attempts)),
+              nextAttemptAt,
             },
           );
+          this.logAttempt(row, outcome, { ...attempt, nextAttemptAt });
           summary.retrying++;
           break;
         }
@@ -154,14 +186,42 @@ export class PublicationDeliveryService {
               nextAttemptAt: at,
             },
           );
+          // Held until the target's secret changes: no scheduled next attempt.
+          this.logAttempt(row, outcome, { ...attempt, nextAttemptAt: null });
           summary.retrying++;
-          this.logger.warn(
-            `Publish target ${target.id} refused authentication; holding its queue`,
-          );
           break;
       }
     }
     return summary;
+  }
+
+  /**
+   * One line per delivery attempt: target, disaster, observation, the
+   * target's HTTP status, the classification, the attempt count and when the
+   * next attempt is due. Never the payload, the response body or the secret.
+   */
+  private logAttempt(
+    row: PublicationQueueItem,
+    classification: DeliveryOutcome,
+    attempt: {
+      status: number | null;
+      error?: string;
+      durationMs?: number;
+      nextAttemptAt: Date | null;
+    },
+  ): void {
+    this.logger.write(ATTEMPT_LEVEL[classification], {
+      event: 'publishing.delivery',
+      targetId: row.targetId,
+      disasterId: row.disasterId,
+      observationId: row.observationId,
+      status: attempt.status,
+      classification,
+      attempt: row.attempts + 1,
+      nextAttemptAt: attempt.nextAttemptAt?.toISOString() ?? null,
+      durationMs: attempt.durationMs,
+      error: attempt.error,
+    });
   }
 
   /** The row's target, if its disaster still publishes to it and it is usable now. */
@@ -227,6 +287,8 @@ export class PublicationDeliveryService {
   ): Promise<SendResult> {
     const rawBody = JSON.stringify(payload);
     const timestamp = Math.floor(this.clock().getTime() / 1000);
+    const started = performance.now();
+    const elapsed = () => Math.round(performance.now() - started);
     try {
       const res = await fetch(target.intakeUrl, {
         method: 'POST',
@@ -244,12 +306,16 @@ export class PublicationDeliveryService {
       return {
         status: res.status,
         detail: `${res.status} ${text}`.trim().slice(0, 500),
+        durationMs: elapsed(),
       };
     } catch (error) {
       const err = error as { name?: string; cause?: { code?: string } };
+      const code = err.cause?.code ?? err.name ?? 'error';
       return {
         status: null,
-        detail: `network: ${err.cause?.code ?? err.name ?? 'error'}`,
+        detail: `network: ${code}`,
+        error: safeId(code),
+        durationMs: elapsed(),
       };
     }
   }

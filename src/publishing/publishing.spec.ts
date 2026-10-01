@@ -7,6 +7,7 @@ import { DisasterRole } from '../disaster/enums/disaster-role.enum';
 import { DisasterType } from '../disaster/enums/disaster-type.enum';
 import { DisasterMembershipStatus } from '../disaster/enums/membership-status.enum';
 import { User } from '../user/entities/user.entity';
+import { LogCapture, LogLine } from '../../test/logging/log-capture';
 import { FakeTarget } from '../../test/publishing/fake-target';
 import {
   createPublishingTestApp,
@@ -700,5 +701,169 @@ describe('every delivery', () => {
     expect(last.headers['x-timestamp']).toBe(
       String(Math.floor(t.clock.now.getTime() / 1000)),
     );
+  });
+});
+
+describe('every delivery attempt', () => {
+  const logs = new LogCapture();
+  beforeEach(() => logs.install());
+  afterEach(() => {
+    logs.uninstall();
+    logs.clear();
+  });
+
+  function attempts(observationId: string): LogLine[] {
+    return logs
+      .events('publishing.delivery')
+      .filter((l) => l.observationId === observationId);
+  }
+
+  it('leaves one line for a delivered record', async () => {
+    const { disaster, targetId } = await publishingDisaster();
+    const id = await observe(disaster.id);
+    logs.clear();
+
+    await deliver();
+
+    const lines = attempts(id);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      level: 'info',
+      targetId,
+      disasterId: disaster.id,
+      observationId: id,
+      status: 201,
+      classification: 'delivered',
+      attempt: 1,
+      nextAttemptAt: null,
+    });
+    expect(typeof lines[0].durationMs).toBe('number');
+  });
+
+  it('says when an unreachable target will be tried again, and how many times it was', async () => {
+    const { disaster } = await publishingDisaster();
+    target.unreachable = true;
+    const id = await observe(disaster.id);
+
+    await deliver();
+    advance(MINUTE);
+    await deliver();
+
+    const lines = attempts(id);
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toMatchObject({
+      level: 'warn',
+      status: null,
+      classification: 'retry',
+      attempt: 2,
+      nextAttemptAt: new Date(t.clock.now.getTime() + 2 * MINUTE).toISOString(),
+    });
+    expect(lines[1].error).toEqual(expect.any(String));
+  });
+
+  it('records the status of a record refused for good, and of a refused signature', async () => {
+    const { disaster } = await publishingDisaster();
+    const invalid = await observe(disaster.id);
+    target.invalidExternalIds.add(invalid);
+    await deliver();
+    expect(attempts(invalid)).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        status: 400,
+        classification: 'failed',
+        attempt: 1,
+        nextAttemptAt: null,
+      }),
+    ]);
+
+    const targetId = await registerTarget('wrong-secret');
+    const other = await createDisaster('Yanlış anahtar');
+    target.linkedIncidents.add(other.id);
+    await setPublishing(other.id, { enabled: true, targetId }).expect(200);
+    const held = await observe(other.id);
+    await deliver();
+    expect(attempts(held)).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        targetId,
+        status: 401,
+        classification: 'authentication-failed',
+        attempt: 1,
+      }),
+    ]);
+  });
+
+  it('logs a resolve dropped because its record was refused', async () => {
+    const { disaster } = await publishingDisaster();
+    const building = await observe(disaster.id);
+    target.invalidExternalIds.add(building);
+    const resolve = await observe(disaster.id, {
+      type: 'FIRE_EXTINGUISHED',
+      parentObservationId: building,
+    });
+
+    await deliver();
+
+    expect(attempts(resolve)).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        status: null,
+        classification: 'failed',
+        error: 'parent_failed',
+        attempt: 1,
+      }),
+    ]);
+  });
+
+  it('never writes the shared secret, the signature or a reporter email', async () => {
+    const { disaster } = await publishingDisaster();
+    await observe(disaster.id);
+    const invalid = await observe(disaster.id, { type: 'ROAD_BLOCKED' });
+    target.invalidExternalIds.add(invalid);
+    const refused = await observe(disaster.id);
+    target.invalidExternalIds.add(refused);
+    await observe(disaster.id, {
+      type: 'FIRE_EXTINGUISHED',
+      parentObservationId: refused,
+    });
+    await deliver();
+    target.tooManyRequests = 1;
+    await observe(disaster.id, { type: 'MEDICAL_POINT' });
+    await deliver();
+    target.unreachable = true;
+    await observe(disaster.id, { type: 'OTHER' });
+    advance(MINUTE);
+    await deliver();
+    target.unreachable = false;
+    const wrongKey = 'wrong-secret-for-log-test';
+    const badTarget = await registerTarget(wrongKey);
+    const other = await createDisaster('Yanlış anahtar');
+    target.linkedIncidents.add(other.id);
+    await setPublishing(other.id, {
+      enabled: true,
+      targetId: badTarget,
+    }).expect(200);
+    await observe(other.id);
+    advance(MINUTE);
+    await deliver();
+
+    const lines = logs.events('publishing.delivery');
+    expect(new Set(lines.map((l) => l.classification))).toEqual(
+      new Set(['delivered', 'retry', 'failed', 'authentication-failed']),
+    );
+    expect(lines.some((l) => l.error === 'parent_failed')).toBe(true);
+    expect(lines.some((l) => l.status === null && l.error)).toBe(true);
+    const output = logs.raw;
+    const secrets = [
+      TARGET_KEY,
+      wrongKey,
+      'field@trac.example',
+      'admin@trac.example',
+      'root@trac.example',
+      ...target.requests.map((r) => r.headers['x-signature']),
+    ];
+    for (const secret of secrets) {
+      expect(output).not.toContain(secret);
+    }
   });
 });
