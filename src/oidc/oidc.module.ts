@@ -5,6 +5,7 @@ import { UserModule } from '../user/user.module';
 import { controllers } from './controllers';
 import { entities } from './entities';
 import { OIDC_CLOCK, OidcClock } from './oidc.constants';
+import { OidcRequestLogModule } from './oidc-logging';
 import { services } from './services';
 
 @Module({
@@ -14,6 +15,7 @@ import { services } from './services';
     // Own instance with no shared secret: ID tokens are RS256-signed with the
     // key passed per call, never with JWT_SECRET.
     JwtModule.register({}),
+    OidcRequestLogModule,
   ],
   controllers: [...controllers],
   providers: [
