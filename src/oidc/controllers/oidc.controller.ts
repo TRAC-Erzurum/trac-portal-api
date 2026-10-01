@@ -15,7 +15,13 @@ import { Public } from '../../auth/decorators/public.decorator';
 import { AuthorizationRequestDto } from '../dto/authorization-request.dto';
 import { TokenRequestDto } from '../dto/token-request.dto';
 import { OidcKeyService } from '../services/oidc-key.service';
-import { ClientCredentials, OidcService } from '../services/oidc.service';
+import { noteOidcOutcome } from '../oidc-logging';
+import {
+  ClientCredentials,
+  OAuthError,
+  OidcService,
+} from '../services/oidc.service';
+import { safeId } from '../../shared/logging/event-logger';
 
 const REFUSAL_PAGE = `<!doctype html>
 <html lang="tr">
@@ -111,6 +117,11 @@ export class OidcController {
   ): Promise<void> {
     res.setHeader('Cache-Control', 'no-store');
     const result = await this.oidcService.validateAuthorizationRequest(query);
+    if (result.kind !== 'valid') {
+      noteOidcOutcome(res, {
+        error: result.kind === 'refused' ? result.reason : result.error,
+      });
+    }
     if (result.kind === 'refused') {
       res.status(HttpStatus.BAD_REQUEST).type('html').send(REFUSAL_PAGE);
       return;
@@ -135,6 +146,9 @@ export class OidcController {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Pragma', 'no-cache');
     const credentials = clientCredentials(authorization, body ?? {});
+    if (credentials.clientId !== undefined) {
+      noteOidcOutcome(res, { clientId: safeId(credentials.clientId) });
+    }
     try {
       const tokens = await this.oidcService.exchangeCode(
         body ?? {},
@@ -143,6 +157,9 @@ export class OidcController {
       res.status(HttpStatus.OK).json(tokens);
     } catch (err) {
       if (!(err instanceof HttpException)) throw err;
+      if (err instanceof OAuthError) {
+        noteOidcOutcome(res, { step: err.step });
+      }
       const status: number = err.getStatus();
       if (status === 401 && credentials.method === 'client_secret_basic') {
         res.setHeader('WWW-Authenticate', 'Basic realm="oidc"');
@@ -154,8 +171,10 @@ export class OidcController {
   private async userinfo(authorization: string | undefined, res: Response) {
     res.setHeader('Cache-Control', 'no-store');
     const match = /^Bearer (\S+)$/i.exec(authorization ?? '');
-    const claims = await this.oidcService.userinfo(match?.[1]);
-    if (!claims) {
+    const result = await this.oidcService.userinfo(match?.[1]);
+    noteOidcOutcome(res, { clientId: result.clientId });
+    if ('step' in result) {
+      noteOidcOutcome(res, { step: result.step });
       res
         .status(HttpStatus.UNAUTHORIZED)
         .setHeader('WWW-Authenticate', 'Bearer error="invalid_token"')
@@ -165,7 +184,7 @@ export class OidcController {
         });
       return;
     }
-    res.status(HttpStatus.OK).json(claims);
+    res.status(HttpStatus.OK).json(result.claims);
   }
 
   @Public()

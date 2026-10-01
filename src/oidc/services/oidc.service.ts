@@ -49,7 +49,7 @@ export type AuthorizationValidation =
   /** Client or redirect URI unknown: show an error page, never redirect. */
   | { kind: 'refused'; reason: 'invalid_client' | 'invalid_redirect_uri' }
   /** Redirect URI verified, but the request is malformed. */
-  | { kind: 'redirect_error'; redirectTo: string }
+  | { kind: 'redirect_error'; error: string; redirectTo: string }
   | { kind: 'valid'; request: ValidatedAuthorizationRequest };
 
 /**
@@ -98,14 +98,34 @@ export interface ClientCredentials {
   method: 'client_secret_basic' | 'client_secret_post' | 'both' | 'none';
 }
 
-/** OAuth2 error response (RFC 6749 §5.2) carried by a built-in HttpException. */
+/**
+ * OAuth2 error response (RFC 6749 §5.2). `step` names the check that failed,
+ * for the log only; the response body stays the standard one.
+ */
+export class OAuthError extends HttpException {
+  constructor(
+    readonly error: string,
+    description: string,
+    status: HttpStatus,
+    readonly step?: string,
+  ) {
+    super({ error, error_description: description }, status);
+  }
+}
+
 export function oauthError(
   error: string,
   description: string,
   status: HttpStatus = HttpStatus.BAD_REQUEST,
-): HttpException {
-  return new HttpException({ error, error_description: description }, status);
+  step?: string,
+): OAuthError {
+  return new OAuthError(error, description, status, step);
 }
+
+/** Why a bearer token was refused, or whose it is; for the log. */
+export type UserinfoResult =
+  | { claims: OidcUserClaims; clientId: string }
+  | { claims: null; step: string; clientId?: string };
 
 const AUTHORIZATION_PARAMS: (keyof AuthorizationRequestDto)[] = [
   'response_type',
@@ -213,6 +233,7 @@ export class OidcService {
 
     const fail = (error: string, description: string) => ({
       kind: 'redirect_error' as const,
+      error,
       redirectTo: appendParams(redirectUri, {
         error,
         error_description: description,
@@ -421,6 +442,8 @@ export class OidcService {
       throw oauthError(
         'invalid_request',
         'Use exactly one client authentication method',
+        HttpStatus.BAD_REQUEST,
+        'multiple_auth_methods',
       );
     }
     const client =
@@ -435,6 +458,7 @@ export class OidcService {
         'invalid_client',
         'Client authentication failed',
         HttpStatus.UNAUTHORIZED,
+        credentials.method === 'none' ? 'no_credentials' : 'bad_credentials',
       );
     }
     return client;
@@ -452,40 +476,50 @@ export class OidcService {
       );
     }
     if (!body.code) {
-      throw oauthError('invalid_request', 'code is required');
+      throw oauthError(
+        'invalid_request',
+        'code is required',
+        HttpStatus.BAD_REQUEST,
+        'code_missing',
+      );
     }
 
     const now = this.clock();
-    const invalidGrant = () =>
-      oauthError('invalid_grant', 'Invalid authorization code');
+    const invalidGrant = (step: string) =>
+      oauthError(
+        'invalid_grant',
+        'Invalid authorization code',
+        HttpStatus.BAD_REQUEST,
+        step,
+      );
     const record = await this.codeRepository.findOne({
       where: { codeHash: sha256Hex(body.code) },
     });
-    if (!record) throw invalidGrant();
+    if (!record) throw invalidGrant('code_unknown');
 
     if (record.usedAt) {
       // Replay: revoke what the first redemption produced (RFC 6749 §4.1.2).
       await this.accessTokenRepository.delete({
         authorizationCodeId: record.id,
       });
-      throw invalidGrant();
+      throw invalidGrant('code_replayed');
     }
-    if (
-      record.clientId !== client.id ||
-      record.expiresAt.getTime() <= now.getTime() ||
-      record.redirectUri !== body.redirect_uri
-    ) {
-      throw invalidGrant();
+    if (record.clientId !== client.id) throw invalidGrant('client_mismatch');
+    if (record.expiresAt.getTime() <= now.getTime()) {
+      throw invalidGrant('code_expired');
+    }
+    if (record.redirectUri !== body.redirect_uri) {
+      throw invalidGrant('redirect_uri_mismatch');
     }
     if (record.codeChallenge) {
       if (
         !body.code_verifier ||
         pkceS256(body.code_verifier) !== record.codeChallenge
       ) {
-        throw invalidGrant();
+        throw invalidGrant('pkce_failed');
       }
     } else if (body.code_verifier) {
-      throw invalidGrant();
+      throw invalidGrant('pkce_unexpected');
     }
 
     // Single use: only the request that flips usedAt from NULL proceeds.
@@ -493,10 +527,10 @@ export class OidcService {
       { id: record.id, usedAt: IsNull() },
       { usedAt: now },
     );
-    if (consumed.affected !== 1) throw invalidGrant();
+    if (consumed.affected !== 1) throw invalidGrant('code_replayed');
 
     const user = await this.findUser(record.userId);
-    if (!user) throw invalidGrant();
+    if (!user) throw invalidGrant('user_missing');
 
     const scopes = record.scope.split(' ') as OidcScope[];
     const accessToken = randomToken();
@@ -558,22 +592,29 @@ export class OidcService {
     }
   }
 
-  /** Claims for a bearer access token; null when the token is not valid. */
-  async userinfo(
-    accessToken: string | undefined,
-  ): Promise<OidcUserClaims | null> {
-    if (!accessToken) return null;
+  /** Claims for a bearer access token; `claims: null` when the token is not valid. */
+  async userinfo(accessToken: string | undefined): Promise<UserinfoResult> {
+    if (!accessToken) return { claims: null, step: 'token_missing' };
     const record = await this.accessTokenRepository.findOne({
       where: { tokenHash: sha256Hex(accessToken) },
     });
-    if (!record || record.expiresAt.getTime() <= this.clock().getTime()) {
-      return null;
+    if (!record) return { claims: null, step: 'token_unknown' };
+    const client = await this.clientService.findActiveById(record.clientId);
+    if (record.expiresAt.getTime() <= this.clock().getTime()) {
+      return {
+        claims: null,
+        step: 'token_expired',
+        clientId: client?.clientId,
+      };
     }
-    if (!(await this.clientService.findActiveById(record.clientId))) {
-      return null;
-    }
+    if (!client) return { claims: null, step: 'client_inactive' };
     const user = await this.findUser(record.userId);
-    if (!user) return null;
-    return buildClaims(user, record.scope.split(' ') as OidcScope[]);
+    if (!user) {
+      return { claims: null, step: 'user_missing', clientId: client.clientId };
+    }
+    return {
+      claims: buildClaims(user, record.scope.split(' ') as OidcScope[]),
+      clientId: client.clientId,
+    };
   }
 }

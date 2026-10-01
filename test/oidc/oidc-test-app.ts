@@ -29,6 +29,7 @@ import { OidcClient } from '../../src/oidc/entities/oidc-client.entity';
 import { OidcConsent } from '../../src/oidc/entities/oidc-consent.entity';
 import { OidcSigningKey } from '../../src/oidc/entities/oidc-signing-key.entity';
 import { OIDC_CLOCK } from '../../src/oidc/oidc.constants';
+import { OidcRequestLogModule } from '../../src/oidc/oidc-logging';
 import { InMemoryRepository } from './in-memory-repository';
 
 export const PUBLIC_API_ORIGIN = 'https://portal.example.org';
@@ -183,6 +184,7 @@ export async function createOidcTestApp(): Promise<OidcTestApp> {
         throttlers: [{ name: 'default', ttl: 60000, limit: 100 }],
       }),
       JwtModule.register({}),
+      OidcRequestLogModule,
     ],
     controllers: [...controllers],
     providers: [
