@@ -62,7 +62,7 @@ export interface DisasterPublishingView {
 export interface DisasterSyncResult extends DisasterPublishingView {
   /** Observations queued by this sync. */
   queued: number;
-  /** Refused records put back in the queue by this sync. */
+  /** Refused or failing records the sync made due for another attempt right now. */
   retried: number;
 }
 
@@ -283,7 +283,8 @@ export class PublicationService {
   /**
    * Sends what the target does not have yet: observations made before
    * publishing was turned on (archived disasters included), and records it
-   * refused, which go back in the queue. Delivery is the ordinary one — one
+   * refused, which go back in the queue, and records waiting out a retry
+   * delay, which are tried again at once. Delivery is the ordinary one — one
    * request per record, oldest first — and the target's own duplicate check
    * makes a record it already holds harmless.
    */
@@ -327,6 +328,23 @@ export class PublicationService {
 
     let retried = 0;
     for (const row of rows) {
+      // A record that failed and is waiting out its back-off (up to an hour)
+      // is tried again now, keeping its attempt count and last answer.
+      if (
+        row.status === PublicationStatus.PENDING &&
+        row.attempts > 0 &&
+        new Date(row.nextAttemptAt).getTime() > at.getTime()
+      ) {
+        await this.queueRepository.update(
+          { id: row.id },
+          {
+            nextAttemptAt: at,
+            updatedBy: [...(row.updatedBy ?? []), actorEmail],
+          },
+        );
+        retried++;
+        continue;
+      }
       if (row.status !== PublicationStatus.FAILED) continue;
       await this.queueRepository.update(
         { id: row.id },
