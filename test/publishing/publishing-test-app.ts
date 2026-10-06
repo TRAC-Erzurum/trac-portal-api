@@ -30,7 +30,6 @@ import {
   ObservationScoringService,
   ObservationService,
 } from '../../src/disaster/services';
-import { controllers as publishingControllers } from '../../src/publishing/controllers';
 import {
   PublicationQueueItem,
   PublishTarget,
@@ -199,7 +198,7 @@ export async function createPublishingTestApp(): Promise<PublishingTestApp> {
       }),
       PassportModule,
     ],
-    controllers: [DisasterController, ...publishingControllers],
+    controllers: [DisasterController],
     providers: [
       ...publishingServices,
       ObservationService,

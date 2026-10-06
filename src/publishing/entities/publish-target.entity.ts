@@ -2,7 +2,11 @@ import { Exclude } from 'class-transformer';
 import { Column, Entity } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 
-/** An external system observations can be published to. */
+/**
+ * The recipient one disaster shares its observations with. Owned by that
+ * disaster (`disasters.publishTargetId`): the recipient's address already
+ * names the source it set up for this disaster.
+ */
 @Entity('publish_targets')
 export class PublishTarget extends BaseEntity {
   @Column({ type: 'varchar' })
@@ -11,25 +15,11 @@ export class PublishTarget extends BaseEntity {
   @Column({ type: 'varchar' })
   intakeUrl: string;
 
-  /** The source id the target assigned to this portal (`X-Source-Id`). */
-  @Column({ type: 'varchar', length: 100 })
-  sourceId: string;
-
   /**
-   * HMAC key for `X-Signature`. Stored as given because it is needed to sign;
-   * write-only through the API and never serialised.
+   * The key presented as a bearer token. Stored as given because it is
+   * needed to send; write-only through the API and never serialised.
    */
   @Exclude()
   @Column({ type: 'varchar' })
   sharedSecret: string;
-
-  @Column({ default: true })
-  active: boolean;
-
-  /**
-   * Set when the target answered 401. Every row of the target is held until
-   * its credentials are changed.
-   */
-  @Column({ type: 'timestamptz', nullable: true })
-  authFailedAt: Date | null;
 }

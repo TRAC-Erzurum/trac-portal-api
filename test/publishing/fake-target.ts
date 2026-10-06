@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { timingSafeEqual } from 'crypto';
 import { AddressInfo } from 'net';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
 
@@ -24,10 +24,10 @@ export interface ReceivedRequest {
   headers: Record<string, string | undefined>;
   rawBody: string;
   body: Record<string, any> | null;
-  /** HMAC over `${X-Timestamp}.${rawBody}` matched the shared secret. */
-  signatureValid: boolean;
-  /** X-Timestamp was within ±300 s of the target's clock. */
-  timestampFresh: boolean;
+  /** The path the request was made to. */
+  path: string;
+  /** `Authorization: Bearer <key>` carried the key. */
+  authentic: boolean;
   status: number;
 }
 
@@ -38,17 +38,17 @@ export interface StoredRecord {
 }
 
 /**
- * In-process implementation of the target's intake contract: signature and
- * timestamp check, dedup by `externalId`, 409 until the source's disaster is
- * linked to an incident, 422 for a closed incident, and `resolves`.
+ * In-process implementation of the target's intake contract: the source is
+ * named in the address and presents its key as a bearer token, dedup by
+ * `externalId`, 422 for a closed incident, and `resolves`.
  */
 export class FakeTarget {
   readonly requests: ReceivedRequest[] = [];
   /** Records by `externalId` (new records only, not resolves). */
   readonly records = new Map<string, StoredRecord>();
   private readonly appliedResolves = new Map<string, string>();
-  readonly linkedIncidents = new Set<string>();
-  readonly closedIncidents = new Set<string>();
+  /** The source's incident is closed: new records are refused (422). */
+  closed = false;
   /** `externalId`s the target rejects as invalid (400). */
   readonly invalidExternalIds = new Set<string>();
   /** When true the target drops every connection (network failure). */
@@ -63,12 +63,11 @@ export class FakeTarget {
   constructor(
     readonly sourceId: string,
     public secret: string,
-    private readonly now: () => Date,
   ) {}
 
   get url(): string {
     const { port } = this.server.address() as AddressInfo;
-    return `http://127.0.0.1:${port}/api/intake/observations`;
+    return `http://127.0.0.1:${port}/api/ingest/observations/${this.sourceId}`;
   }
 
   async start(): Promise<void> {
@@ -96,18 +95,12 @@ export class FakeTarget {
         const v = req.headers[name];
         return Array.isArray(v) ? v[0] : v;
       };
-      const timestamp = header('x-timestamp') ?? '';
-      const expected = `sha256=${createHmac('sha256', this.secret)
-        .update(`${timestamp}.${rawBody}`)
-        .digest('hex')}`;
-      const given = header('x-signature') ?? '';
-      const signatureValid =
+      const given = header('authorization') ?? '';
+      const expected = `Bearer ${this.secret}`;
+      const authentic =
         given.length === expected.length &&
         timingSafeEqual(Buffer.from(given), Buffer.from(expected));
-      const nowSeconds = Math.floor(this.now().getTime() / 1000);
-      const timestampFresh =
-        /^\d+$/.test(timestamp) &&
-        Math.abs(nowSeconds - Number(timestamp)) <= 300;
+      const path = req.url ?? '';
       let body: Record<string, any> | null;
       try {
         body = JSON.parse(rawBody);
@@ -115,22 +108,20 @@ export class FakeTarget {
         body = null;
       }
       const [status, payload] = this.decide(
-        header('x-source-id'),
-        signatureValid && timestampFresh,
+        path.endsWith(`/${this.sourceId}`),
+        authentic,
         req.method ?? '',
         body,
       );
       this.requests.push({
         headers: {
           'content-type': header('content-type'),
-          'x-source-id': header('x-source-id'),
-          'x-timestamp': timestamp,
-          'x-signature': given,
+          authorization: given,
         },
         rawBody,
         body,
-        signatureValid,
-        timestampFresh,
+        path,
+        authentic,
         status,
       });
       const respond = () => {
@@ -143,13 +134,13 @@ export class FakeTarget {
   }
 
   private decide(
-    sourceId: string | undefined,
+    rightSource: boolean,
     authentic: boolean,
     method: string,
     body: Record<string, any> | null,
   ): [number, unknown] {
     if (method !== 'POST') return [405, { error: 'method' }];
-    if (sourceId !== this.sourceId || !authentic)
+    if (!rightSource || !authentic)
       return [401, { error: 'authentication failed' }];
     if (this.tooManyRequests > 0) {
       this.tooManyRequests--;
@@ -158,8 +149,7 @@ export class FakeTarget {
     if (!body || typeof body !== 'object') return [400, { error: 'json' }];
     const str = (v: unknown) =>
       typeof v === 'string' && v.length > 0 && v.length <= 100;
-    if (!str(body.externalId) || !str(body.externalIncidentId))
-      return [400, { error: 'ids' }];
+    if (!str(body.externalId)) return [400, { error: 'ids' }];
     if (this.invalidExternalIds.has(body.externalId))
       return [400, { error: 'invalid' }];
     if (body.resolves === undefined && !TARGET_TYPES.includes(body.type))
@@ -180,9 +170,7 @@ export class FakeTarget {
       typeof r.verified !== 'boolean'
     )
       return [400, { error: 'reporter' }];
-    if (!this.linkedIncidents.has(body.externalIncidentId))
-      return [409, { error: 'not linked' }];
-    if (this.closedIncidents.has(body.externalIncidentId))
+    if (this.closed && !this.records.has(body.externalId))
       return [422, { error: 'incident closed' }];
 
     if (body.resolves !== undefined) {
