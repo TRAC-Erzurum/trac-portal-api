@@ -1082,3 +1082,74 @@ describe('syncing a disaster', () => {
     expect(t.repos.queue.rows).toHaveLength(0);
   });
 });
+
+describe('photos', () => {
+  async function addPhotos(observationId: string, count: number) {
+    for (let i = 0; i < count; i++) {
+      await t.repos.photos.save({
+        observationId,
+        filePath: `uploads/observations/${observationId}-${i}.jpg`,
+        sortOrder: i,
+      } as never);
+    }
+  }
+
+  it('go with the record as public addresses on the portal origin, in order', async () => {
+    const { disaster } = await publishingDisaster();
+    const id = await observe(disaster.id);
+    await addPhotos(id, 2);
+
+    await deliver();
+
+    expect(target.requests[0].body?.photos).toEqual([
+      `https://portal.example/uploads/observations/${id}-0.jpg`,
+      `https://portal.example/uploads/observations/${id}-1.jpg`,
+    ]);
+  });
+
+  it('are sent for earlier observations too, at most five', async () => {
+    const targetId = await registerTarget();
+    const disaster = await createDisaster();
+    target.linkedIncidents.add(disaster.id);
+    const id = await observe(disaster.id);
+    await addPhotos(id, 7);
+    await setPublishing(disaster.id, { enabled: true, targetId }).expect(200);
+    await http
+      .post(`/api/disaster/${disaster.id}/publishing/sync`)
+      .set('Cookie', as(disasterAdmin))
+      .expect(201);
+
+    await deliver();
+
+    expect(target.requests[0].body?.photos).toHaveLength(5);
+  });
+
+  it('are left out of a record without any', async () => {
+    const { disaster } = await publishingDisaster();
+    await observe(disaster.id);
+    await deliver();
+    expect(target.requests[0].body).not.toHaveProperty('photos');
+  });
+});
+
+describe('syncing an archived disaster', () => {
+  it('works without switching sharing on first', async () => {
+    const targetId = await registerTarget();
+    const disaster = await createDisaster();
+    target.linkedIncidents.add(disaster.id);
+    const id = await observe(disaster.id);
+    await setPublishing(disaster.id, { targetId }).expect(200);
+    await t.repos.disasters.update(
+      { id: disaster.id },
+      { archivedAt: new Date('2026-09-29T00:00:00Z') },
+    );
+
+    await http
+      .post(`/api/disaster/${disaster.id}/publishing/sync`)
+      .set('Cookie', as(disasterAdmin))
+      .expect(201);
+    await deliver();
+
+    expect(target.records.has(id)).toBe(true);
+  });
+});

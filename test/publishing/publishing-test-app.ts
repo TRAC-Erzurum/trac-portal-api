@@ -36,7 +36,10 @@ import {
   PublishTarget,
 } from '../../src/publishing/entities';
 import { PublicationStatus } from '../../src/publishing/enums/publication-status.enum';
-import { PUBLISHING_CLOCK } from '../../src/publishing/publishing.constants';
+import {
+  PUBLISHING_CLOCK,
+  PUBLISHING_PHOTO_GRACE_MS,
+} from '../../src/publishing/publishing.constants';
 import {
   PublicationQueueClaimer,
   services as publishingServices,
@@ -152,6 +155,7 @@ export interface PublishingTestApp {
     disasters: CountingRepository<Disaster>;
     memberships: CountingRepository<DisasterMembership>;
     observations: CountingRepository<Observation>;
+    photos: CountingRepository<ObservationPhoto>;
     targets: CountingRepository<PublishTarget>;
     queue: CountingRepository<PublicationQueueItem>;
   };
@@ -165,6 +169,7 @@ export async function createPublishingTestApp(): Promise<PublishingTestApp> {
     disasters: new CountingRepository<Disaster>(),
     memberships: new CountingRepository<DisasterMembership>(),
     observations: new CountingRepository<Observation>(),
+    photos: new CountingRepository<ObservationPhoto>(),
     targets: new CountingRepository<PublishTarget>(),
     queue: new CountingRepository<PublicationQueueItem>([
       'observationId',
@@ -188,7 +193,9 @@ export async function createPublishingTestApp(): Promise<PublishingTestApp> {
       ConfigModule.forRoot({
         ignoreEnvFile: true,
         isGlobal: true,
-        load: [() => ({ JWT_SECRET })],
+        load: [
+          () => ({ JWT_SECRET, PUBLIC_API_ORIGIN: 'https://portal.example/' }),
+        ],
       }),
       PassportModule,
     ],
@@ -212,6 +219,7 @@ export async function createPublishingTestApp(): Promise<PublishingTestApp> {
         useValue: { recompute: async () => undefined },
       },
       { provide: PUBLISHING_CLOCK, useValue: () => clock.now },
+      { provide: PUBLISHING_PHOTO_GRACE_MS, useValue: 0 },
       {
         provide: PublicationQueueClaimer,
         useValue: new InMemoryClaimer(repos.queue),
@@ -227,7 +235,7 @@ export async function createPublishingTestApp(): Promise<PublishingTestApp> {
       },
       {
         provide: getRepositoryToken(ObservationPhoto),
-        useValue: new CountingRepository(),
+        useValue: repos.photos,
       },
       { provide: getRepositoryToken(User), useValue: new CountingRepository() },
       { provide: getRepositoryToken(PublishTarget), useValue: repos.targets },

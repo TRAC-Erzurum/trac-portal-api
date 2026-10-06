@@ -16,7 +16,11 @@ import { UpdateDisasterPublishingDto } from '../dto/update-disaster-publishing.d
 import { PublicationQueueItem } from '../entities/publication-queue-item.entity';
 import { PublishTarget } from '../entities/publish-target.entity';
 import { PublicationStatus } from '../enums/publication-status.enum';
-import { PUBLISHING_CLOCK, PublishingClock } from '../publishing.constants';
+import {
+  PUBLISHING_CLOCK,
+  PUBLISHING_PHOTO_GRACE_MS,
+  PublishingClock,
+} from '../publishing.constants';
 import { buildTargetRecord, RecordKind } from '../utils/target-record.util';
 
 export interface PublicationIssue {
@@ -110,6 +114,7 @@ export class PublicationService {
     private readonly observationRepository: Repository<Observation>,
     private readonly userService: UserService,
     @Inject(PUBLISHING_CLOCK) private readonly clock: PublishingClock,
+    @Inject(PUBLISHING_PHOTO_GRACE_MS) private readonly photoGraceMs: number,
   ) {}
 
   private async findDisaster(id: string): Promise<Disaster> {
@@ -295,8 +300,19 @@ export class PublicationService {
     if (!target?.active) {
       throw new BadRequestException('error.publishTargetNotFound');
     }
+    // An archived disaster takes no new observations, so there is nothing
+    // "live" to switch on: syncing it is the whole point of its sharing.
     if (!disaster.publishingEnabled) {
-      throw new BadRequestException('error.publishingNotEnabled');
+      if (!disaster.archivedAt) {
+        throw new BadRequestException('error.publishingNotEnabled');
+      }
+      await this.disasterRepository.update(
+        { id: disasterId },
+        {
+          publishingEnabled: true,
+          updatedBy: [...(disaster.updatedBy ?? []), actorEmail],
+        },
+      );
     }
 
     const observations = await this.observationRepository.find({
@@ -419,7 +435,7 @@ export class PublicationService {
         status: PublicationStatus.PENDING,
         payload: buildTargetRecord(observation, reporter, kind),
         attempts: 0,
-        nextAttemptAt: this.clock(),
+        nextAttemptAt: new Date(this.clock().getTime() + this.photoGraceMs),
         lastAttemptAt: null,
         lastResult: null,
         deliveredAt: null,

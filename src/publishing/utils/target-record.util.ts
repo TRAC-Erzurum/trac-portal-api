@@ -9,10 +9,10 @@ export type RecordKind =
   | { kind: 'resolve'; resolves: string };
 
 /**
- * The target record for an observation. The parent link and photos are
- * deliberately absent: the target keeps records flat, and photos are only
- * reachable with a portal session. `locationPrecision` is omitted because
- * the portal does not record it.
+ * The target record for an observation. The parent link is deliberately
+ * absent: the target keeps records flat. Photos are added when it is sent
+ * (they are uploaded after the observation). `locationPrecision` is omitted
+ * because the portal does not record it.
  */
 export function buildTargetRecord(
   observation: Observation,
