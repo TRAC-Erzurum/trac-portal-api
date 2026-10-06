@@ -1029,6 +1029,28 @@ describe('syncing a disaster', () => {
     });
   });
 
+  it('tries a record that is waiting out its retry delay again at once', async () => {
+    const { disaster, first } = await disasterWithHistory();
+    target.linkedIncidents.delete(disaster.id);
+    await sync(disaster.id).expect(201);
+    await deliver();
+    await deliver();
+    expect(target.records.size).toBe(0);
+    expect((await queueRow(first)).attempts).toBe(1);
+
+    target.linkedIncidents.add(disaster.id);
+    await deliver();
+    expect(target.records.size).toBe(0); // still inside the one-minute delay
+
+    const res = await sync(disaster.id).expect(201);
+    expect(res.body).toMatchObject({ queued: 0, retried: 2 });
+    await deliver();
+
+    expect(target.records.has(first)).toBe(true);
+    const after = await view(disaster.id);
+    expect(after.counts).toMatchObject({ delivered: 2, waiting: 0 });
+  });
+
   it('sends a resolution after the record it resolves', async () => {
     const targetId = await registerTarget();
     const disaster = await createDisaster();
