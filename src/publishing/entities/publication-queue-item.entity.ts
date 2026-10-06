@@ -52,6 +52,10 @@ export class PublicationQueueItem extends BaseEntity {
   @Column({ type: 'timestamptz', nullable: true })
   deliveredAt: Date | null;
 
+  /** The target already had this record when it was delivered (it answered `duplicate`). */
+  @Column({ type: 'boolean', default: false })
+  alreadyExisted: boolean;
+
   @ManyToOne(() => Observation, { onDelete: 'CASCADE' })
   @JoinColumn({
     name: 'observationId',

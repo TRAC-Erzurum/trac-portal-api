@@ -112,6 +112,13 @@ export class DisasterController {
     );
   }
 
+  @Post(':id/publishing/sync')
+  @UseGuards(DisasterAdminGuard)
+  @AllowWithoutCallsign()
+  syncPublishing(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.publicationService.syncDisaster(id, req.user.email);
+  }
+
   @Get(':id/members')
   @UseGuards(DisasterAdminGuard)
   @AllowWithoutCallsign()

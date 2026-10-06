@@ -41,6 +41,8 @@ interface SendResult {
   /** `null` for a network failure or timeout. */
   status: number | null;
   detail: string;
+  /** The target answered 200 `duplicate`: it already had the record. */
+  alreadyExisted?: boolean;
   /** Network error code when there was no response. */
   error?: string;
   durationMs: number;
@@ -52,6 +54,15 @@ const ATTEMPT_LEVEL: Record<DeliveryOutcome, EventLevel> = {
   failed: 'error',
   'authentication-failed': 'error',
 };
+
+/** `{ duplicate: true }`: the target's answer for a record it already holds. */
+function isDuplicateBody(text: string): boolean {
+  try {
+    return (JSON.parse(text) as { duplicate?: unknown })?.duplicate === true;
+  } catch {
+    return false;
+  }
+}
 
 /** Sends due queue rows to their targets, signed, one record per request. */
 @Injectable()
@@ -143,7 +154,12 @@ export class PublicationDeliveryService {
       };
       switch (outcome) {
         case 'delivered':
-          await this.finish(row, PublicationStatus.DELIVERED, result.detail);
+          await this.finish(
+            row,
+            PublicationStatus.DELIVERED,
+            result.detail,
+            result.alreadyExisted,
+          );
           this.logAttempt(row, outcome, { ...attempt, nextAttemptAt: null });
           summary.delivered++;
           break;
@@ -267,6 +283,7 @@ export class PublicationDeliveryService {
     row: PublicationQueueItem,
     status: PublicationStatus.DELIVERED | PublicationStatus.FAILED,
     detail: string,
+    alreadyExisted = false,
   ): Promise<void> {
     const at = this.clock();
     await this.queueRepository.update(
@@ -277,6 +294,7 @@ export class PublicationDeliveryService {
         lastAttemptAt: at,
         lastResult: detail,
         deliveredAt: status === PublicationStatus.DELIVERED ? at : null,
+        alreadyExisted,
       },
     );
   }
@@ -306,6 +324,7 @@ export class PublicationDeliveryService {
       return {
         status: res.status,
         detail: `${res.status} ${text}`.trim().slice(0, 500),
+        alreadyExisted: res.status === 200 && isDuplicateBody(text),
         durationMs: elapsed(),
       };
     } catch (error) {
