@@ -228,7 +228,12 @@ describe('an observation created in a disaster with publishing on', () => {
       .get(`/api/disaster/${disaster.id}/publishing`)
       .set('Cookie', as(disasterAdmin))
       .expect(200);
-    expect(res.body.counts).toEqual({ waiting: 0, delivered: 2, failed: 0 });
+    expect(res.body.counts).toEqual({
+      waiting: 0,
+      delivered: 2,
+      failed: 0,
+      alreadyExisted: 0,
+    });
   });
 });
 
@@ -865,5 +870,215 @@ describe('every delivery attempt', () => {
     for (const secret of secrets) {
       expect(output).not.toContain(secret);
     }
+  });
+});
+
+describe('syncing a disaster', () => {
+  function sync(disasterId: string, user: User = disasterAdmin) {
+    return http
+      .post(`/api/disaster/${disasterId}/publishing/sync`)
+      .set('Cookie', as(user));
+  }
+
+  async function view(disasterId: string) {
+    const res = await http
+      .get(`/api/disaster/${disasterId}/publishing`)
+      .set('Cookie', as(disasterAdmin))
+      .expect(200);
+    return res.body;
+  }
+
+  /** A disaster with observations made before publishing was on. */
+  async function disasterWithHistory() {
+    const targetId = await registerTarget();
+    const disaster = await createDisaster();
+    target.linkedIncidents.add(disaster.id);
+    const first = await observe(disaster.id, {
+      eventTime: '2026-09-28T11:55:00+03:00',
+    });
+    const second = await observe(disaster.id, {
+      type: 'ROAD_BLOCKED',
+      eventTime: '2026-09-27T23:30:00-05:00',
+    });
+    expect(t.repos.queue.rows).toHaveLength(0);
+    await setPublishing(disaster.id, { enabled: true, targetId }).expect(200);
+    return { disaster, targetId, first, second };
+  }
+
+  it('sends earlier observations one request each, with their own times in UTC', async () => {
+    const { disaster, first, second } = await disasterWithHistory();
+    expect((await view(disaster.id)).notSent).toBe(2);
+
+    const res = await sync(disaster.id).expect(201);
+    expect(res.body).toMatchObject({ queued: 2, retried: 0, notSent: 0 });
+    expect(target.requests).toHaveLength(0);
+
+    await deliver();
+
+    expect(target.requests.map((r) => r.body?.externalId)).toEqual([
+      first,
+      second,
+    ]);
+    expect(target.requests.map((r) => r.status)).toEqual([201, 201]);
+    expect(target.records.get(first).body.observedAt).toBe(
+      '2026-09-28T08:55:00.000Z',
+    );
+    expect(target.records.get(second).body.observedAt).toBe(
+      '2026-09-28T04:30:00.000Z',
+    );
+    const after = await view(disaster.id);
+    expect(after.counts).toEqual({
+      waiting: 0,
+      delivered: 2,
+      failed: 0,
+      alreadyExisted: 0,
+    });
+    expect(after.issues).toEqual([]);
+  });
+
+  it('works for an archived disaster', async () => {
+    const { disaster, first } = await disasterWithHistory();
+    await t.repos.disasters.update(
+      { id: disaster.id },
+      { archivedAt: new Date('2026-09-29T00:00:00Z') },
+    );
+
+    await sync(disaster.id).expect(201);
+    await deliver();
+
+    expect(target.records.has(first)).toBe(true);
+  });
+
+  it('queues each observation once, however often it is run', async () => {
+    const { disaster } = await disasterWithHistory();
+    await sync(disaster.id).expect(201);
+    const again = await sync(disaster.id).expect(201);
+
+    expect(again.body).toMatchObject({ queued: 0, retried: 0 });
+    expect(t.repos.queue.rows).toHaveLength(2);
+    await deliver();
+    await sync(disaster.id).expect(201);
+    await deliver();
+    expect(target.requests).toHaveLength(2);
+  });
+
+  it('counts a record the target already had as delivered, not as an error', async () => {
+    const { disaster, first } = await disasterWithHistory();
+    target.records.set(first, {
+      id: 'rec-existing',
+      body: {},
+      resolvedBy: null,
+    });
+
+    await sync(disaster.id).expect(201);
+    await deliver();
+
+    expect(target.requests.map((r) => r.status)).toEqual([200, 201]);
+    expect(await queueRow(first)).toMatchObject({
+      status: PublicationStatus.DELIVERED,
+      alreadyExisted: true,
+    });
+    const after = await view(disaster.id);
+    expect(after.counts).toMatchObject({
+      delivered: 2,
+      failed: 0,
+      alreadyExisted: 1,
+    });
+    expect(after.issues).toEqual([]);
+  });
+
+  it('lists a record the target refused, and sends it again on the next sync', async () => {
+    const { disaster, first, second } = await disasterWithHistory();
+    target.closedIncidents.add(disaster.id);
+
+    await sync(disaster.id).expect(201);
+    await deliver();
+
+    const refused = await view(disaster.id);
+    expect(refused.counts).toMatchObject({ delivered: 0, failed: 2 });
+    expect(refused.issues.map((i: any) => i.observationId).sort()).toEqual(
+      [first, second].sort(),
+    );
+    expect(refused.issues[0]).toMatchObject({
+      status: 'FAILED',
+      lastResult: expect.stringContaining('422'),
+    });
+
+    target.closedIncidents.delete(disaster.id);
+    const res = await sync(disaster.id).expect(201);
+    expect(res.body).toMatchObject({ queued: 0, retried: 2 });
+    await deliver();
+
+    const after = await view(disaster.id);
+    expect(after.counts).toMatchObject({ delivered: 2, failed: 0 });
+    expect(after.issues).toEqual([]);
+  });
+
+  it('lists a record that keeps failing for another reason while it is retried', async () => {
+    const { disaster, first } = await disasterWithHistory();
+    target.unreachable = true;
+    await sync(disaster.id).expect(201);
+    await deliver();
+
+    const after = await view(disaster.id);
+    expect(after.issues[0]).toMatchObject({
+      observationId: first,
+      status: 'PENDING',
+      attempts: 1,
+      lastResult: expect.stringContaining('network'),
+    });
+  });
+
+  it('sends a resolution after the record it resolves', async () => {
+    const targetId = await registerTarget();
+    const disaster = await createDisaster();
+    target.linkedIncidents.add(disaster.id);
+    const building = await observe(disaster.id);
+    const extinguished = await observe(disaster.id, {
+      type: 'FIRE_EXTINGUISHED',
+      parentObservationId: building,
+    });
+    await observe(disaster.id, {
+      type: 'DEBRIS_REMOVED',
+      parentObservationId: building,
+    });
+    await setPublishing(disaster.id, { enabled: true, targetId }).expect(200);
+
+    const res = await sync(disaster.id).expect(201);
+    expect(res.body.queued).toBe(2);
+    await deliver();
+
+    expect(target.requests.map((r) => r.body?.externalId)).toEqual([
+      building,
+      extinguished,
+    ]);
+    expect(target.records.get(building).resolvedBy).toBe(extinguished);
+  });
+
+  it('is refused for a disaster with no target, or with publishing off', async () => {
+    const targetId = await registerTarget();
+    const disaster = await createDisaster();
+    await observe(disaster.id);
+    await sync(disaster.id).expect(400);
+
+    await setPublishing(disaster.id, { targetId }).expect(200);
+    const res = await sync(disaster.id).expect(400);
+    expect(res.body.message).toBe('error.publishingNotEnabled');
+  });
+
+  it('reports no target and nothing to send for a disaster without one', async () => {
+    const disaster = await createDisaster();
+    await observe(disaster.id);
+    expect(await view(disaster.id)).toMatchObject({
+      target: null,
+      notSent: 0,
+      issues: [],
+    });
+  });
+
+  it('cannot be run by anyone but an administrator of that disaster', async () => {
+    const { disaster } = await disasterWithHistory();
+    await sync(disaster.id, fieldOperator).expect(403);
+    expect(t.repos.queue.rows).toHaveLength(0);
   });
 });
