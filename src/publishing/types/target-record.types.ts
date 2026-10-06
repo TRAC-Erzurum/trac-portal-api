@@ -11,6 +11,8 @@ export interface TargetRecord {
   lat?: number;
   lng?: number;
   locationLabel?: string;
+  /** Absolute URLs on the portal's public origin; the target downloads them. */
+  photos?: string[];
   observedAt: string;
   reporter: { email: string; label: string; verified: boolean };
 }

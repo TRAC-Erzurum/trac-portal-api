@@ -1,8 +1,10 @@
 import { performance } from 'perf_hooks';
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Disaster } from '../../disaster/entities/disaster.entity';
+import { ObservationPhoto } from '../../disaster/entities/observation-photo.entity';
 import { PublicationQueueItem } from '../entities/publication-queue-item.entity';
 import { PublishTarget } from '../entities/publish-target.entity';
 import { PublicationStatus } from '../enums/publication-status.enum';
@@ -15,6 +17,7 @@ import {
   CLAIM_LEASE_MS,
   DELIVERY_BATCH_SIZE,
   DELIVERY_TIMEOUT_MS,
+  MAX_PHOTOS_PER_RECORD,
   PUBLISHING_CLOCK,
   PublishingClock,
 } from '../publishing.constants';
@@ -76,6 +79,9 @@ export class PublicationDeliveryService {
     private readonly targetRepository: Repository<PublishTarget>,
     @InjectRepository(PublicationQueueItem)
     private readonly queueRepository: Repository<PublicationQueueItem>,
+    @InjectRepository(ObservationPhoto)
+    private readonly photoRepository: Repository<ObservationPhoto>,
+    private readonly config: ConfigService,
     private readonly claimer: PublicationQueueClaimer,
     @Inject(PUBLISHING_CLOCK) private readonly clock: PublishingClock,
   ) {}
@@ -144,7 +150,7 @@ export class PublicationDeliveryService {
         continue;
       }
 
-      const result = await this.send(target, row.payload);
+      const result = await this.send(target, await this.withPhotos(row));
       const at = this.clock();
       const outcome = classifyResponse(result.status);
       const attempt = {
@@ -257,6 +263,30 @@ export class PublicationDeliveryService {
       where: { id: row.targetId },
     });
     return target?.active && !target.authFailedAt ? target : null;
+  }
+
+  /**
+   * The row's record with its photos' public addresses, read now: they are
+   * uploaded after the observation, so the queued payload cannot have them.
+   * The target downloads them (only from the origin it was told to expect);
+   * one it cannot fetch never costs it the record.
+   */
+  private async withPhotos(row: PublicationQueueItem): Promise<TargetRecord> {
+    const origin = this.config
+      .get<string>('PUBLIC_API_ORIGIN')
+      ?.replace(/\/+$/, '');
+    if (!origin || row.payload.resolves) return row.payload;
+    const photos = (
+      await this.photoRepository.find({
+        where: { observationId: row.observationId },
+        order: { sortOrder: 'ASC' },
+      })
+    ).slice(0, MAX_PHOTOS_PER_RECORD);
+    if (photos.length === 0) return row.payload;
+    return {
+      ...row.payload,
+      photos: photos.map((p) => `${origin}/${p.filePath.replace(/^\/+/, '')}`),
+    };
   }
 
   /** A resolve whose record was refused for good can never succeed. */
