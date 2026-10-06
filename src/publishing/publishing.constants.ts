@@ -2,10 +2,6 @@
 export const PUBLISHING_CLOCK = 'PUBLISHING_CLOCK';
 export type PublishingClock = () => Date;
 
-/** First retry delay; doubles per failed attempt. */
-export const RETRY_BASE_MS = 60 * 1000;
-/** Retry delay never grows past this. */
-export const RETRY_CAP_MS = 60 * 60 * 1000;
 /** How often the worker looks for due rows. */
 export const DELIVERY_INTERVAL_MS = 15 * 1000;
 /** Rows claimed per run. */

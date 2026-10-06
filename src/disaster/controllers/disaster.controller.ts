@@ -4,8 +4,10 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -14,7 +16,8 @@ import { AllowWithoutCallsign } from '../../auth/decorators/allow-without-callsi
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { GlobalRole } from '../../auth/enums/role.enum';
 import { PortalOrBranchLeaderGuard } from '../../branch/guards/portal-or-branch-leader.guard';
-import { UpdateDisasterPublishingDto } from '../../publishing/dto';
+import { SaveDisasterPublishingDto } from '../../publishing/dto';
+import { PublicationStatus } from '../../publishing/enums/publication-status.enum';
 import { PublicationService } from '../../publishing/services/publication.service';
 import { RequestWithUser } from '../../shared/types/request.types';
 import {
@@ -97,19 +100,50 @@ export class DisasterController {
     return this.publicationService.getDisasterPublishing(id);
   }
 
-  @Patch(':id/publishing')
+  @Put(':id/publishing')
   @UseGuards(DisasterAdminGuard)
   @AllowWithoutCallsign()
-  updatePublishing(
+  savePublishing(
     @Param('id') id: string,
-    @Body() dto: UpdateDisasterPublishingDto,
+    @Body() dto: SaveDisasterPublishingDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.publicationService.updateDisasterPublishing(
+    return this.publicationService.saveDisasterPublishing(
       id,
       dto,
       req.user.email,
     );
+  }
+
+  @Get(':id/publishing/history')
+  @UseGuards(DisasterAdminGuard)
+  @AllowWithoutCallsign()
+  publishingHistory(
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.publicationService.getHistory(id, {
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      status: Object.values(PublicationStatus).includes(
+        status as PublicationStatus,
+      )
+        ? (status as PublicationStatus)
+        : undefined,
+    });
+  }
+
+  @Post(':id/publishing/history/:itemId/retry')
+  @UseGuards(DisasterAdminGuard)
+  @AllowWithoutCallsign()
+  retryPublication(
+    @Param('id') id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.publicationService.retryItem(id, itemId, req.user.email);
   }
 
   @Post(':id/publishing/sync')

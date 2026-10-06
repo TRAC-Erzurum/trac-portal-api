@@ -22,12 +22,7 @@ import {
   PublishingClock,
 } from '../publishing.constants';
 import { TargetRecord } from '../types/target-record.types';
-import {
-  classifyResponse,
-  DeliveryOutcome,
-  retryDelayMs,
-  signDelivery,
-} from '../utils/delivery.util';
+import { classifyResponse, DeliveryOutcome } from '../utils/delivery.util';
 import {
   EligiblePair,
   PublicationQueueClaimer,
@@ -36,7 +31,6 @@ import {
 export interface DeliveryRunSummary {
   claimed: number;
   delivered: number;
-  retrying: number;
   failed: number;
 }
 
@@ -53,9 +47,7 @@ interface SendResult {
 
 const ATTEMPT_LEVEL: Record<DeliveryOutcome, EventLevel> = {
   delivered: 'info',
-  retry: 'warn',
   failed: 'error',
-  'authentication-failed': 'error',
 };
 
 /** `{ duplicate: true }`: the target's answer for a record it already holds. */
@@ -67,7 +59,11 @@ function isDuplicateBody(text: string): boolean {
   }
 }
 
-/** Sends due queue rows to their targets, signed, one record per request. */
+/**
+ * Sends due queue rows to their targets, one record per request, once each:
+ * a record the target took is delivered, anything else is failed, and only a
+ * person puts a failed record back (retry, or sync).
+ */
 @Injectable()
 export class PublicationDeliveryService {
   private readonly logger = new EventLogger(PublicationDeliveryService.name);
@@ -86,21 +82,13 @@ export class PublicationDeliveryService {
     @Inject(PUBLISHING_CLOCK) private readonly clock: PublishingClock,
   ) {}
 
-  /**
-   * Targets rows may be sent to right now: active, not held by a 401, and
-   * selected by a disaster whose publishing is on.
-   */
+  /** Disasters whose sharing is on, with the target they share with. */
   private async eligiblePairs(): Promise<EligiblePair[]> {
-    const targets = new Map(
-      (await this.targetRepository.find({ where: { active: true } }))
-        .filter((t) => !t.authFailedAt)
-        .map((t) => [t.id, t]),
-    );
     const disasters = await this.disasterRepository.find({
       where: { publishingEnabled: true },
     });
     return disasters
-      .filter((d) => d.publishTargetId && targets.has(d.publishTargetId))
+      .filter((d) => d.publishTargetId)
       .map((d) => ({ disasterId: d.id, targetId: d.publishTargetId }));
   }
 
@@ -108,7 +96,6 @@ export class PublicationDeliveryService {
     const summary: DeliveryRunSummary = {
       claimed: 0,
       delivered: 0,
-      retrying: 0,
       failed: 0,
     };
     const pairs = await this.eligiblePairs();
@@ -127,14 +114,11 @@ export class PublicationDeliveryService {
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
 
-    const heldTargets = new Set<string>();
     for (const row of rows) {
       // Sends in a run are sequential and may take a while, so the switch and
       // the target are read again right before each one: a disaster turned off
       // (or a target changed) mid-run must not let the rest of the batch out.
-      const target = heldTargets.has(row.targetId)
-        ? null
-        : await this.sendableTarget(row);
+      const target = await this.sendableTarget(row);
       if (!target) {
         await this.release(row);
         continue;
@@ -144,93 +128,44 @@ export class PublicationDeliveryService {
         this.logAttempt(row, 'failed', {
           status: null,
           error: 'parent_failed',
-          nextAttemptAt: null,
         });
         summary.failed++;
         continue;
       }
 
       const result = await this.send(target, await this.withPhotos(row));
-      const at = this.clock();
       const outcome = classifyResponse(result.status);
       const attempt = {
         status: result.status,
         error: result.error,
         durationMs: result.durationMs,
       };
-      switch (outcome) {
-        case 'delivered':
-          await this.finish(
-            row,
-            PublicationStatus.DELIVERED,
-            result.detail,
-            result.alreadyExisted,
-          );
-          this.logAttempt(row, outcome, { ...attempt, nextAttemptAt: null });
-          summary.delivered++;
-          break;
-        case 'failed':
-          await this.finish(row, PublicationStatus.FAILED, result.detail);
-          this.logAttempt(row, outcome, { ...attempt, nextAttemptAt: null });
-          summary.failed++;
-          break;
-        case 'retry': {
-          const attempts = row.attempts + 1;
-          const nextAttemptAt = new Date(at.getTime() + retryDelayMs(attempts));
-          await this.queueRepository.update(
-            { id: row.id },
-            {
-              attempts,
-              lastAttemptAt: at,
-              lastResult: result.detail,
-              nextAttemptAt,
-            },
-          );
-          this.logAttempt(row, outcome, { ...attempt, nextAttemptAt });
-          summary.retrying++;
-          break;
-        }
-        case 'authentication-failed':
-          // A configuration error: hold every row of the target until its
-          // credentials change instead of failing them all permanently.
-          // Only while the secret is still the one that was just refused.
-          await this.targetRepository.update(
-            { id: target.id, sharedSecret: target.sharedSecret },
-            { authFailedAt: at },
-          );
-          heldTargets.add(target.id);
-          await this.queueRepository.update(
-            { id: row.id },
-            {
-              attempts: row.attempts + 1,
-              lastAttemptAt: at,
-              lastResult: result.detail,
-              nextAttemptAt: at,
-            },
-          );
-          // Held until the target's secret changes: no scheduled next attempt.
-          this.logAttempt(row, outcome, { ...attempt, nextAttemptAt: null });
-          summary.retrying++;
-          break;
+      if (outcome === 'delivered') {
+        await this.finish(
+          row,
+          PublicationStatus.DELIVERED,
+          result.detail,
+          result.alreadyExisted,
+        );
+        summary.delivered++;
+      } else {
+        await this.finish(row, PublicationStatus.FAILED, result.detail);
+        summary.failed++;
       }
+      this.logAttempt(row, outcome, attempt);
     }
     return summary;
   }
 
   /**
    * One line per delivery attempt: target, disaster, observation, the
-   * target's HTTP status, the classification, the attempt count and when the
-   * next attempt is due. Never the payload, the response body or the secret.
+   * target's HTTP status and the classification. Never the payload, the
+   * response body or the key.
    */
   private logAttempt(
     row: PublicationQueueItem,
     classification: DeliveryOutcome,
-    attempt: {
-      status: number | null;
-      error?: string;
-      durationMs?: number;
-      nextAttemptAt: Date | null;
-    },
+    attempt: { status: number | null; error?: string; durationMs?: number },
   ): void {
     this.logger.write(ATTEMPT_LEVEL[classification], {
       event: 'publishing.delivery',
@@ -240,13 +175,12 @@ export class PublicationDeliveryService {
       status: attempt.status,
       classification,
       attempt: row.attempts + 1,
-      nextAttemptAt: attempt.nextAttemptAt?.toISOString() ?? null,
       durationMs: attempt.durationMs,
       error: attempt.error,
     });
   }
 
-  /** The row's target, if its disaster still publishes to it and it is usable now. */
+  /** The row's target, if its disaster still shares with it and sharing is on. */
   private async sendableTarget(
     row: PublicationQueueItem,
   ): Promise<PublishTarget | null> {
@@ -259,10 +193,7 @@ export class PublicationDeliveryService {
     ) {
       return null;
     }
-    const target = await this.targetRepository.findOne({
-      where: { id: row.targetId },
-    });
-    return target?.active && !target.authFailedAt ? target : null;
+    return this.targetRepository.findOne({ where: { id: row.targetId } });
   }
 
   /**
@@ -289,7 +220,7 @@ export class PublicationDeliveryService {
     };
   }
 
-  /** A resolve whose record was refused for good can never succeed. */
+  /** A resolve whose record was refused can only be refused too. */
   private async resolvesFailedRecord(
     row: PublicationQueueItem,
   ): Promise<boolean> {
@@ -333,8 +264,6 @@ export class PublicationDeliveryService {
     target: PublishTarget,
     payload: TargetRecord,
   ): Promise<SendResult> {
-    const rawBody = JSON.stringify(payload);
-    const timestamp = Math.floor(this.clock().getTime() / 1000);
     const started = performance.now();
     const elapsed = () => Math.round(performance.now() - started);
     try {
@@ -342,11 +271,9 @@ export class PublicationDeliveryService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Source-Id': target.sourceId,
-          'X-Timestamp': String(timestamp),
-          'X-Signature': signDelivery(target.sharedSecret, timestamp, rawBody),
+          Authorization: `Bearer ${target.sharedSecret}`,
         },
-        body: rawBody,
+        body: JSON.stringify(payload),
         redirect: 'manual',
         signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
       });

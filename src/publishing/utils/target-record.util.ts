@@ -21,7 +21,6 @@ export function buildTargetRecord(
 ): TargetRecord {
   const record: TargetRecord = {
     externalId: observation.id,
-    externalIncidentId: observation.disasterId,
     observedAt: new Date(observation.eventTime).toISOString(),
     reporter: {
       email: reporter.email,
