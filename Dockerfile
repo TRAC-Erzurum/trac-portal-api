@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 COPY package.json yarn.lock ./
@@ -18,7 +18,7 @@ RUN yarn install --production --frozen-lockfile --ignore-scripts && \
     find /app/node_modules -depth -type d \( -name "test" -o -name "tests" -o -name "__tests__" -o -name "example" -o -name "examples" \) -exec rm -rf {} + 2>/dev/null || true && \
     find /app/node_modules -depth -type d -name "doc" ! -path "*/exceljs/*" -exec rm -rf {} + 2>/dev/null || true
 
-FROM node:20-alpine AS production
+FROM node:24-alpine AS production
 
 ARG VERSION=
 ENV APP_VERSION=${VERSION}

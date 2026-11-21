@@ -21,7 +21,7 @@ Read exact versions from `package.json`. Ranges are shown here for orientation o
 - Validation: class-validator (^0.15.1) and class-transformer
 - Jest (^30.2.0) with ts-jest for unit tests; ESLint (^10) with typescript-eslint and Prettier
 - Package manager: **yarn 1** (`yarn.lock`). Never use npm to install.
-- Node.js 20 (the Docker base image and CI use `node:20`)
+- Node.js 24 LTS (the Docker base image uses `node:24-alpine`; CI uses `node-version: 24`; `package.json` `engines` is `>=24`)
 
 ## Setup & run
 
