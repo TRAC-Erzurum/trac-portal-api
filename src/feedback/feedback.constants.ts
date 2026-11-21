@@ -13,23 +13,20 @@ export const FEEDBACK_LABEL_BY_CATEGORY: Record<FeedbackCategory, string> = {
   security: 'security',
 };
 
-const TITLE_UNKNOWN_CALLSIGN = 'Bilinmeyen çağrı işareti';
+/** Category names used in GitHub issue titles and bodies. Issues never carry a call sign. */
+export const FEEDBACK_CATEGORY_TITLE: Record<FeedbackCategory, string> = {
+  bug: 'Bug',
+  enhancement: 'Feature request',
+  improvement: 'Improvement',
+  question: 'Question',
+  security: 'Security',
+};
 
 export function buildFeedbackIssueTitle(
   category: FeedbackCategory,
-  callSign: string | undefined,
   summary: string,
 ): string {
-  const cs = callSign?.trim() || TITLE_UNKNOWN_CALLSIGN;
-  const s = summary.trim();
-  const templates: Record<FeedbackCategory, string> = {
-    bug: `${cs} tarafından bildirilen hata: ${s}`,
-    enhancement: `${cs} tarafından bildirilen özellik isteği: ${s}`,
-    improvement: `${cs} tarafından bildirilen iyileştirme: ${s}`,
-    question: `${cs} tarafından bildirilen soru: ${s}`,
-    security: `${cs} tarafından bildirilen güvenlik bildirimi: ${s}`,
-  };
-  let title = templates[category];
+  let title = `[Feedback] ${FEEDBACK_CATEGORY_TITLE[category]}: ${summary.trim()}`;
   if (title.length > 250) {
     title = `${title.slice(0, 247)}…`;
   }
