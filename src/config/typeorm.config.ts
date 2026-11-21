@@ -13,6 +13,8 @@ export default new DataSource({
   database: process.env.DB_NAME,
   entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
   migrations: [join(__dirname, '..', 'migrations', '*.{ts,js}')],
+  // Run each migration in its own transaction, as run-migrations.ts does, so new enum values are committed before use.
+  migrationsTransactionMode: 'each',
   ssl: process.env.DB_SSL === 'true',
   extra: { options: '-c timezone=UTC' },
   // TypeORM 1.x throws on null/undefined where values by default; keep the 0.3 behaviour (ignore).

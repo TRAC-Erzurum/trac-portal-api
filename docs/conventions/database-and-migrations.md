@@ -11,6 +11,7 @@
 
 - Agents write migration files and entity changes. Agents never run migrations, never generate them against a live or development database, and never run seeds or other SQL against any database. Human maintainers verify a migration on a local database before merge.
 - The container runs migrations at start: `docker-entrypoint.sh` takes a `pg_dump` backup, then runs `dist/config/run-migrations.js`, which runs pending migrations with `transaction: 'each'`.
+- Each migration runs in its own transaction, both at container start and with the `yarn migration:run` CLI (`migrationsTransactionMode: 'each'` in `src/config/typeorm.config.ts`), so a new enum value added in one migration can be used by a later one.
 
 ## Creating a migration
 
