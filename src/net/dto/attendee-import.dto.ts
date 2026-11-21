@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Min,
@@ -32,12 +33,20 @@ export class AttendeeImportRowDto {
   @IsString({ message: 'error.invalidData' })
   district?: string;
 
+  // Any number is accepted here. normalizeSignal falls back to 5/9 per row
+  // for non-integers and out-of-range values, instead of rejecting the request.
   @IsOptional()
-  @IsInt({ message: 'error.invalidData' })
+  @IsNumber(
+    { allowNaN: false, allowInfinity: false },
+    { message: 'error.invalidData' },
+  )
   readability?: number;
 
   @IsOptional()
-  @IsInt({ message: 'error.invalidData' })
+  @IsNumber(
+    { allowNaN: false, allowInfinity: false },
+    { message: 'error.invalidData' },
+  )
   signalStrength?: number;
 }
 

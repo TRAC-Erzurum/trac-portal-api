@@ -47,6 +47,17 @@ export interface AttendeeImportResult {
   }>;
 }
 
+/** Final attendee field values. Callers decide every fallback before persisting. */
+export interface AttendeePersistInput {
+  callSign: string;
+  name: string | null;
+  country: string | null;
+  city: string | null;
+  district: string | null;
+  readability: number;
+  signalStrength: number;
+}
+
 @Injectable()
 export class AttendeeService {
   private readonly logger = new Logger(AttendeeService.name);
@@ -85,7 +96,35 @@ export class AttendeeService {
       throw new ConflictException('Attendee already exists');
     }
 
-    return this.createAttendee(net, dto, callSign, createdBy, actorCallSign);
+    const operator = await this.getOrCreateOperator(
+      {
+        ...dto,
+        callSign,
+        name: (dto.name ?? '').trim() || undefined,
+        country: (dto.country ?? '').trim() || undefined,
+        city: (dto.city ?? '').trim() || undefined,
+        district: (dto.district ?? '').trim() || undefined,
+      },
+      createdBy,
+    );
+
+    // Manual add keeps the operator fallback for every empty field.
+    return this.persistAttendee(
+      net,
+      operator,
+      {
+        callSign,
+        name: (dto.name ?? '').trim() || operator.fullName || null,
+        country: (dto.country ?? '').trim() || operator.country || null,
+        city: (dto.city ?? '').trim() || operator.city || null,
+        district: (dto.district ?? '').trim() || operator.district || null,
+        readability: dto.readability,
+        signalStrength: dto.signalStrength,
+      },
+      createdBy,
+      actorCallSign,
+      dto.callSign,
+    );
   }
 
   async importAttendees(
@@ -130,25 +169,39 @@ export class AttendeeService {
       seen.add(callSign);
 
       try {
+        // Import uses the resolved location only. No operator fallback for city/district.
         const location = resolveCityDistrict(
           { city: row.city?.trim(), district: row.district?.trim() },
           cities,
         );
         const signal = normalizeSignal(row.readability, row.signalStrength);
+        const name = row.name?.trim() || undefined;
 
-        await this.createAttendee(
-          net,
+        const operator = await this.getOrCreateOperator(
           {
             callSign,
-            name: row.name?.trim() || undefined,
+            name,
             city: location.city ?? undefined,
             district: location.district ?? undefined,
+          },
+          createdBy,
+        );
+
+        await this.persistAttendee(
+          net,
+          operator,
+          {
+            callSign,
+            name: name || operator.fullName || null,
+            country: operator.country || null,
+            city: location.city,
+            district: location.district,
             readability: signal.readability,
             signalStrength: signal.signalStrength,
           },
-          callSign,
           createdBy,
           actorCallSign,
+          callSign,
         );
         result.added += 1;
       } catch {
@@ -162,35 +215,23 @@ export class AttendeeService {
     return result;
   }
 
-  /** Shared by manual add and import. Callers validate the call sign and duplicates. */
-  private async createAttendee(
+  /** Shared by manual add and import. Callers validate the call sign, duplicates and every fallback. */
+  private async persistAttendee(
     net: Net,
-    dto: Partial<AttendeeDto>,
-    callSign: string,
+    operator: Operator,
+    input: AttendeePersistInput,
     createdBy: string,
     actorCallSign: string,
+    targetCallSign: string,
   ) {
-    const operator = await this.getOrCreateOperator(
-      {
-        ...dto,
-        callSign,
-        name: (dto.name ?? '').trim() || undefined,
-        country: (dto.country ?? '').trim() || undefined,
-        city: (dto.city ?? '').trim() || undefined,
-        district: (dto.district ?? '').trim() || undefined,
-      },
-      createdBy,
-    );
-
     const attendee = new Attendee();
-    attendee.callSign = callSign;
-    attendee.name = (dto.name ?? '').trim() || operator.fullName || null;
-    attendee.country = (dto.country ?? '').trim() || operator.country || null;
-    attendee.city = (dto.city ?? '').trim() || operator.city || null;
-    attendee.district =
-      (dto.district ?? '').trim() || operator.district || null;
-    attendee.readability = dto.readability;
-    attendee.signalStrength = dto.signalStrength;
+    attendee.callSign = input.callSign;
+    attendee.name = input.name;
+    attendee.country = input.country;
+    attendee.city = input.city;
+    attendee.district = input.district;
+    attendee.readability = input.readability;
+    attendee.signalStrength = input.signalStrength;
     attendee.operator = operator;
     attendee.net = net;
     attendee.createdBy = createdBy;
@@ -206,7 +247,7 @@ export class AttendeeService {
         saved.id,
         null,
         actorCallSign,
-        dto.callSign ?? callSign,
+        targetCallSign,
         { netId: net.id, netName: net.name },
       ),
     );
