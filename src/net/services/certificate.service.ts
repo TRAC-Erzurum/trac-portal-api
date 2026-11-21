@@ -11,7 +11,7 @@ import { join } from 'path';
 import { Readable } from 'stream';
 import { FileStorageService } from '../../shared/storage';
 import type { Response } from 'express';
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- CJS-style import-equals kept as-is
+
 import { ZipArchive } from 'archiver';
 import * as fk from '@pdf-lib/fontkit';
 import { PDFDocument, rgb, RGB, type PDFFont } from 'pdf-lib';
@@ -73,17 +73,16 @@ export class CertificateService implements OnModuleInit {
     if (!can) return null;
     const net = await this.netRepository.findOne({
       where: { id: netId },
-      relations: [
-        'certificateTemplate',
-        'branch',
-        'branch.callSigns',
-        'operator',
-      ],
+      relations: {
+        certificateTemplate: true,
+        branch: { callSigns: true },
+        operator: true,
+      },
     });
     if (!net?.certificateTemplate) return null;
     const attendees = await this.attendeeRepository.find({
       where: { net: { id: netId } },
-      relations: ['operator'],
+      relations: { operator: true },
       order: { createdAt: 'ASC' },
     });
     const attendeeIndex = attendees.findIndex((a) => a.id === attendeeId);
@@ -109,7 +108,7 @@ export class CertificateService implements OnModuleInit {
   ): Promise<boolean> {
     const net = await this.netRepository.findOne({
       where: { id: netId },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
     });
     if (!net) return false;
     const effectiveRole = await this.userService.getEffectiveRole(userId);
@@ -134,13 +133,13 @@ export class CertificateService implements OnModuleInit {
   ): Promise<boolean> {
     const net = await this.netRepository.findOne({
       where: { id: netId },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
     });
     if (!net) return false;
     if (!net.endedAt) return false; // only completed nets
     const attendee = await this.attendeeRepository.findOne({
       where: { id: attendeeId, net: { id: netId } },
-      relations: ['operator', 'operator.user'],
+      relations: { operator: { user: true } },
     });
     if (!attendee) return false;
     const effectiveRole = await this.userService.getEffectiveRole(userId);
@@ -185,12 +184,11 @@ export class CertificateService implements OnModuleInit {
     }
     const net = await this.netRepository.findOne({
       where: { id: netId },
-      relations: [
-        'certificateTemplate',
-        'branch',
-        'branch.callSigns',
-        'operator',
-      ],
+      relations: {
+        certificateTemplate: true,
+        branch: { callSigns: true },
+        operator: true,
+      },
     });
     if (!net) throw new NotFoundException('error.notFound');
     if (!net.endedAt) throw new ForbiddenException('error.netNotCompleted');
@@ -198,7 +196,7 @@ export class CertificateService implements OnModuleInit {
       throw new NotFoundException('error.certificateTemplateNotFound');
     const attendees = await this.attendeeRepository.find({
       where: { net: { id: netId } },
-      relations: ['operator'],
+      relations: { operator: true },
       order: { createdAt: 'ASC' },
     });
     const attendeeIndex = attendees.findIndex((a) => a.id === attendeeId);
@@ -495,13 +493,11 @@ export class CertificateService implements OnModuleInit {
   ): Promise<void> {
     const net = await this.netRepository.findOne({
       where: { id: netId },
-      relations: [
-        'operator',
-        'operator.user',
-        'branch',
-        'branch.callSigns',
-        'certificateTemplate',
-      ],
+      relations: {
+        operator: { user: true },
+        branch: { callSigns: true },
+        certificateTemplate: true,
+      },
     });
     if (!net) throw new NotFoundException('error.notFound');
     if (!net.endedAt) throw new ForbiddenException('error.netNotCompleted');
@@ -533,7 +529,7 @@ export class CertificateService implements OnModuleInit {
     archive.pipe(res);
     const attendees = await this.attendeeRepository.find({
       where: { net: { id: netId } },
-      relations: ['operator'],
+      relations: { operator: true },
       order: { createdAt: 'ASC' },
     });
     const templateImageBytes = await this.fileStorage.getBytes(

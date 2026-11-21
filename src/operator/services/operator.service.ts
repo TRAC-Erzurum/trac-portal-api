@@ -102,7 +102,7 @@ export class OperatorService {
           operatorId: userOperator.id,
           status: MembershipStatus.APPROVED,
         },
-        select: ['branchId'],
+        select: { branchId: true },
       });
     }
     if (memberships.length > 0) {
@@ -542,7 +542,7 @@ export class OperatorService {
       });
 
     const branchCallSignsList = await this.branchCallSignRepository.find({
-      select: ['callSign'],
+      select: { callSign: true },
     });
     const branchCallSignSet = new Set(
       branchCallSignsList.map((cs) => cs.callSign),
@@ -644,7 +644,7 @@ export class OperatorService {
           branchId: priorityBranchId,
           status: MembershipStatus.APPROVED,
         },
-        select: ['operatorId'],
+        select: { operatorId: true },
       });
       branchMemberOperatorIds = new Set(memberships.map((m) => m.operatorId));
     }

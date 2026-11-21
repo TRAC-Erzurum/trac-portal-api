@@ -119,7 +119,7 @@ export class ActivityService {
   private async getCallSignForUser(userId: string): Promise<string | null> {
     const operator = await this.operatorRepository.findOne({
       where: { user: { id: userId } },
-      select: ['callSign'],
+      select: { callSign: true },
     });
     return operator?.callSign ?? null;
   }

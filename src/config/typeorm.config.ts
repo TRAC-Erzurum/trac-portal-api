@@ -15,4 +15,6 @@ export default new DataSource({
   migrations: [join(__dirname, '..', 'migrations', '*.{ts,js}')],
   ssl: process.env.DB_SSL === 'true',
   extra: { options: '-c timezone=UTC' },
+  // TypeORM 1.x throws on null/undefined where values by default; keep the 0.3 behaviour (ignore).
+  invalidWhereValuesBehavior: { null: 'ignore', undefined: 'ignore' },
 });

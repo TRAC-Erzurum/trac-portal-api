@@ -52,22 +52,18 @@ export class EquipmentService {
   async findOne(id: string): Promise<Equipment> {
     const equipment = await this.equipmentRepository.findOne({
       where: { id },
-      relations: [
-        'category',
-        'category.parent',
-        'status',
-        'photos',
-        'propertyValues',
-        'propertyValues.propertyDefinition',
-        'relationsAsSource',
-        'relationsAsSource.targetEquipment',
-        'relationsAsSource.targetEquipment.category',
-        'relationsAsSource.targetEquipment.status',
-        'relationsAsTarget',
-        'relationsAsTarget.sourceEquipment',
-        'relationsAsTarget.sourceEquipment.category',
-        'relationsAsTarget.sourceEquipment.status',
-      ],
+      relations: {
+        category: { parent: true },
+        status: true,
+        photos: true,
+        propertyValues: { propertyDefinition: true },
+        relationsAsSource: {
+          targetEquipment: { category: true, status: true },
+        },
+        relationsAsTarget: {
+          sourceEquipment: { category: true, status: true },
+        },
+      },
     });
     if (!equipment) {
       throw new NotFoundException('error.equipmentNotFound');
@@ -295,7 +291,7 @@ export class EquipmentService {
   async delete(id: string): Promise<void> {
     const equipment = await this.equipmentRepository.findOne({
       where: { id },
-      relations: ['photos'],
+      relations: { photos: true },
     });
     if (!equipment) {
       throw new NotFoundException('error.equipmentNotFound');
@@ -318,7 +314,7 @@ export class EquipmentService {
   ): Promise<EquipmentPhoto[]> {
     const equipment = await this.equipmentRepository.findOne({
       where: { id: equipmentId },
-      relations: ['photos'],
+      relations: { photos: true },
     });
     if (!equipment) {
       throw new NotFoundException('error.equipmentNotFound');
