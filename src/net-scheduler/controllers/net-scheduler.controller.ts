@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -33,10 +34,19 @@ export class NetSchedulerController {
     @Query('branchFilter')
     branchFilter: 'all' | 'my-branches' | 'branch' | undefined,
     @Query('search') search: string | undefined,
+    @Query('status') statusStr: string | undefined,
     @Query('limit') limitStr: string | undefined,
     @Query('offset') offsetStr: string | undefined,
     @Req() req: RequestWithUser,
   ) {
+    if (
+      statusStr != null &&
+      statusStr !== 'active' &&
+      statusStr !== 'inactive'
+    ) {
+      throw new BadRequestException('error.invalidData');
+    }
+    const status = statusStr === 'inactive' ? 'inactive' : 'active';
     const limit = limitStr != null ? parseInt(limitStr, 10) : undefined;
     const offset = offsetStr != null ? parseInt(offsetStr, 10) : undefined;
     return this.netSchedulerService.findAll({
@@ -44,6 +54,7 @@ export class NetSchedulerController {
       branchFilter,
       userId: req.user.id,
       search: search?.trim() || undefined,
+      status,
       limit: Number.isFinite(limit) ? limit : undefined,
       offset: Number.isFinite(offset) ? offset : undefined,
     });
@@ -85,9 +96,19 @@ export class NetSchedulerController {
     );
   }
 
+  @Post(':id/end')
+  @Roles(BranchRole.MEMBER)
+  end(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.netSchedulerService.endScheduler(
+      id,
+      req.user.email,
+      req.user.id,
+    );
+  }
+
   @Delete(':id')
   @Roles(BranchRole.MEMBER)
-  delete(@Param('id') id: string) {
-    return this.netSchedulerService.delete(id);
+  delete(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.netSchedulerService.delete(id, req.user.id);
   }
 }
