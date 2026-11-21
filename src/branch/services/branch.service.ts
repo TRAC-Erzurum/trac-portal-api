@@ -132,7 +132,7 @@ export class BranchService {
         (
           await this.userRepository.find({
             where: { globalRole: GlobalRole.SUPER_ADMIN },
-            select: ['id'],
+            select: { id: true },
           })
         ).map((a) => a.id),
       );
@@ -453,7 +453,7 @@ export class BranchService {
 
       const nets = await netRepo.find({
         where: { branchId: id },
-        select: ['id'],
+        select: { id: true },
       });
       const netIds = nets.map((n) => n.id);
 

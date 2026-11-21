@@ -12,6 +12,8 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
   // Columns are `timestamp` (no tz) and hold UTC wall time; `DEFAULT now()`
   // follows the session timezone, so pin it instead of inheriting the server's.
   extra: { options: '-c timezone=UTC' },
+  // TypeORM 1.x throws on null/undefined where values by default; keep the 0.3 behaviour (ignore).
+  invalidWhereValuesBehavior: { null: 'ignore', undefined: 'ignore' },
   migrations: ['dist/migrations/*{.ts,.js}'],
   entities: ['dist/**/*.entity{.ts,.js}'],
   synchronize: false,

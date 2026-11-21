@@ -223,14 +223,14 @@ export class DashboardService {
   private async getBranchIdsForUser(userId: string): Promise<string[]> {
     const operator = await this.operatorRepository.findOne({
       where: { user: { id: userId } },
-      select: ['id'],
+      select: { id: true },
     });
     if (!operator) {
       return [];
     }
     const memberships = await this.membershipRepository.find({
       where: { operatorId: operator.id, status: MembershipStatus.APPROVED },
-      select: ['branchId'],
+      select: { branchId: true },
     });
     return memberships.map((m) => m.branchId);
   }
@@ -279,6 +279,20 @@ export class DashboardService {
     };
   }
 
+  private async getAttendeeCounts(
+    netIds: string[],
+  ): Promise<Map<string, number>> {
+    if (netIds.length === 0) return new Map();
+    const rows = await this.attendeeRepository
+      .createQueryBuilder('attendee')
+      .select('attendee.netId', 'netId')
+      .addSelect('COUNT(attendee.id)', 'count')
+      .where('attendee.netId IN (:...netIds)', { netIds })
+      .groupBy('attendee.netId')
+      .getRawMany<{ netId: string; count: string }>();
+    return new Map(rows.map((r) => [r.netId, Number(r.count)]));
+  }
+
   async getActiveNets(
     limit: number = 5,
     userId?: string,
@@ -291,7 +305,6 @@ export class DashboardService {
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('net.branch', 'branch')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
-      .loadRelationCountAndMap('net.attendeeCount', 'net.attendees')
       .where('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NULL');
 
@@ -303,6 +316,7 @@ export class DashboardService {
       .orderBy('net.startedAt', 'DESC')
       .limit(limit)
       .getMany();
+    const attendeeCounts = await this.getAttendeeCounts(nets.map((n) => n.id));
 
     const now = new Date();
 
@@ -310,7 +324,7 @@ export class DashboardService {
       id: net.id,
       name: net.name,
       operatorCallSign: net.operator?.callSign || 'Unknown',
-      attendeeCount: (net as any).attendeeCount || 0,
+      attendeeCount: attendeeCounts.get(net.id) || 0,
       startedAt: net.startedAt,
       durationMinutes: net.startedAt
         ? Math.floor(
@@ -437,7 +451,6 @@ export class DashboardService {
       .leftJoinAndSelect('net.operator', 'operator')
       .leftJoinAndSelect('net.branch', 'branch')
       .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
-      .loadRelationCountAndMap('net.attendeeCount', 'net.attendees')
       .where('net.startedAt IS NOT NULL')
       .andWhere('net.endedAt IS NOT NULL');
 
@@ -446,6 +459,7 @@ export class DashboardService {
     }
 
     const nets = await qb.orderBy('net.endedAt', 'DESC').limit(limit).getMany();
+    const attendeeCounts = await this.getAttendeeCounts(nets.map((n) => n.id));
 
     return nets.map((net) => {
       const duration =
@@ -463,7 +477,7 @@ export class DashboardService {
         id: net.id,
         name: net.name,
         operatorCallSign: net.operator?.callSign || 'Unknown',
-        attendeeCount: (net as any).attendeeCount || 0,
+        attendeeCount: attendeeCounts.get(net.id) || 0,
         startedAt: net.startedAt,
         durationMinutes: duration,
         certificateTemplateId: net.certificateTemplateId ?? undefined,
@@ -1548,13 +1562,13 @@ export class DashboardService {
   ): Promise<NetComparePreviousResponse | null> {
     const current = await this.netRepository.findOne({
       where: { id: netId },
-      select: [
-        'id',
-        'branchId',
-        'startedAt',
-        'endedAt',
-        'totalDurationMinutes',
-      ],
+      select: {
+        id: true,
+        branchId: true,
+        startedAt: true,
+        endedAt: true,
+        totalDurationMinutes: true,
+      },
     });
     if (!current?.branchId || !current.startedAt || !current.endedAt) {
       return null;

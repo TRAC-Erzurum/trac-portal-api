@@ -485,13 +485,12 @@ export class NetSchedulerService {
   async findOne(id: string): Promise<NetScheduler> {
     const scheduler = await this.schedulerRepository.findOne({
       where: { id },
-      relations: [
-        'branch',
-        'operator',
-        'branchCallSign',
-        'communicationChannels',
-        'communicationChannels.communicationChannel',
-      ],
+      relations: {
+        branch: true,
+        operator: true,
+        branchCallSign: true,
+        communicationChannels: { communicationChannel: true },
+      },
     });
     if (!scheduler) {
       throw new NotFoundException('error.notFound');

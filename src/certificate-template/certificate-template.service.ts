@@ -43,7 +43,7 @@ export class CertificateTemplateService {
   async findOne(id: string, branchId?: string): Promise<CertificateTemplate> {
     const template = await this.templateRepository.findOne({
       where: { id },
-      relations: ['branch'],
+      relations: { branch: true },
     });
     if (!template) {
       throw new NotFoundException('error.notFound');
@@ -117,7 +117,7 @@ export class CertificateTemplateService {
   ): Promise<{ id: string; name: string }[]> {
     const nets = await this.netRepository.find({
       where: { certificateTemplateId: templateId },
-      select: ['id', 'name'],
+      select: { id: true, name: true },
     });
     return nets;
   }

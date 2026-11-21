@@ -41,7 +41,7 @@ export class BranchCommunicationChannelAdminGuard implements CanActivate {
 
     const channel = await this.channelRepository.findOne({
       where: { id: String(channelId) },
-      select: ['id', 'branchId'],
+      select: { id: true, branchId: true },
     });
     if (!channel) {
       throw new NotFoundException('error.communicationChannelNotFound');

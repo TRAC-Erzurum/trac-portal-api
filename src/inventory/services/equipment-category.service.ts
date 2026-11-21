@@ -34,22 +34,23 @@ export class EquipmentCategoryService {
   async findAll(): Promise<EquipmentCategory[]> {
     return this.categoryRepository.find({
       where: { parentId: IsNull() },
-      relations: [
-        'children',
-        'children.children',
-        'children.children.children',
-        'propertyDefinitions',
-        'children.propertyDefinitions',
-        'children.children.propertyDefinitions',
-        'children.children.children.propertyDefinitions',
-      ],
+      relations: {
+        children: {
+          children: {
+            children: { propertyDefinitions: true },
+            propertyDefinitions: true,
+          },
+          propertyDefinitions: true,
+        },
+        propertyDefinitions: true,
+      },
       order: { sortOrder: 'ASC', name: 'ASC' },
     });
   }
 
   async findAllFlat(): Promise<EquipmentCategory[]> {
     return this.categoryRepository.find({
-      relations: ['parent', 'propertyDefinitions'],
+      relations: { parent: true, propertyDefinitions: true },
       order: { sortOrder: 'ASC', name: 'ASC' },
     });
   }
@@ -57,7 +58,7 @@ export class EquipmentCategoryService {
   async findOne(id: string): Promise<EquipmentCategory> {
     const category = await this.categoryRepository.findOne({
       where: { id },
-      relations: ['propertyDefinitions'],
+      relations: { propertyDefinitions: true },
     });
     if (!category) {
       throw new NotFoundException('error.categoryNotFound');
@@ -86,7 +87,7 @@ export class EquipmentCategoryService {
       chain.push(currentId);
       const cat = await this.categoryRepository.findOne({
         where: { id: currentId },
-        select: ['id', 'parentId'],
+        select: { id: true, parentId: true },
       });
       if (!cat) break;
       currentId = cat.parentId;
@@ -174,7 +175,7 @@ export class EquipmentCategoryService {
   private async getDescendantIds(categoryId: string): Promise<string[]> {
     const children = await this.categoryRepository.find({
       where: { parentId: categoryId },
-      select: ['id'],
+      select: { id: true },
     });
     const ids: string[] = [];
     for (const c of children) {

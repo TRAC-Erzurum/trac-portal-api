@@ -57,7 +57,7 @@ export class MembershipService {
   ): Promise<void> {
     const op = await this.operatorRepository.findOne({
       where: { id: operatorId },
-      relations: ['user'],
+      relations: { user: true },
     });
     if (op?.user?.id) {
       await this.userService.syncRoleColumn(op.user.id);
@@ -109,7 +109,7 @@ export class MembershipService {
   ): Promise<OperatorBranchMembership> {
     const existingMembership = await this.membershipRepository.findOne({
       where: { operatorId, branchId },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
     });
 
     if (existingMembership) {
@@ -139,7 +139,7 @@ export class MembershipService {
 
     const operator = await this.operatorRepository.findOne({
       where: { id: operatorId },
-      relations: ['user'],
+      relations: { user: true },
     });
     if (!operator) {
       throw new NotFoundException('error.operatorNotFound');
@@ -196,7 +196,7 @@ export class MembershipService {
 
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['operator'],
+      relations: { operator: true },
     });
     if (!user) {
       throw new NotFoundException('error.userNotFound');
@@ -254,7 +254,7 @@ export class MembershipService {
   ): Promise<OperatorBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
     });
 
     if (!membership) {
@@ -352,7 +352,7 @@ export class MembershipService {
   ): Promise<OperatorBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
     });
 
     if (!membership) {
@@ -421,7 +421,7 @@ export class MembershipService {
 
     const operator = await this.operatorRepository.findOne({
       where: { id: operatorId },
-      relations: ['user'],
+      relations: { user: true },
     });
     if (!operator) {
       throw new NotFoundException('error.operatorNotFound');
@@ -448,7 +448,7 @@ export class MembershipService {
 
     const membership = await this.membershipRepository.findOne({
       where: { operatorId, branchId },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
     });
 
     if (!membership) {
@@ -555,7 +555,7 @@ export class MembershipService {
         operatorId: operator.id,
         status: MembershipStatus.APPROVED,
       },
-      relations: ['branch', 'branch.callSigns'],
+      relations: { branch: { callSigns: true } },
       order: {
         createdAt: 'ASC',
       },
@@ -572,7 +572,7 @@ export class MembershipService {
     }
     return this.membershipRepository.findOne({
       where: { operatorId: operator.id, branchId },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
     });
   }
 
@@ -657,7 +657,7 @@ export class MembershipService {
     }
     return this.membershipRepository.find({
       where: { operatorId: operator.id },
-      relations: ['branch', 'branch.callSigns'],
+      relations: { branch: { callSigns: true } },
       order: { createdAt: 'DESC' },
     });
   }
@@ -671,7 +671,7 @@ export class MembershipService {
   ): Promise<OperatorBranchMembership> {
     const membership = await this.membershipRepository.findOne({
       where: { id: membershipId },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
     });
 
     if (!membership) {
@@ -753,7 +753,7 @@ export class MembershipService {
   ): Promise<OperatorBranchMembership[]> {
     return this.membershipRepository.find({
       where: { branchId, status: MembershipStatus.PENDING },
-      relations: ['operator', 'operator.user', 'branch'],
+      relations: { operator: { user: true }, branch: true },
       order: { createdAt: 'ASC' },
     });
   }
@@ -776,7 +776,7 @@ export class MembershipService {
           role: BranchRole.PRESIDENT,
         },
       ],
-      select: ['branchId'],
+      select: { branchId: true },
     });
     return adminMemberships.map((m) => m.branchId);
   }
@@ -814,7 +814,7 @@ export class MembershipService {
     if (effectiveRole === GlobalRole.SUPER_ADMIN) {
       const allBranches = await this.branchRepository.find({
         where: { isActive: true },
-        select: ['id', 'name'],
+        select: { id: true, name: true },
       });
       branches = allBranches.map((b) => ({ branchId: b.id, name: b.name }));
     } else {
@@ -835,7 +835,7 @@ export class MembershipService {
             role: BranchRole.PRESIDENT,
           },
         ],
-        relations: ['branch'],
+        relations: { branch: true },
       });
       branches = adminMemberships.map((m) => ({
         branchId: m.branchId,
@@ -877,7 +877,7 @@ export class MembershipService {
   ): Promise<OperatorBranchMembership[]> {
     return this.membershipRepository.find({
       where: { operatorId },
-      relations: ['branch', 'branch.callSigns'],
+      relations: { branch: { callSigns: true } },
       order: { createdAt: 'DESC' },
     });
   }
