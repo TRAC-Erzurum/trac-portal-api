@@ -1,9 +1,5 @@
 export type FeedbackCategory =
-  | 'bug'
-  | 'enhancement'
-  | 'improvement'
-  | 'question'
-  | 'security';
+  'bug' | 'enhancement' | 'improvement' | 'question' | 'security';
 
 export const FEEDBACK_CATEGORIES: FeedbackCategory[] = [
   'bug',
