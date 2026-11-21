@@ -5,6 +5,7 @@ import { Operator } from '../../operator/entities/operator.entity';
 import { BranchCallSign } from '../../branch/entities/branch-call-sign.entity';
 import { NetSchedulerCommunicationChannel } from './net-scheduler-communication-channel.entity';
 import { NetRecurrence } from '../enums/net-recurrence.enum';
+import { NetSchedulerStatus } from '../utils/net-scheduler-status.util';
 
 @Entity('net_schedulers')
 export class NetScheduler extends BaseEntity {
@@ -40,6 +41,9 @@ export class NetScheduler extends BaseEntity {
 
   @Column({ default: true })
   isActive: boolean;
+
+  /** Computed on read (active | paused | ended); not a column. */
+  status?: NetSchedulerStatus;
 
   @ManyToOne(() => Branch, { nullable: false })
   @JoinColumn({ name: 'branchId' })
