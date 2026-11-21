@@ -1,91 +1,60 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   Logger,
-  ServiceUnavailableException,
+  NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Octokit } from '@octokit/rest';
 import { randomUUID } from 'crypto';
 import { fileTypeFromBuffer } from 'file-type';
 import { AuthUser } from '../auth/types/auth.types';
 import { FileStorageService } from '../shared/storage/file-storage.service';
-import { OperatorBranchMembership } from '../branch/entities/operator-branch-membership.entity';
-import { OperatorService } from '../operator/services/operator.service';
-import { MembershipStatus } from '../branch/enums/membership-status.enum';
 import {
   ALLOWED_FEEDBACK_IMAGE_MIMES,
-  buildFeedbackIssueTitle,
-  FEEDBACK_LABEL_BY_CATEGORY,
-  FEEDBACK_LABEL_PRODUCT,
   MAX_FEEDBACK_BODY_LENGTH,
   MAX_FEEDBACK_SUMMARY_LENGTH,
   mimeToExt,
 } from './feedback.constants';
-import { FeedbackCategory, isFeedbackCategory } from './feedback.types';
-import { parseGithubRepoWebUrl } from './utils/parse-github-repo';
+import { Feedback } from './entities/feedback.entity';
+import { FeedbackGithubStatus } from './enums/feedback-github-status.enum';
+import { ListFeedbackQueryDto } from './dto/list-feedback-query.dto';
+import { FeedbackGithubService } from './feedback-github.service';
+import { isFeedbackCategory } from './feedback.types';
+
+const MAX_FEEDBACK_ATTACHMENTS = 3;
+const DEFAULT_FEEDBACK_LIST_LIMIT = 50;
+
+export interface FeedbackSubmitResult {
+  success: true;
+  id: string;
+  issueUrl?: string;
+}
 
 @Injectable()
 export class FeedbackService {
   private readonly logger = new Logger(FeedbackService.name);
 
   constructor(
-    private readonly configService: ConfigService,
     private readonly fileStorage: FileStorageService,
-    @InjectRepository(OperatorBranchMembership)
-    private readonly membershipRepository: Repository<OperatorBranchMembership>,
-    private readonly operatorService: OperatorService,
+    @InjectRepository(Feedback)
+    private readonly feedbackRepository: Repository<Feedback>,
+    private readonly github: FeedbackGithubService,
   ) {}
 
-  private getPublicOrigin(): string {
-    const nodeEnv = this.configService.get<string>('NODE_ENV');
-    const domain = this.configService.get<string>('DOMAIN');
-    const port = this.configService.get<number>('PORT') || 8000;
-    if (nodeEnv === 'production' && domain) {
-      return `https://${domain}`;
-    }
-    return `http://localhost:${port}`;
-  }
-
-  private assertFeedbackConfigured(): {
-    token: string;
-    owner: string;
-    repo: string;
-  } {
-    const token =
-      this.configService.get<string>('GITHUB_FEEDBACK_TOKEN')?.trim() ||
-      process.env.GITHUB_FEEDBACK_TOKEN?.trim();
-    const repoUrl =
-      this.configService.get<string>('GITHUB_REPO_WEB_URL') ||
-      process.env.GITHUB_REPO_WEB_URL;
-    const parsed = parseGithubRepoWebUrl(repoUrl);
-    if (!token || !parsed) {
-      throw new ServiceUnavailableException('error.feedbackNotConfigured');
-    }
-    return { token, owner: parsed.owner, repo: parsed.repo };
-  }
-
-  async countApprovedMemberships(userId: string): Promise<number> {
-    const operator = await this.operatorService.findByUserId(userId);
-    if (!operator) {
-      return 0;
-    }
-    return this.membershipRepository.count({
-      where: { operatorId: operator.id, status: MembershipStatus.APPROVED },
-    });
-  }
-
+  /**
+   * Saves the submission first, then forwards it to GitHub unless it is a
+   * security report. The request succeeds even when forwarding fails: the
+   * record keeps the failure and can be retried later.
+   */
   async submitFeedback(
     user: AuthUser,
     categoryRaw: string,
     summaryRaw: string,
     bodyRaw: string,
     files: Express.Multer.File[],
-  ): Promise<{ success: true; issueUrl: string }> {
-    const { token, owner, repo } = this.assertFeedbackConfigured();
-
+  ): Promise<FeedbackSubmitResult> {
     if (!isFeedbackCategory(categoryRaw)) {
       throw new BadRequestException('error.feedbackInvalidCategory');
     }
@@ -105,15 +74,82 @@ export class FeedbackService {
     if (body.length > MAX_FEEDBACK_BODY_LENGTH) {
       throw new BadRequestException('error.feedbackBodyTooLarge');
     }
-
-    const maxFiles = 3;
-    if (files.length > maxFiles) {
+    if (files.length > MAX_FEEDBACK_ATTACHMENTS) {
       throw new BadRequestException('error.feedbackAttachmentRejected');
     }
 
-    const uploadedPaths: string[] = [];
-    const origin = this.getPublicOrigin();
+    const uploadedPaths = await this.storeAttachments(files);
 
+    let record: Feedback;
+    try {
+      record = await this.feedbackRepository.save(
+        this.feedbackRepository.create({
+          userId: user.id,
+          callSign: user.callSign?.trim() || null,
+          category,
+          summary,
+          body,
+          attachmentPaths: uploadedPaths,
+          githubStatus:
+            category === 'security'
+              ? FeedbackGithubStatus.SKIPPED
+              : FeedbackGithubStatus.PENDING,
+          githubAttempts: 0,
+        }),
+      );
+    } catch (e) {
+      // Attachments are removed only when the record itself was not saved.
+      await this.removeAttachments(uploadedPaths);
+      this.logger.error(`Feedback save failed: ${(e as Error).name}`);
+      throw new InternalServerErrorException('error.internal');
+    }
+
+    if (record.githubStatus === FeedbackGithubStatus.PENDING) {
+      try {
+        await this.github.forwardNewRecord(record);
+      } catch (e) {
+        // The record is saved as pending and the sync job retries it.
+        this.logger.warn(
+          `Feedback ${record.id} saved; forwarding not recorded: ${(e as Error).name}`,
+        );
+      }
+    }
+
+    return {
+      success: true,
+      id: record.id,
+      ...(record.githubIssueUrl ? { issueUrl: record.githubIssueUrl } : {}),
+    };
+  }
+
+  async list(query: ListFeedbackQueryDto) {
+    const limit = query.limit ?? DEFAULT_FEEDBACK_LIST_LIMIT;
+    const offset = query.offset ?? 0;
+    const [data, total] = await this.feedbackRepository.findAndCount({
+      where: {
+        ...(query.category && { category: query.category }),
+        ...(query.githubStatus && { githubStatus: query.githubStatus }),
+      },
+      order: { createdAt: 'DESC' },
+      skip: offset,
+      take: limit,
+    });
+    return { data, total, limit, offset };
+  }
+
+  async findOne(id: string): Promise<Feedback> {
+    const record = await this.feedbackRepository.findOne({ where: { id } });
+    if (!record) {
+      throw new NotFoundException('error.notFound');
+    }
+    return record;
+  }
+
+  /** Stores uploaded images. On any failure the images already stored are removed. */
+  private async storeAttachments(
+    files: Express.Multer.File[],
+  ): Promise<string[]> {
+    const uploadedPaths: string[] = [];
     try {
       for (const file of files) {
         const ft = await fileTypeFromBuffer(file.buffer);
@@ -121,93 +157,32 @@ export class FeedbackService {
         if (!ALLOWED_FEEDBACK_IMAGE_MIMES.has(mime)) {
           throw new BadRequestException('error.feedbackAttachmentRejected');
         }
-        const ext = mimeToExt(mime);
-        const logicalPath = `uploads/feedback/${randomUUID()}.${ext}`;
+        const logicalPath = `uploads/feedback/${randomUUID()}.${mimeToExt(mime)}`;
         await this.fileStorage.putBytes(logicalPath, file.buffer, mime);
         uploadedPaths.push(logicalPath);
       }
-
-      const approvedCount = await this.countApprovedMemberships(user.id);
-
-      const title = buildFeedbackIssueTitle(category, user.callSign, summary);
-      const issueBody = this.buildIssueMarkdown(
-        user,
-        body,
-        uploadedPaths,
-        origin,
-        approvedCount,
-      );
-
-      const labels = [
-        FEEDBACK_LABEL_BY_CATEGORY[category],
-        FEEDBACK_LABEL_PRODUCT,
-      ];
-
-      const octokit = new Octokit({ auth: token });
-      const created = await octokit.rest.issues.create({
-        owner,
-        repo,
-        title,
-        body: issueBody,
-        labels,
-      });
-
-      const issueUrl = created.data.html_url;
-      return { success: true, issueUrl };
+      return uploadedPaths;
     } catch (e) {
-      for (const p of uploadedPaths) {
-        try {
-          await this.fileStorage.delete(p);
-        } catch (delErr) {
-          this.logger.warn(`Feedback R2 rollback failed for ${p}: ${delErr}`);
-        }
-      }
-
-      if (
-        e instanceof BadRequestException ||
-        e instanceof ServiceUnavailableException
-      ) {
+      await this.removeAttachments(uploadedPaths);
+      if (e instanceof BadRequestException) {
         throw e;
       }
-
-      this.logger.error('GitHub issues.create failed', e);
-      throw new BadRequestException('error.feedbackGithubFailed');
+      this.logger.error(
+        `Feedback attachment storage failed: ${(e as Error).name}`,
+      );
+      throw new InternalServerErrorException('error.internal');
     }
   }
 
-  private buildIssueMarkdown(
-    user: AuthUser,
-    body: string,
-    imageLogicalPaths: string[],
-    origin: string,
-    approvedMembershipCount: number,
-  ): string {
-    const lines: string[] = [];
-    lines.push('## Portal');
-    lines.push(`- Kullanıcı ID: \`${user.id}\``);
-    lines.push(
-      `- Çağrı işareti: ${user.callSign?.trim() ? user.callSign.trim() : '—'}`,
-    );
-    lines.push(`- Rol: \`${user.role}\``);
-    lines.push(
-      `- Geçerli şube ID: ${user.currentBranchId != null && user.currentBranchId !== '' ? `\`${user.currentBranchId}\`` : '—'}`,
-    );
-    lines.push(`- Onaylı şube üyeliği sayısı: ${approvedMembershipCount}`);
-    lines.push(
-      `- Operatör ID: ${user.operatorId ? `\`${user.operatorId}\`` : '—'}`,
-    );
-    lines.push(`- Zaman (UTC): ${new Date().toISOString()}`);
-    lines.push('');
-    lines.push('## Açıklama');
-    lines.push(body);
-    lines.push('');
-    if (imageLogicalPaths.length > 0) {
-      lines.push('## Ekran görüntüleri');
-      for (const p of imageLogicalPaths) {
-        const sub = p.replace(/^uploads\//, '');
-        lines.push(`![](${origin}/uploads/${sub})`);
+  private async removeAttachments(paths: string[]): Promise<void> {
+    for (const p of paths) {
+      try {
+        await this.fileStorage.delete(p);
+      } catch (delErr) {
+        this.logger.warn(
+          `Feedback attachment cleanup failed for ${p}: ${(delErr as Error).name}`,
+        );
       }
     }
-    return lines.join('\n');
   }
 }
