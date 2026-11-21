@@ -15,6 +15,7 @@ import {
   StatusResponse,
   ActiveNet,
   PendingNet,
+  HomeNet,
   PersonalNetStats,
   PersonalNetStatsBranchAware,
   CommunityStats,
@@ -76,6 +77,17 @@ export class DashboardController {
   ): Promise<PendingNet[]> {
     return this.dashboardService.getRecentCancelledNets(
       Math.min(limit, 10),
+      user.id,
+    );
+  }
+
+  @Get('nets/home')
+  async getHomeNets(
+    @CurrentUser() user: User,
+    @Query('limit', new DefaultValuePipe(6), ParseIntPipe) limit: number,
+  ): Promise<HomeNet[]> {
+    return this.dashboardService.getHomeNets(
+      Math.min(Math.max(limit, 1), 10),
       user.id,
     );
   }

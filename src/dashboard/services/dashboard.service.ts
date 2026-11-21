@@ -48,6 +48,21 @@ export interface PendingNet {
   };
 }
 
+export interface HomeNet {
+  id: string;
+  name: string;
+  status: 'active' | 'pending' | 'completed';
+  startedAt: string | null;
+  endedAt: string | null;
+  scheduledAt: string | null;
+  estimatedDurationMinutes: number | null;
+  durationMinutes: number | null;
+  attendeeCount: number;
+  certificateTemplateId: string | null;
+  branch: { id: string; name: string; isHeadquarters: boolean } | null;
+  branchCallSign: { id: string; callSign: string } | null;
+}
+
 export interface PersonalNetStats {
   attendedNets: number;
   managedNets: number;
@@ -494,6 +509,128 @@ export class DashboardService {
               callSign: net.branchCallSign.callSign,
             }
           : undefined,
+      };
+    });
+  }
+
+  async getHomeNets(limit: number, userId: string): Promise<HomeNet[]> {
+    const branchIds = await this.getBranchIdsForUser(userId);
+    if (branchIds.length === 0) return [];
+
+    const now = new Date();
+    const fetchGroup = (
+      where: string,
+      order: (qb: SelectQueryBuilder<Net>) => SelectQueryBuilder<Net>,
+      take: number,
+    ): Promise<Net[]> => {
+      if (take <= 0) return Promise.resolve([]);
+      const qb = this.netRepository
+        .createQueryBuilder('net')
+        .leftJoinAndSelect('net.branch', 'branch')
+        .leftJoinAndSelect('net.branchCallSign', 'branchCallSign')
+        .where('net.branchId IN (:...branchIds)', { branchIds })
+        .andWhere(where, { now });
+      return order(qb).limit(take).getMany();
+    };
+
+    const selected: { net: Net; status: HomeNet['status'] }[] = [];
+    const addNets = (nets: Net[], status: HomeNet['status']) =>
+      nets.forEach((net) => selected.push({ net, status }));
+
+    // 1. Active nets, most recently started first.
+    addNets(
+      await fetchGroup(
+        'net.startedAt IS NOT NULL AND net.endedAt IS NULL',
+        (qb) => qb.orderBy('net.startedAt', 'DESC'),
+        limit - selected.length,
+      ),
+      'active',
+    );
+
+    // 2. Not started yet and due (or unscheduled).
+    addNets(
+      await fetchGroup(
+        'net.startedAt IS NULL AND net.endedAt IS NULL AND (net.scheduledAt IS NULL OR net.scheduledAt <= :now)',
+        (qb) =>
+          qb
+            .orderBy('net.scheduledAt', 'ASC', 'NULLS LAST')
+            .addOrderBy('net.createdAt', 'DESC'),
+        limit - selected.length,
+      ),
+      'pending',
+    );
+
+    // 3. Planned for the future, nearest first.
+    addNets(
+      await fetchGroup(
+        'net.startedAt IS NULL AND net.endedAt IS NULL AND net.scheduledAt > :now',
+        (qb) => qb.orderBy('net.scheduledAt', 'ASC'),
+        limit - selected.length,
+      ),
+      'pending',
+    );
+
+    // 4. Filler: recently completed nets.
+    addNets(
+      await fetchGroup(
+        'net.startedAt IS NOT NULL AND net.endedAt IS NOT NULL',
+        (qb) => qb.orderBy('net.endedAt', 'DESC'),
+        limit - selected.length,
+      ),
+      'completed',
+    );
+
+    const attendeeCounts = await this.getAttendeeCounts(
+      selected.filter((s) => s.status !== 'pending').map((s) => s.net.id),
+    );
+
+    const toIso = (value: Date | string | null | undefined) =>
+      value ? new Date(value).toISOString() : null;
+
+    return selected.map(({ net, status }) => {
+      let durationMinutes: number | null = null;
+      if (status === 'active' && net.startedAt) {
+        durationMinutes = Math.floor(
+          (now.getTime() - new Date(net.startedAt).getTime()) / 60000,
+        );
+      } else if (status === 'completed') {
+        durationMinutes =
+          net.totalDurationMinutes > 0
+            ? net.totalDurationMinutes
+            : net.startedAt && net.endedAt
+              ? Math.floor(
+                  (new Date(net.endedAt).getTime() -
+                    new Date(net.startedAt).getTime()) /
+                    60000,
+                )
+              : 0;
+      }
+
+      return {
+        id: net.id,
+        name: net.name,
+        status,
+        startedAt: toIso(net.startedAt),
+        endedAt: toIso(net.endedAt),
+        scheduledAt: toIso(net.scheduledAt),
+        estimatedDurationMinutes: net.estimatedDurationMinutes ?? null,
+        durationMinutes,
+        attendeeCount:
+          status === 'pending' ? 0 : attendeeCounts.get(net.id) || 0,
+        certificateTemplateId: net.certificateTemplateId ?? null,
+        branch: net.branch
+          ? {
+              id: net.branch.id,
+              name: net.branch.name,
+              isHeadquarters: net.branch.isHeadquarters,
+            }
+          : null,
+        branchCallSign: net.branchCallSign
+          ? {
+              id: net.branchCallSign.id,
+              callSign: net.branchCallSign.callSign,
+            }
+          : null,
       };
     });
   }
