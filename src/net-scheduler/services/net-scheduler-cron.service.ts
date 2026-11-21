@@ -53,13 +53,12 @@ export class NetSchedulerCronService {
   private async createNetsForToday(todayStr: string) {
     const schedulers = await this.schedulerRepository.find({
       where: { isActive: true },
-      relations: [
-        'branch',
-        'operator',
-        'branchCallSign',
-        'communicationChannels',
-        'communicationChannels.communicationChannel',
-      ],
+      relations: {
+        branch: true,
+        operator: true,
+        branchCallSign: true,
+        communicationChannels: { communicationChannel: true },
+      },
     });
 
     for (const scheduler of schedulers) {

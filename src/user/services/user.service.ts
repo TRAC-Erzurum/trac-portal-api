@@ -276,7 +276,7 @@ export class UserService {
         operatorId: targetOperator.id,
         status: MembershipStatus.APPROVED,
       },
-      select: ['branchId'],
+      select: { branchId: true },
     });
     for (const tm of targetMemberships) {
       if (

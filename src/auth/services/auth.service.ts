@@ -498,7 +498,7 @@ export class AuthService {
   async getPendingPasswordResetRequests(): Promise<PasswordResetRequest[]> {
     return this.passwordResetRequestRepository.find({
       where: { status: PasswordResetStatus.PENDING },
-      relations: ['operator'],
+      relations: { operator: true },
       order: { createdAt: 'ASC' },
     });
   }
@@ -516,7 +516,7 @@ export class AuthService {
   ): Promise<void> {
     const request = await this.passwordResetRequestRepository.findOne({
       where: { id: requestId, status: PasswordResetStatus.PENDING },
-      relations: ['operator', 'operator.user'],
+      relations: { operator: { user: true } },
     });
 
     if (!request) {

@@ -14,8 +14,8 @@ This is the NestJS backend of the TRAC Portal, used by an amateur radio club (TR
 
 Read exact versions from `package.json`. Ranges are shown here for orientation only.
 
-- NestJS 11 (`@nestjs/core` ^11.1.16), platform Express
-- TypeScript (^5.9.3), compiled with `nest build`
+- NestJS 12 (`@nestjs/core` 12.x, ESM-only packages loaded by the CommonJS app through `require(esm)`), platform Express
+- TypeScript (6.0.x), compiled with `nest build`
 - TypeORM (^0.3.28) on PostgreSQL (`pg` ^8.20.0)
 - Auth: Passport JWT (`passport-jwt`), Google OAuth (`passport-google-oauth20`), OIDC provider
 - Validation: class-validator (^0.15.1) and class-transformer

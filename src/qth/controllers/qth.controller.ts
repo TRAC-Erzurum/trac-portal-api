@@ -3,7 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { City } from '../entities/city.entity';
 import { Country } from '../entities/country.entity';
 import { QthService } from '../services/qth.service';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { Public } from '../../auth/decorators/public.decorator';
 
 @Controller('qth')
 export class QthController {

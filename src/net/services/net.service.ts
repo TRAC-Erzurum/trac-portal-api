@@ -382,7 +382,7 @@ export class NetService {
     // Now fetch a fresh net entity WITHOUT communication channel relation to avoid TypeORM tracking issues
     const net = await this.netRepository.findOne({
       where: { id },
-      relations: ['operator', 'branch', 'branchCallSign'],
+      relations: { operator: true, branch: true, branchCallSign: true },
     });
 
     if (!net) {
