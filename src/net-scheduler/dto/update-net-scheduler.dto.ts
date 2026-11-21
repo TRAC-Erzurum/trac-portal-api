@@ -10,6 +10,7 @@ import {
   Min,
   Max,
   Matches,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { NetRecurrence } from '../enums/net-recurrence.enum';
@@ -58,6 +59,7 @@ export class UpdateNetSchedulerDto {
   estimatedDurationMinutes?: number;
 
   @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
 
   @IsOptional()

@@ -22,6 +22,10 @@ import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { CreateNetDto } from '../../net/dto/create-net.dto';
 import { NetCommunicationChannelDto } from '../../net/dto/net-communication-channel.dto';
 import { normalizeTurkishSearchTerm } from '../../shared/utils/turkish-search.util';
+import {
+  addDaysToDateStr,
+  classifyNetSchedulerStatus,
+} from '../utils/net-scheduler-status.util';
 
 /** Today in GMT+3 (Europe/Istanbul) as YYYY-MM-DD. Use for "today" in create/update/list/upcoming. */
 function getTodayGMT3(): string {
@@ -397,12 +401,9 @@ export class NetSchedulerService {
       throw new BadRequestException('error.schedulerStartDateImmutable');
     }
     const scheduler = await this.findOne(id);
-    const effectiveRole = await this.userService.getEffectiveRole(userId);
-    if (effectiveRole !== GlobalRole.SUPER_ADMIN) {
-      await this.userService.validateBranchMembership(
-        userId,
-        scheduler.branchId,
-      );
+    await this.assertBranchAccess(userId, scheduler.branchId);
+    if (dto.isActive === true && scheduler.status === 'ended') {
+      throw new BadRequestException('error.schedulerAlreadyEnded');
     }
 
     if (dto.name != null) scheduler.name = dto.name;
@@ -495,7 +496,25 @@ export class NetSchedulerService {
     if (!scheduler) {
       throw new NotFoundException('error.notFound');
     }
+    const hasNet =
+      (await this.netRepository.count({ where: { schedulerId: id } })) > 0;
+    scheduler.status = classifyNetSchedulerStatus(
+      scheduler,
+      hasNet,
+      getTodayGMT3(),
+    );
     return scheduler;
+  }
+
+  /** Non-super-admins must be members of the plan's branch. */
+  private async assertBranchAccess(
+    userId: string,
+    branchId: string,
+  ): Promise<void> {
+    const effectiveRole = await this.userService.getEffectiveRole(userId);
+    if (effectiveRole !== GlobalRole.SUPER_ADMIN) {
+      await this.userService.validateBranchMembership(userId, branchId);
+    }
   }
 
   async findAll(
@@ -504,6 +523,7 @@ export class NetSchedulerService {
       branchFilter?: 'all' | 'my-branches' | 'branch';
       userId?: string;
       search?: string;
+      status?: 'active' | 'inactive';
       limit?: number;
       offset?: number;
     } = {},
@@ -516,6 +536,7 @@ export class NetSchedulerService {
       branchFilter = 'my-branches',
       userId,
       search,
+      status = 'active',
       limit,
       offset,
     } = opts;
@@ -530,6 +551,12 @@ export class NetSchedulerService {
       .leftJoinAndSelect('s.branchCallSign', 'branchCallSign')
       .leftJoinAndSelect('s.communicationChannels', 'ch')
       .orderBy('s.startDate', 'DESC');
+    if (status === 'inactive') {
+      qb.orderBy('s.endDate', 'DESC', 'NULLS FIRST').addOrderBy(
+        's.startDate',
+        'DESC',
+      );
+    }
 
     if (branchId) {
       qb.andWhere('s.branchId = :branchId', { branchId });
@@ -554,8 +581,6 @@ export class NetSchedulerService {
     const list = await qb.getMany();
     const today = getTodayGMT3();
 
-    // Exclude recurring schedulers whose cycle has ended
-    // Exclude one-time schedulers that already have a net created
     const rows = await this.netRepository
       .createQueryBuilder('n')
       .select('DISTINCT n.schedulerId', 'schedulerId')
@@ -565,14 +590,16 @@ export class NetSchedulerService {
       rows.map((r) => r.schedulerId).filter(Boolean),
     );
 
+    // active: not paused and not ended. inactive: paused or ended.
     const filtered = list.filter((s) => {
-      if (s.endDate != null && s.endDate < today) return false;
-      if (
-        s.recurrence === NetRecurrence.ONE_TIME &&
-        schedulerIdsWithNets.has(s.id)
-      )
-        return false;
-      return true;
+      s.status = classifyNetSchedulerStatus(
+        s,
+        schedulerIdsWithNets.has(s.id),
+        today,
+      );
+      return status === 'active'
+        ? s.status === 'active'
+        : s.status !== 'active';
     });
 
     if (usePagination) {
@@ -583,12 +610,33 @@ export class NetSchedulerService {
     return filtered;
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, userId: string): Promise<void> {
     const scheduler = await this.schedulerRepository.findOne({ where: { id } });
     if (!scheduler) {
       throw new NotFoundException('error.notFound');
     }
+    await this.assertBranchAccess(userId, scheduler.branchId);
     await this.schedulerRepository.remove(scheduler);
+  }
+
+  /**
+   * End a plan: endDate becomes yesterday (GMT+3). Existing nets are not touched.
+   * endDate may end up before startDate; that is allowed.
+   */
+  async endScheduler(
+    id: string,
+    updatedBy: string,
+    userId: string,
+  ): Promise<NetScheduler> {
+    const scheduler = await this.findOne(id);
+    await this.assertBranchAccess(userId, scheduler.branchId);
+    if (scheduler.status === 'ended') {
+      throw new BadRequestException('error.schedulerAlreadyEnded');
+    }
+    scheduler.endDate = addDaysToDateStr(getTodayGMT3(), -1);
+    scheduler.updatedBy = [...(scheduler.updatedBy || []), updatedBy];
+    await this.schedulerRepository.save(scheduler);
+    return this.findOne(id);
   }
 
   /** Upcoming nets for scheduler: next N dates with resolved name. */
