@@ -65,8 +65,7 @@ export class User extends BaseEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   emergencyContacts:
-    | { name: string; callSign?: string; phone: string }[]
-    | null;
+    { name: string; callSign?: string; phone: string }[] | null;
 
   @Column({ type: 'jsonb', nullable: true })
   expertiseAreas: string[] | null;

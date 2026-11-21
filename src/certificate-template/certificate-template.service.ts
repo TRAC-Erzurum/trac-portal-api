@@ -21,9 +21,7 @@ export class CertificateTemplateService {
   private static readonly DEFAULT_ELEMENT_BOX_HEIGHT = 8;
 
   private static readonly DEFAULT_ELEMENT_TEXT_ALIGN:
-    | 'left'
-    | 'center'
-    | 'right' = 'left';
+    'left' | 'center' | 'right' = 'left';
 
   constructor(
     @InjectRepository(CertificateTemplate)
