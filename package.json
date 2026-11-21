@@ -38,7 +38,7 @@
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/serve-static": "^5.0.4",
     "@nestjs/throttler": "6.8.0",
-    "@nestjs/typeorm": "^11.0.0",
+    "@nestjs/typeorm": "11.0.3",
     "@octokit/rest": "^22.0.1",
     "@pdf-lib/fontkit": "^1.1.1",
     "archiver": "^7.0.1",
@@ -59,7 +59,7 @@
     "pg": "8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "typeorm": "^0.3.28"
+    "typeorm": "0.3.31"
   },
   "devDependencies": {
     "@eslint/eslintrc": "3.3.7",
