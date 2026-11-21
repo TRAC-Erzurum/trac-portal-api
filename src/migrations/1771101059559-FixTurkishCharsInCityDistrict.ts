@@ -47,7 +47,9 @@ export class FixTurkishCharsInCityDistrict1771101059559 implements MigrationInte
     const cities: Array<{
       name: string;
       districts: Array<{ name: string }>;
-    }> = require(citiesPath);
+    }> =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- path is resolved at runtime
+      require(citiesPath);
 
     const cityNames = cities.map((c) => c.name);
     const districtNames = cities.flatMap((c) =>
