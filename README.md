@@ -2,9 +2,11 @@
 
 Backend: NestJS, TypeScript, PostgreSQL, TypeORM. Ana repo (trac-portal): [TRAC-Erzurum/trac-portal](https://github.com/TRAC-Erzurum/trac-portal).
 
+Geliştirici ve AI ajanları için kurallar ve doğrulama komutu (`yarn verify`): [AGENTS.md](AGENTS.md).
+
 ## Gereksinimler
 
-Node 22+, yarn. Yerel geliştirme için PostgreSQL.
+Node 24+, yarn. Yerel geliştirme için PostgreSQL.
 
 ## Kurulum
 

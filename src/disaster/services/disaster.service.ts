@@ -159,7 +159,7 @@ export class DisasterService {
       }>();
 
     for (const row of totals) {
-      const stats = statsMap.get(row.disasterId)!;
+      const stats = statsMap.get(row.disasterId);
       stats.observationCount = parseInt(row.count, 10);
       stats.lastObservationAt = row.lastObservationAt
         ? new Date(row.lastObservationAt).toISOString()
@@ -176,7 +176,7 @@ export class DisasterService {
       .getRawMany<{ disasterId: string; count: string }>();
 
     for (const row of roots) {
-      const stats = statsMap.get(row.disasterId)!;
+      const stats = statsMap.get(row.disasterId);
       stats.rootCount = parseInt(row.count, 10);
     }
 
@@ -197,7 +197,7 @@ export class DisasterService {
       }>();
 
     for (const row of severities) {
-      const stats = statsMap.get(row.disasterId)!;
+      const stats = statsMap.get(row.disasterId);
       stats.severityCounts[row.severity] = parseInt(row.count, 10);
     }
 
@@ -210,7 +210,7 @@ export class DisasterService {
 
     for (const observation of rootObservations) {
       if (this.isConflicting(observation, config)) {
-        const stats = statsMap.get(observation.disasterId)!;
+        const stats = statsMap.get(observation.disasterId);
         stats.conflictingCount++;
       }
     }

@@ -11,6 +11,7 @@ import { join } from 'path';
 import { Readable } from 'stream';
 import { FileStorageService } from '../../shared/storage';
 import type { Response } from 'express';
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- CJS-style import-equals kept as-is
 import archiver = require('archiver');
 import * as fk from '@pdf-lib/fontkit';
 import { PDFDocument, rgb, RGB, type PDFFont } from 'pdf-lib';
@@ -382,7 +383,9 @@ export class CertificateService implements OnModuleInit {
     fallback: string,
   ): string {
     let s = String(raw ?? '').trim();
-    s = s.replace(/[\u0000-\u001F\\\/:\*\?"<>\|]/g, '');
+    // Strips control characters on purpose (filename safety).
+    // eslint-disable-next-line no-control-regex
+    s = s.replace(/[\u0000-\u001F\\/:*?"<>|]/g, '');
     s = s.replace(/_/g, '-');
     s = s.replace(/\s+/g, ' ').trim();
     if (!s) return fallback;

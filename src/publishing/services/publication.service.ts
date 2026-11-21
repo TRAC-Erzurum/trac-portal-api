@@ -249,8 +249,9 @@ export class PublicationService {
         (o) => [o.id, o],
       ),
     );
-    const items = rows.slice((page - 1) * limit, page * limit).map(
-      (r): PublicationHistoryItem => ({
+    const items = rows
+      .slice((page - 1) * limit, page * limit)
+      .map((r): PublicationHistoryItem => ({
         id: r.id,
         observationId: r.observationId,
         observationType: byId.get(r.observationId)?.type ?? null,
@@ -260,8 +261,7 @@ export class PublicationService {
         alreadyExisted: r.alreadyExisted,
         lastResult: r.lastResult,
         lastAttemptAt: r.lastAttemptAt,
-      }),
-    );
+      }));
     return { items, total: rows.length, page, limit };
   }
 
