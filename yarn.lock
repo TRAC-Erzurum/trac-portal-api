@@ -1391,7 +1391,7 @@
     load-esm "1.0.3"
     tslib "2.8.1"
 
-"@nestjs/config@^4.0.3":
+"@nestjs/config@4.0.4":
   version "4.0.4"
   resolved "https://registry.yarnpkg.com/@nestjs/config/-/config-4.0.4.tgz#311d806fdc32a8bf29cf9ced903b97cbdb7e064b"
   integrity sha512-CJPjNitr0bAufSEnRe2N+JbnVmMmDoo6hvKCPzXgZoGwJSmp/dZPk9f/RMbuD/+Q1ZJPjwsRpq0vxna++Knwow==
@@ -1411,7 +1411,7 @@
     path-to-regexp "8.4.2"
     tslib "2.8.1"
 
-"@nestjs/event-emitter@^3.0.1":
+"@nestjs/event-emitter@3.1.0":
   version "3.1.0"
   resolved "https://registry.yarnpkg.com/@nestjs/event-emitter/-/event-emitter-3.1.0.tgz#d814b4c753d4fa1276f60d6fdcaeca907f0446eb"
   integrity sha512-DOY/4XBGyIjYyOJKkO6jl1kzFE0ZfX0wV+M2HR5NWymPT9Z0zdCEcZGxTXXkoMRwPtglnvCGJALSjOpXPIcM3g==
@@ -1474,10 +1474,10 @@
   dependencies:
     tslib "2.8.1"
 
-"@nestjs/throttler@^6.5.0":
-  version "6.5.0"
-  resolved "https://registry.yarnpkg.com/@nestjs/throttler/-/throttler-6.5.0.tgz#1ee550a258c4ae697d3978f2c8932adff927439e"
-  integrity sha512-9j0ZRfH0QE1qyrj9JjIRDz5gQLPqq9yVC2nHsrosDVAfI5HHw08/aUAWx9DZLSdQf4HDkmhTTEGLrRFHENvchQ==
+"@nestjs/throttler@6.8.0":
+  version "6.8.0"
+  resolved "https://registry.yarnpkg.com/@nestjs/throttler/-/throttler-6.8.0.tgz#38e6f49826f6b0fd959067e4b84df1e967da136c"
+  integrity sha512-kApHI/Ycxu3cxz7mcEhth7eeR9+L2GGb2CKpaBU+uAWz6DF4XRK68VWXFDKDA1aVwCdOf7HjYiafvQVG+eD2Gw==
 
 "@nestjs/typeorm@^11.0.0":
   version "11.0.1"
