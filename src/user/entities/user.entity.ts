@@ -58,7 +58,15 @@ export class User extends BaseEntity {
   currentBranchId: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
-  addresses: { type: string; address: string; qth: string }[] | null;
+  addresses:
+    | {
+        type: string;
+        address: string;
+        qth?: string;
+        city?: string;
+        district?: string;
+      }[]
+    | null;
 
   @Column({ type: 'jsonb', nullable: true })
   phoneNumbers: string[] | null;

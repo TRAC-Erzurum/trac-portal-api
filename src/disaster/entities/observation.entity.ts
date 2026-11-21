@@ -31,11 +31,11 @@ export class Observation extends BaseEntity {
   })
   type: ObservationType;
 
-  @Column({ type: 'double precision' })
-  lat: number;
+  @Column({ type: 'double precision', nullable: true })
+  lat: number | null;
 
-  @Column({ type: 'double precision' })
-  lng: number;
+  @Column({ type: 'double precision', nullable: true })
+  lng: number | null;
 
   @Column({ type: 'varchar', nullable: true })
   locationLabel: string | null;
