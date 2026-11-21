@@ -12,7 +12,7 @@ import { Readable } from 'stream';
 import { FileStorageService } from '../../shared/storage';
 import type { Response } from 'express';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- CJS-style import-equals kept as-is
-import archiver = require('archiver');
+import { ZipArchive } from 'archiver';
 import * as fk from '@pdf-lib/fontkit';
 import { PDFDocument, rgb, RGB, type PDFFont } from 'pdf-lib';
 import { Net } from '../entities/net.entity';
@@ -529,7 +529,7 @@ export class CertificateService implements OnModuleInit {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="${netNameSanitized}-certificates.zip"`,
     });
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
     archive.pipe(res);
     const attendees = await this.attendeeRepository.find({
       where: { net: { id: netId } },
@@ -607,7 +607,7 @@ export class CertificateService implements OnModuleInit {
       'Content-Disposition': `attachment; filename="${zipName}"`,
     });
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
     archive.pipe(res);
 
     for (let i = 0; i < certificates.length; i++) {
