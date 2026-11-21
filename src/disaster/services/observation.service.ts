@@ -22,6 +22,7 @@ import { CreateObservationDto } from '../dto/create-observation.dto';
 import { ObservationQueryDto } from '../dto/observation-query.dto';
 import { SimilarObservationQueryDto } from '../dto/similar-observation-query.dto';
 import { isChildAllowed, isRootType } from '../constants/observation-hierarchy';
+import { resolveRootObservationLocation } from '../utils/observation-location.util';
 import { DisasterService } from './disaster.service';
 import { ObservationScoringService } from './observation-scoring.service';
 @Injectable()
@@ -133,6 +134,8 @@ export class ObservationService {
       .where('observation.disasterId = :disasterId', { disasterId })
       .andWhere('observation.parentObservationId IS NULL')
       .andWhere('observation.type = :type', { type: query.type })
+      .andWhere('observation.lat IS NOT NULL')
+      .andWhere('observation.lng IS NOT NULL')
       .andWhere('observation.lat BETWEEN :minLat AND :maxLat', {
         minLat: lat - latDelta,
         maxLat: lat + latDelta,
@@ -205,8 +208,8 @@ export class ObservationService {
     const disaster = await this.disasterService.findOne(disasterId);
     this.disasterService.assertNotArchived(disaster);
 
-    let lat: number;
-    let lng: number;
+    let lat: number | null;
+    let lng: number | null;
     let locationLabel: string | null;
     let parentObservationId: string | null = null;
 
@@ -232,12 +235,10 @@ export class ObservationService {
       if (!isRootType(dto.type)) {
         throw new BadRequestException('error.invalidData');
       }
-      if (dto.lat === undefined || dto.lng === undefined) {
-        throw new BadRequestException('error.invalidData');
-      }
-      lat = dto.lat;
-      lng = dto.lng;
-      locationLabel = dto.locationLabel?.trim() || null;
+      const location = resolveRootObservationLocation(dto);
+      lat = location.lat;
+      lng = location.lng;
+      locationLabel = location.locationLabel;
     }
 
     const observation = this.observationRepository.create({

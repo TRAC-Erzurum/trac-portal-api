@@ -5,7 +5,6 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  ValidateIf,
 } from 'class-validator';
 import { ObservationSeverity } from '../enums/observation-severity.enum';
 import { ObservationType } from '../enums/observation-type.enum';
@@ -18,11 +17,11 @@ export class CreateObservationDto {
   @IsEnum(ObservationType)
   type: ObservationType;
 
-  @ValidateIf((o) => !o.parentObservationId)
+  @IsOptional()
   @IsNumber()
   lat?: number;
 
-  @ValidateIf((o) => !o.parentObservationId)
+  @IsOptional()
   @IsNumber()
   lng?: number;
 

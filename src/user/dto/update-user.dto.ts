@@ -16,7 +16,16 @@ class AddressDto {
   address: string;
 
   @IsString()
-  qth: string;
+  @IsOptional()
+  qth?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  district?: string;
 }
 
 class EmergencyContactDto {
