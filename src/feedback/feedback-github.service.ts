@@ -28,6 +28,20 @@ export const FEEDBACK_SYNC_BATCH_SIZE = 20;
 /** Advisory lock key shared by every pm2 instance so one issue is never created twice. */
 const FEEDBACK_SYNC_LOCK_KEY = 7144001;
 const MAX_GITHUB_ERROR_LENGTH = 500;
+/** Bounds each GitHub call so a hung request cannot hold the advisory lock. */
+const GITHUB_REQUEST_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 export interface GithubAppConfig {
   appId: string;
@@ -94,22 +108,20 @@ export class FeedbackGithubService {
     if (!config) {
       return;
     }
-    await this.withSyncLock(true, async () => {
-      const fresh = await this.feedbackRepository.findOne({
-        where: { id: record.id },
-      });
+    await this.withSyncLock(true, async (repo) => {
+      const fresh = await repo.findOne({ where: { id: record.id } });
       if (!fresh || fresh.githubStatus !== FeedbackGithubStatus.PENDING) {
         return;
       }
-      await this.forward(fresh, config);
+      await this.forward(fresh, config, repo);
       Object.assign(record, fresh);
     });
   }
 
   /** Admin retry of one record. Throws the errors the admin endpoint documents. */
   async retryRecord(id: string): Promise<Feedback> {
-    const result = await this.withSyncLock(true, async () => {
-      const record = await this.feedbackRepository.findOne({ where: { id } });
+    const result = await this.withSyncLock(true, async (repo) => {
+      const record = await repo.findOne({ where: { id } });
       if (!record) {
         throw new NotFoundException('error.notFound');
       }
@@ -123,7 +135,7 @@ export class FeedbackGithubService {
       if (!config) {
         throw new ServiceUnavailableException('error.feedbackNotConfigured');
       }
-      await this.forward(record, config);
+      await this.forward(record, config, repo);
       return record;
     });
     if (!result) {
@@ -145,8 +157,8 @@ export class FeedbackGithubService {
     if (!config) {
       return null;
     }
-    return this.withSyncLock(options.wait, async () => {
-      const records = await this.feedbackRepository.find({
+    return this.withSyncLock(options.wait, async (repo) => {
+      const records = await repo.find({
         where: [
           {
             githubStatus: FeedbackGithubStatus.PENDING,
@@ -164,7 +176,7 @@ export class FeedbackGithubService {
       let sent = 0;
       let failed = 0;
       for (const record of records) {
-        await this.forward(record, config);
+        await this.forward(record, config, repo);
         if (record.githubStatus === FeedbackGithubStatus.SENT) {
           sent += 1;
         } else {
@@ -179,7 +191,11 @@ export class FeedbackGithubService {
    * Creates the GitHub issue for one record and stores the outcome. Never
    * throws for a GitHub failure; the record is saved as failed instead.
    */
-  private async forward(record: Feedback, config: GithubAppConfig) {
+  private async forward(
+    record: Feedback,
+    config: GithubAppConfig,
+    repo: Repository<Feedback>,
+  ) {
     record.githubAttempts += 1;
     try {
       const auth = createAppAuth({
@@ -187,8 +203,15 @@ export class FeedbackGithubService {
         privateKey: config.privateKey,
         installationId: config.installationId,
       });
-      const { token } = await auth({ type: 'installation' });
-      const octokit = new Octokit({ auth: token });
+      const { token } = await withTimeout(
+        auth({ type: 'installation' }),
+        GITHUB_REQUEST_TIMEOUT_MS,
+        'GitHub App token request timed out',
+      );
+      const octokit = new Octokit({
+        auth: token,
+        request: { signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS) },
+      });
       const { data } = await octokit.rest.issues.create({
         owner: config.owner,
         repo: config.repo,
@@ -222,17 +245,19 @@ export class FeedbackGithubService {
         `Feedback GitHub forwarding failed (${statusLabel ?? 'no HTTP status'}): ${message}`,
       );
     }
-    await this.feedbackRepository.save(record);
+    await repo.save(record);
   }
 
   /**
    * Runs `work` while holding a transaction-scoped advisory lock. The lock is
    * released on commit or rollback, so a crashed instance cannot keep it.
+   * `work` receives a repository bound to the same transaction, so it uses the
+   * one connection that holds the lock instead of a second pooled connection.
    * Returns null without running `work` when `wait` is false and the lock is busy.
    */
   private async withSyncLock<T>(
     wait: boolean,
-    work: () => Promise<T>,
+    work: (repo: Repository<Feedback>) => Promise<T>,
   ): Promise<T | null> {
     return this.dataSource.transaction(async (manager) => {
       if (wait) {
@@ -248,7 +273,7 @@ export class FeedbackGithubService {
           return null;
         }
       }
-      return work();
+      return work(manager.getRepository(Feedback));
     });
   }
 

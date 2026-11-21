@@ -1,4 +1,4 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
+import { Check, Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../shared/entities/base.entity';
 import { User } from '../../user/entities/user.entity';
 import { FeedbackGithubStatus } from '../enums/feedback-github-status.enum';
@@ -6,12 +6,19 @@ import { FeedbackCategory } from '../feedback.types';
 
 @Entity('feedbacks')
 @Index('IDX_feedbacks_createdAt', ['createdAt'])
+@Check(
+  'CHK_feedbacks_githubStatus',
+  `"githubStatus" IN ('pending', 'sent', 'failed', 'skipped')`,
+)
 export class Feedback extends BaseEntity {
   @Column({ type: 'uuid', nullable: true })
   userId: string | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
-  @JoinColumn({ name: 'userId' })
+  @JoinColumn({
+    name: 'userId',
+    foreignKeyConstraintName: 'FK_feedbacks_user',
+  })
   user?: User | null;
 
   /** Snapshot of the call sign at submission time. */

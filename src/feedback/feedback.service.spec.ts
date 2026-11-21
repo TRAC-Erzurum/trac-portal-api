@@ -63,7 +63,10 @@ function build(env: Record<string, string>) {
   // Single-connection stand-in: the advisory lock always succeeds.
   const dataSource = {
     transaction: async (work: (manager: unknown) => Promise<unknown>) =>
-      work({ query: async () => [{ locked: true }] }),
+      work({
+        query: async () => [{ locked: true }],
+        getRepository: () => repo,
+      }),
   };
   const storage = { putBytes: jest.fn(), delete: jest.fn() };
   const github = new FeedbackGithubService(
