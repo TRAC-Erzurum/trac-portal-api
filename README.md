@@ -6,7 +6,7 @@ Geliştirici ve AI ajanları için kurallar ve doğrulama komutu (`yarn verify`)
 
 ## Gereksinimler
 
-Node 22+, yarn. Yerel geliştirme için PostgreSQL.
+Node 24+, yarn. Yerel geliştirme için PostgreSQL.
 
 ## Kurulum
 
