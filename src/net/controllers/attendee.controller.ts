@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { AttendeeService } from '../services/attendee.service';
 import { AttendeeDto } from '../dto/attendee.dto';
+import { AttendeeImportDto } from '../dto/attendee-import.dto';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { GlobalRole, BranchRole } from '../../auth/enums/role.enum';
 import { UseGuards } from '@nestjs/common';
@@ -41,6 +42,21 @@ export class AttendeeController {
     @Req() req: RequestWithUser,
   ) {
     return this.attendeeService.addAttendeeToNet(
+      netId,
+      dto,
+      req.user.email,
+      req.user.callSign,
+    );
+  }
+
+  @Post('import')
+  @ManageNet()
+  async importAttendees(
+    @Param('netId') netId: string,
+    @Body() dto: AttendeeImportDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.attendeeService.importAttendees(
       netId,
       dto,
       req.user.email,

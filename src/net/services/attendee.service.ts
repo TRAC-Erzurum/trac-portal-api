@@ -2,17 +2,21 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Attendee } from '../entities/attendee.entity';
+import { Net } from '../entities/net.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AttendeeDto } from '../dto/attendee.dto';
+import { AttendeeImportDto } from '../dto/attendee-import.dto';
 import { NetService } from './net.service';
 import { OperatorService } from '../../operator/services/operator.service';
 import { Operator } from '../../operator/entities/operator.entity';
 import { PaginationDto } from '../../shared/dto/pagination.dto';
+import { QthService } from '../../qth/services/qth.service';
 import {
   ActivityEvent,
   ACTIVITY_EVENT,
@@ -25,15 +29,46 @@ import {
   isValidCallSignFormat,
   extractPlainCallSign,
 } from '../../shared/utils/call-sign.util';
+import {
+  normalizeImportCallSign,
+  normalizeSignal,
+  resolveCityDistrict,
+} from '../utils/attendee-import.util';
+
+export type AttendeeImportSkipReason =
+  'invalidCallSign' | 'duplicate' | 'failed';
+
+export interface AttendeeImportResult {
+  added: number;
+  skipped: Array<{
+    row: number;
+    callSign: string;
+    reason: AttendeeImportSkipReason;
+  }>;
+}
+
+/** Final attendee field values. Callers decide every fallback before persisting. */
+export interface AttendeePersistInput {
+  callSign: string;
+  name: string | null;
+  country: string | null;
+  city: string | null;
+  district: string | null;
+  readability: number;
+  signalStrength: number;
+}
 
 @Injectable()
 export class AttendeeService {
+  private readonly logger = new Logger(AttendeeService.name);
+
   constructor(
     @InjectRepository(Attendee)
     private attendeeRepository: Repository<Attendee>,
     private netService: NetService,
     private operatorService: OperatorService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly qthService: QthService,
   ) {}
 
   async addAttendeeToNet(
@@ -73,15 +108,130 @@ export class AttendeeService {
       createdBy,
     );
 
+    // Manual add keeps the operator fallback for every empty field.
+    return this.persistAttendee(
+      net,
+      operator,
+      {
+        callSign,
+        name: (dto.name ?? '').trim() || operator.fullName || null,
+        country: (dto.country ?? '').trim() || operator.country || null,
+        city: (dto.city ?? '').trim() || operator.city || null,
+        district: (dto.district ?? '').trim() || operator.district || null,
+        readability: dto.readability,
+        signalStrength: dto.signalStrength,
+      },
+      createdBy,
+      actorCallSign,
+      dto.callSign,
+    );
+  }
+
+  async importAttendees(
+    netId: string,
+    dto: AttendeeImportDto,
+    createdBy: string,
+    actorCallSign: string,
+  ): Promise<AttendeeImportResult> {
+    const net = await this.netService.findOne(netId);
+
+    if (!net.startedAt) {
+      throw new BadRequestException('error.netNotStarted');
+    }
+
+    const existing = await this.attendeeRepository.find({
+      where: { net: { id: netId } },
+      select: { callSign: true },
+    });
+    const seen = new Set(
+      existing.map((a) => normalizeImportCallSign(a.callSign)),
+    );
+    const cities = await this.qthService.getCities('Türkiye');
+
+    const result: AttendeeImportResult = { added: 0, skipped: [] };
+
+    for (const row of dto.rows) {
+      const callSign = normalizeImportCallSign(row.callSign);
+
+      if (!isValidCallSignFormat(callSign, { allowSlashes: true })) {
+        result.skipped.push({
+          row: row.row,
+          callSign,
+          reason: 'invalidCallSign',
+        });
+        continue;
+      }
+
+      if (seen.has(callSign)) {
+        result.skipped.push({ row: row.row, callSign, reason: 'duplicate' });
+        continue;
+      }
+      seen.add(callSign);
+
+      try {
+        // Import uses the resolved location only. No operator fallback for city/district.
+        const location = resolveCityDistrict(
+          { city: row.city?.trim(), district: row.district?.trim() },
+          cities,
+        );
+        const signal = normalizeSignal(row.readability, row.signalStrength);
+        const name = row.name?.trim() || undefined;
+
+        const operator = await this.getOrCreateOperator(
+          {
+            callSign,
+            name,
+            city: location.city ?? undefined,
+            district: location.district ?? undefined,
+          },
+          createdBy,
+        );
+
+        await this.persistAttendee(
+          net,
+          operator,
+          {
+            callSign,
+            name: name || operator.fullName || null,
+            country: operator.country || null,
+            city: location.city,
+            district: location.district,
+            readability: signal.readability,
+            signalStrength: signal.signalStrength,
+          },
+          createdBy,
+          actorCallSign,
+          callSign,
+        );
+        result.added += 1;
+      } catch {
+        this.logger.warn(
+          `Attendee import failed at row ${row.row} (${callSign})`,
+        );
+        result.skipped.push({ row: row.row, callSign, reason: 'failed' });
+      }
+    }
+
+    return result;
+  }
+
+  /** Shared by manual add and import. Callers validate the call sign, duplicates and every fallback. */
+  private async persistAttendee(
+    net: Net,
+    operator: Operator,
+    input: AttendeePersistInput,
+    createdBy: string,
+    actorCallSign: string,
+    targetCallSign: string,
+  ) {
     const attendee = new Attendee();
-    attendee.callSign = callSign;
-    attendee.name = (dto.name ?? '').trim() || operator.fullName || null;
-    attendee.country = (dto.country ?? '').trim() || operator.country || null;
-    attendee.city = (dto.city ?? '').trim() || operator.city || null;
-    attendee.district =
-      (dto.district ?? '').trim() || operator.district || null;
-    attendee.readability = dto.readability;
-    attendee.signalStrength = dto.signalStrength;
+    attendee.callSign = input.callSign;
+    attendee.name = input.name;
+    attendee.country = input.country;
+    attendee.city = input.city;
+    attendee.district = input.district;
+    attendee.readability = input.readability;
+    attendee.signalStrength = input.signalStrength;
     attendee.operator = operator;
     attendee.net = net;
     attendee.createdBy = createdBy;
@@ -97,7 +247,7 @@ export class AttendeeService {
         saved.id,
         null,
         actorCallSign,
-        dto.callSign,
+        targetCallSign,
         { netId: net.id, netName: net.name },
       ),
     );
@@ -105,7 +255,10 @@ export class AttendeeService {
     return saved;
   }
 
-  private async getOrCreateOperator(dto: AttendeeDto, createdBy: string) {
+  private async getOrCreateOperator(
+    dto: Partial<AttendeeDto>,
+    createdBy: string,
+  ) {
     let operator: Operator;
     if (!dto.operatorId) {
       const plainCallSign = extractPlainCallSign(dto.callSign ?? '');
