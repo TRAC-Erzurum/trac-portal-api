@@ -8,6 +8,7 @@ import { ManageNetGuard } from './guards/manage-net.guard';
 import { UserModule } from '../user/user.module';
 import { BranchModule } from '../branch/branch.module';
 import { CertificateTemplateModule } from '../certificate-template/certificate-template.module';
+import { QthModule } from '../qth/qth.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CertificateTemplateModule } from '../certificate-template/certificate-t
     forwardRef(() => UserModule),
     forwardRef(() => BranchModule),
     CertificateTemplateModule,
+    QthModule,
   ],
   controllers: controllers,
   providers: [...services, ManageNetGuard],
